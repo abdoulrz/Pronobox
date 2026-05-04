@@ -1,0 +1,564 @@
+require('dotenv').config();
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const User = require('./models/User');
+const Transaction = require('./models/Transaction');
+const Channel = require('./models/Channel');
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// MongoDB Connection Options
+const mongoOptions = {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+  socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+  family: 4, // Use IPv4, skip trying IPv6
+  maxPoolSize: 10, // Maintain up to 10 socket connections
+  retryWrites: true,
+  retryReads: true
+};
+
+// Connect to MongoDB with improved error handling and retry logic
+const connectWithRetry = () => {
+  console.log('Attempting to connect to MongoDB...');
+  // Clean and validate MongoDB URI
+  const mongoURI = process.env.MONGODB_URI;
+  if (!mongoURI) {
+    console.error('MongoDB URI is not defined in environment variables!');
+    process.exit(1);
+  }
+  mongoose.connect(mongoURI, mongoOptions).
+  then(() => {
+    console.log('MongoDB connected successfully!');
+    // Initialize mock data after successful connection
+    initializeMockData();
+  }).
+  catch((err) => {
+    console.error('MongoDB connection error:', err);
+    console.log('Retrying connection in 5 seconds...');
+    setTimeout(connectWithRetry, 5000);
+  });
+};
+
+// Handle MongoDB connection events
+mongoose.connection.on('error', (err) => {
+  console.error('MongoDB connection error:', err);
+});
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB disconnected! Attempting to reconnect...');
+  setTimeout(connectWithRetry, 5000);
+});
+mongoose.connection.on('reconnected', () => {
+  console.log('MongoDB reconnected!');
+});
+
+// Middleware to verify JWT token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'Access denied' });
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ message: 'Invalid token' });
+    req.user = user;
+    next();
+  });
+};
+
+// Routes
+// Auth routes
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+    // Check if user already exists
+    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists' });
+    }
+    // Create new user
+    const user = new User({
+      username,
+      email,
+      password
+    });
+    await user.save();
+    // Generate token
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.status(201).json({
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        isPro: user.isPro,
+        avatar: user.avatar,
+        walletBalance: user.walletBalance
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    // Find user
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
+    // Check password
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
+    // Update last login
+    user.lastLogin = Date.now();
+    await user.save();
+    // Generate token
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        isPro: user.isPro,
+        avatar: user.avatar,
+        walletBalance: user.walletBalance
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// User routes
+app.get('/api/users/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/users/me', authenticateToken, async (req, res) => {
+  try {
+    const updates = req.body;
+    // Don't allow updating sensitive fields
+    delete updates.password;
+    delete updates.role;
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: updates },
+      { new: true }
+    ).select('-password');
+    res.json(user);
+  } catch (error) {
+    console.error('Update user error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Admin routes
+app.get('/api/admin/users', authenticateToken, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const users = await User.find().select('-password');
+    res.json(users);
+  } catch (error) {
+    console.error('Get all users error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/admin/users/:id', authenticateToken, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const updates = req.body;
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: updates },
+      { new: true }
+    ).select('-password');
+    res.json(user);
+  } catch (error) {
+    console.error('Admin update user error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Transaction routes
+app.post('/api/transactions', authenticateToken, async (req, res) => {
+  try {
+    const { amount, type, description, method, itemId, itemName, recipient } = req.body;
+    const transaction = new Transaction({
+      user: req.user.id,
+      amount,
+      type,
+      description,
+      method,
+      itemId,
+      itemName,
+      recipient
+    });
+    await transaction.save();
+    // Update user wallet balance
+    const user = await User.findById(req.user.id);
+    if (type === 'recharge') {
+      user.walletBalance += amount;
+    } else if (type === 'withdrawal' || type === 'subscription' || type === 'pro' || type === 'product') {
+      user.walletBalance -= amount;
+    }
+    // Update user Pro status if applicable
+    if (type === 'subscription' || type === 'pro') {
+      user.isPro = true;
+    }
+    await user.save();
+    res.status(201).json(transaction);
+  } catch (error) {
+    console.error('Create transaction error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/transactions', authenticateToken, async (req, res) => {
+  try {
+    const transactions = await Transaction.find({ user: req.user.id }).sort({ createdAt: -1 });
+    res.json(transactions);
+  } catch (error) {
+    console.error('Get transactions error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Channel routes
+app.post('/api/channels', authenticateToken, async (req, res) => {
+  try {
+    const { name, description, premium, allowComments, subscriptionPrice } = req.body;
+    const channel = new Channel({
+      name,
+      description,
+      premium,
+      adminOnly: premium ? true : !allowComments,
+      allowComments: premium ? false : allowComments,
+      owner: req.user.id,
+      members: [req.user.id],
+      subscriptionPrice: premium ? subscriptionPrice : 0,
+      shareLink: `https://pronosbox.com/canal/${Math.floor(Math.random() * 1000) + 100}`
+    });
+    await channel.save();
+    // Add channel to user's joined channels
+    await User.findByIdAndUpdate(req.user.id, {
+      $push: { channelsJoined: channel._id }
+    });
+    res.status(201).json(channel);
+  } catch (error) {
+    console.error('Create channel error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/channels', async (req, res) => {
+  try {
+    const channels = await Channel.find().
+    populate('owner', 'username avatar').
+    populate('members', 'username avatar');
+    res.json(channels);
+  } catch (error) {
+    console.error('Get channels error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/channels/:id', async (req, res) => {
+  try {
+    const channel = await Channel.findById(req.params.id).
+    populate('owner', 'username avatar').
+    populate('members', 'username avatar').
+    populate('messages.user', 'username avatar role');
+    if (!channel) {
+      return res.status(404).json({ message: 'Channel not found' });
+    }
+    res.json(channel);
+  } catch (error) {
+    console.error('Get channel error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/channels/:id/join', authenticateToken, async (req, res) => {
+  try {
+    const channel = await Channel.findById(req.params.id);
+    if (!channel) {
+      return res.status(404).json({ message: 'Channel not found' });
+    }
+    // Check if user is already a member
+    if (channel.members.includes(req.user.id)) {
+      return res.status(400).json({ message: 'Already a member' });
+    }
+    // Add user to channel members
+    channel.members.push(req.user.id);
+    await channel.save();
+    // Add channel to user's joined channels
+    await User.findByIdAndUpdate(req.user.id, {
+      $push: { channelsJoined: channel._id }
+    });
+    res.json({ message: 'Joined channel successfully' });
+  } catch (error) {
+    console.error('Join channel error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/channels/:id/messages', authenticateToken, async (req, res) => {
+  try {
+    const { text } = req.body;
+    const channel = await Channel.findById(req.params.id);
+    if (!channel) {
+      return res.status(404).json({ message: 'Channel not found' });
+    }
+    // Check if user can post
+    const isAdmin = req.user.role === 'admin';
+    const isOwner = channel.owner.toString() === req.user.id;
+    if (channel.adminOnly && !isAdmin && !isOwner) {
+      return res.status(403).json({ message: 'Only admins can post in this channel' });
+    }
+    // Add message
+    channel.messages.push({
+      user: req.user.id,
+      text
+    });
+    // Update statistics
+    channel.statistics.messagesSent += 1;
+    await channel.save();
+    // Get the added message with user details
+    const addedMessage = await Channel.findById(req.params.id).
+    select('messages').
+    populate('messages.user', 'username avatar role');
+    const newMessage = addedMessage.messages[addedMessage.messages.length - 1];
+    res.status(201).json(newMessage);
+  } catch (error) {
+    console.error('Send message error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Initialize mock data
+const initializeMockData = async () => {
+  try {
+    // Check if we already have users
+    const userCount = await User.countDocuments();
+    if (userCount === 0) {
+      console.log('Initializing mock data...');
+      // Create mock users
+      const adminUser = new User({
+        username: 'Admin',
+        email: 'admin@pronosbox.com',
+        password: 'admin123',
+        role: 'admin',
+        isPro: true,
+        walletBalance: 1000,
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
+      });
+      const regularUser = new User({
+        username: 'User',
+        email: 'user@pronosbox.com',
+        password: 'user123',
+        role: 'user',
+        isPro: false,
+        walletBalance: 50,
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
+      });
+      const proUser = new User({
+        username: 'ProUser',
+        email: 'pro@pronosbox.com',
+        password: 'pro123',
+        role: 'user',
+        isPro: true,
+        walletBalance: 250,
+        avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
+      });
+      await Promise.all([adminUser.save(), regularUser.save(), proUser.save()]);
+      // Create mock channels
+      const officialChannel = new Channel({
+        name: 'PronosBox Officiel',
+        description: 'Canal officiel de PronosBox - Actualités et annonces',
+        premium: false,
+        adminOnly: true,
+        allowComments: false,
+        owner: adminUser._id,
+        members: [adminUser._id, regularUser._id, proUser._id],
+        avatar: 'https://images.unsplash.com/photo-1560272564-c83b66b1ad12?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
+        shareLink: 'https://pronosbox.com/canal/1',
+        statistics: {
+          totalViews: 45230,
+          activeUsers: 8750,
+          messagesSent: 2,
+          averageEngagement: 75.4
+        },
+        messages: [
+        {
+          user: adminUser._id,
+          text: 'Bienvenue sur le canal officiel de PronosBox! Retrouvez ici toutes les actualités et annonces importantes.'
+        },
+        {
+          user: adminUser._id,
+          text: "Nous avons ajouté de nouveaux pronos pour les matchs de ce soir. N'hésitez pas à les consulter!"
+        }]
+
+      });
+      const premiumChannel = new Channel({
+        name: 'Pronos Premium',
+        description: 'Accès exclusif aux analyses détaillées par nos experts',
+        premium: true,
+        adminOnly: true,
+        allowComments: false,
+        owner: adminUser._id,
+        members: [adminUser._id, proUser._id],
+        subscriptionPrice: 9.99,
+        avatar: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
+        shareLink: 'https://pronosbox.com/canal/2',
+        statistics: {
+          totalViews: 28450,
+          activeUsers: 3200,
+          messagesSent: 1,
+          averageEngagement: 82.7
+        },
+        messages: [
+        {
+          user: adminUser._id,
+          text: 'Nouveau prono premium disponible: PSG vs Marseille. Notre analyse suggère un match à plus de 3.5 buts avec une confiance de 85%.'
+        }]
+
+      });
+      const ligue1Channel = new Channel({
+        name: 'Communauté Ligue 1',
+        description: 'Discussions et analyses sur la Ligue 1',
+        premium: false,
+        adminOnly: false,
+        allowComments: true,
+        owner: proUser._id,
+        members: [adminUser._id, regularUser._id, proUser._id],
+        avatar: 'https://images.unsplash.com/photo-1522778034537-20a2486be803?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
+        shareLink: 'https://pronosbox.com/canal/3',
+        statistics: {
+          totalViews: 32180,
+          activeUsers: 5430,
+          messagesSent: 4,
+          averageEngagement: 68.2
+        },
+        messages: [
+        {
+          user: proUser._id,
+          text: 'Analyse du match Lyon-Monaco (2-1): Lyon a été plus efficace avec 5 tirs cadrés contre 3 pour Monaco malgré une possession de balle inférieure (42%).'
+        },
+        {
+          user: proUser._id,
+          text: "Prochain match important: Lyon vs Marseille samedi à 21h00. Un duel qui pourrait être décisif pour la course à l'Europe."
+        },
+        {
+          user: regularUser._id,
+          text: 'Merci pour cette analyse! Pensez-vous que Lyon est en mesure de se qualifier pour la Ligue des Champions cette saison?'
+        },
+        {
+          user: proUser._id,
+          text: 'Lyon a encore des matchs difficiles à jouer, mais je leur donne 60% de chances de finir dans le top 4. Tout dépendra de leur régularité.'
+        }]
+
+      });
+      await Promise.all([officialChannel.save(), premiumChannel.save(), ligue1Channel.save()]);
+      // Create mock transactions
+      const transactions = [
+      {
+        user: regularUser._id,
+        amount: 50,
+        type: 'recharge',
+        description: 'Recharge de portefeuille',
+        status: 'completed',
+        method: 'card'
+      },
+      {
+        user: proUser._id,
+        amount: 29.99,
+        type: 'subscription',
+        description: 'Abonnement Premium - Mensuel',
+        status: 'completed',
+        method: 'wallet'
+      },
+      {
+        user: proUser._id,
+        amount: 20,
+        type: 'withdrawal',
+        description: 'Retrait vers carte bancaire',
+        status: 'completed',
+        method: 'card'
+      },
+      {
+        user: regularUser._id,
+        amount: 24.99,
+        type: 'product',
+        description: 'Achat: Stratégies avancées de paris',
+        status: 'completed',
+        method: 'wallet'
+      }];
+
+      await Transaction.insertMany(transactions);
+      console.log('Mock data initialized successfully');
+    }
+  } catch (error) {
+    console.error('Error initializing mock data:', error);
+  }
+};
+
+// Start server
+const PORT = process.env.PORT || 5000;
+
+// Initiate MongoDB connection
+connectWithRetry();
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+// Add graceful shutdown
+process.on('SIGINT', async () => {
+  try {
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed gracefully');
+    process.exit(0);
+  } catch (err) {
+    console.error('Error during graceful shutdown:', err);
+    process.exit(1);
+  }
+});

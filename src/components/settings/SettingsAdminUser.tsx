@@ -1,0 +1,3157 @@
+import React, { useCallback, useEffect, useState, useRef } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+
+// import { useNavigate } from 'react-router-dom';
+import { WS_EVENTS } from '../../services/WebSocketService';
+import { useWebSocket } from '../../hooks/useWebSocket';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import { getUsers, updateUserByAdmin, getAdminTransactions, getAdminWithdrawals, getSupportMessages, updateWithdrawalStatus, sendAdminSupportMessage } from '../../services/api';
+
+// Interfaces
+export interface UserData {
+  id: string;
+  username: string;
+  email?: string;
+  isPro: boolean;
+  walletBalance?: number;
+  avatar?: string;
+  isBanned?: boolean;
+  status?: string;
+  role?: string;
+  joinDate?: string;
+  lastLogin?: string;
+}
+
+export interface SupportMessage {
+  id: number;
+  sender: 'system' | 'user' | 'agent';
+  message: string;
+  time: string;
+  date?: string;
+  userId?: string;
+  username?: string;
+  userType?: 'standard' | 'pro' | null;
+}
+
+export interface Transaction {
+  id: string;
+  userId: string;
+  username: string;
+  amount: number;
+  type: 'recharge' | 'subscription' | 'withdrawal' | 'product';
+  status: 'completed' | 'pending' | 'failed' | 'rejected' | 'approved';
+  method: string;
+  date: string;
+  description: string;
+}
+
+export interface WithdrawalRequest {
+  id: string;
+  userId: string;
+  username: string;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  method: string;
+  date: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  accountInfo?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  eligibility?: any;
+  processedAt?: string;
+  processedBy?: string;
+}
+
+export interface SiteStats {
+  totalUsers: number;
+  proUsers: number;
+  standardUsers: number;
+  totalTransactions: number;
+  totalVolume: number;
+  pendingWithdrawals: number;
+}
+
+const SettingsAdminUser: React.FC = () => {
+  const { user, updateUser } = useAuth();
+  const { connected, subscribe, send } = useWebSocket();
+  // Pas d'onglet ouvert par défaut
+  const [activeSection, setActiveSection] = useState<string>('admin');
+  const [activeAdminTab, setActiveAdminTab] = useState<string>('users');
+  // États pour la gestion du portefeuille
+  const [showRechargeModal, setShowRechargeModal] = useState<boolean>(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState<boolean>(false);
+  const [rechargeAmount, setRechargeAmount] = useState<number>(50);
+  const [withdrawAmount, setWithdrawAmount] = useState<number>(50);
+  const [rechargeMethod, setRechargeMethod] = useState<string>('card');
+  const [withdrawMethod, setWithdrawMethod] = useState<string>('bank');
+  const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
+  const [isProcessingWithdraw, setIsProcessingWithdraw] = useState<boolean>(false);
+  // État pour le support
+  const [showSupportChat, setShowSupportChat] = useState<boolean>(false);
+  const [supportMessage, setSupportMessage] = useState<string>('');
+  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([
+  {
+    id: 1,
+    sender: 'system',
+    message:
+    "Bienvenue dans le service client PronosBox! Comment pouvons-nous vous aider aujourd'hui?",
+    time: new Date().toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    }),
+    userType: null
+  }]
+  );
+  // const [supportCategory, setSupportCategory] = useState<string>('');
+  const [activeUserTypeFilter, setActiveUserTypeFilter] = useState<string>('all');
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // États pour l'administration
+  const [userSearchQuery, setUserSearchQuery] = useState<string>('');
+  const [usersData, setUsersData] = useState<UserData[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState<boolean>(false);
+  const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+  const [showUserModal, setShowUserModal] = useState<boolean>(false);
+  const [userActionMenuOpen, setUserActionMenuOpen] = useState<string | null>(null);
+  // États pour les transactions et demandes de retrait
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
+  const [selectedWithdrawal, setSelectedWithdrawal] = useState<WithdrawalRequest | null>(null);
+  const [showWithdrawalDetailsModal, setShowWithdrawalDetailsModal] =
+  useState<boolean>(false);
+  const [siteTotalBalance, setSiteTotalBalance] = useState<number>(0);
+  const [siteStats, setSiteStats] = useState<SiteStats>({
+    totalUsers: 0,
+    proUsers: 0,
+    standardUsers: 0,
+    totalTransactions: 0,
+    totalVolume: 0,
+    pendingWithdrawals: 0
+  });
+  // Chargement des données utilisateurs
+  const loadUsers = useCallback(async () => {
+    setIsLoadingUsers(true);
+    try {
+      const response = await getUsers() as UserData[];
+      setUsersData(response);
+      // Calculer les statistiques du site
+      const proUsers = response.filter((u: UserData) => u.isPro).length;
+      setSiteStats((prev) => ({
+        ...prev,
+        totalUsers: response.length,
+        proUsers,
+        standardUsers: response.length - proUsers
+      }));
+    } catch (error) {
+      console.error('Erreur lors du chargement des utilisateurs:', error);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  }, []);
+  // Charger les données au montage du composant
+  useEffect(() => {
+    loadUsers();
+    loadTransactions();
+    loadWithdrawalRequests();
+    loadSupportMessages();
+  }, [loadUsers]);
+  // Charger les transactions
+  const loadTransactions = async () => {
+    try {
+      const response = await getAdminTransactions();
+      setTransactions(response);
+      
+      // Calculer le solde total du site
+      const totalBalance = response.reduce((sum: number, tr: any) => {
+        if (tr.type === 'recharge' && tr.status === 'completed') {
+          return sum + tr.amount;
+        } else if (['withdrawal', 'subscription', 'product'].includes(tr.type) && tr.status === 'completed') {
+          return sum - tr.amount;
+        }
+        return sum;
+      }, 0);
+      setSiteTotalBalance(totalBalance);
+      
+      // Mettre à jour les statistiques
+      setSiteStats((prev) => ({
+        ...prev,
+        totalTransactions: response.length,
+        totalVolume: response.reduce((sum: number, tr: any) => sum + tr.amount, 0)
+      }));
+    } catch (error) {
+      console.error('Erreur lors du chargement des transactions:', error);
+    }
+  };
+
+  // Charger les retraits
+  const loadWithdrawalRequests = async () => {
+    try {
+      const response = await getAdminWithdrawals();
+      setWithdrawalRequests(response);
+      
+      // Mettre à jour les statistiques
+      setSiteStats((prev) => ({
+        ...prev,
+        pendingWithdrawals: response.filter((w: any) => w.status === 'pending').length
+      }));
+    } catch (error) {
+      console.error('Erreur lors du chargement des retraits:', error);
+    }
+  };
+
+  // Charger les messages de support
+  const loadSupportMessages = async () => {
+    try {
+      const response = await getSupportMessages();
+      setSupportMessages(response);
+    } catch (error) {
+      console.error('Erreur lors du chargement des messages de support:', error);
+    }
+  }; // Faire défiler la chatbox vers le bas lorsque de nouveaux messages arrivent
+  useEffect(() => {if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      }
+    }, [supportMessages]);
+  // S'abonner aux événements WebSocket
+  useEffect(() => {
+    if (connected) {
+      // S'abonner aux nouveaux messages de support
+      const unsubscribeSupportMessage = subscribe(
+        WS_EVENTS.ADMIN_NEW_SUPPORT_MESSAGE,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (payload: any) => {
+          setSupportMessages((prev) => [
+          ...prev,
+          {
+            id: prev.length + 1,
+            sender: 'user',
+            message: payload.message,
+            time: new Date().toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            }),
+            userType: payload.userType,
+            userId: payload.userId,
+            username: payload.username
+          }]
+          );
+        }
+      );
+      // S'abonner aux nouvelles demandes de retrait
+      const unsubscribeWithdrawal = subscribe(
+        WS_EVENTS.ADMIN_WITHDRAWAL_REQUEST,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (payload: any) => {
+          setWithdrawalRequests((prev) => [payload, ...prev]);
+          // Mettre à jour les statistiques
+          setSiteStats((prev) => ({
+            ...prev,
+            pendingWithdrawals: prev.pendingWithdrawals + 1
+          }));
+        }
+      );
+      // S'abonner aux mises à jour d'utilisateurs
+      const unsubscribeUserUpdate = subscribe(
+        WS_EVENTS.ADMIN_USER_UPDATED,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (payload: any) => {
+          setUsersData((prev) =>
+          prev.map((user) =>
+          user.id === payload.id ?
+          {
+            ...user,
+            ...payload
+          } :
+          user
+          )
+          );
+        }
+      );
+      // S'abonner aux nouvelles transactions
+      const unsubscribeTransaction = subscribe(
+        WS_EVENTS.TRANSACTION_COMPLETE,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (payload: any) => {
+          setTransactions((prev) => [payload, ...prev]);
+          // Mettre à jour le solde total du site
+          if (payload.type === 'recharge') {
+            setSiteTotalBalance((prev) => prev + payload.amount);
+          } else if (
+          ['withdrawal', 'subscription', 'product'].includes(payload.type))
+          {
+            setSiteTotalBalance((prev) => prev - payload.amount);
+          }
+          // Mettre à jour les statistiques
+          setSiteStats((prev) => ({
+            ...prev,
+            totalTransactions: prev.totalTransactions + 1,
+            totalVolume: prev.totalVolume + payload.amount
+          }));
+        }
+      );
+      // Nettoyage des abonnements à la destruction du composant
+      return () => {
+        unsubscribeSupportMessage();
+        unsubscribeWithdrawal();
+        unsubscribeUserUpdate();
+        unsubscribeTransaction();
+      };
+    }
+  }, [connected, subscribe]);
+  const handleSectionClick = (section: string) => {
+    setActiveSection(activeSection === section ? '' : section);
+  };
+  const [emailNotifications, setEmailNotifications] = useState(user?.notifications?.email ?? false);
+  const [pushNotifications, setPushNotifications] = useState(user?.notifications?.push ?? true);
+  const [matchNotifications, setMatchNotifications] = useState(user?.notifications?.matches ?? true);
+  const [channelNotifications, setChannelNotifications] = useState(user?.notifications?.channels ?? true);
+
+  const handleNotificationChange = async (type: string, value: boolean) => {
+    // Update local state first for instant feedback
+    switch (type) {
+      case 'email': setEmailNotifications(value); break;
+      case 'push': setPushNotifications(value); break;
+      case 'matches': setMatchNotifications(value); break;
+      case 'channels': setChannelNotifications(value); break;
+    }
+
+    // Persist to DB
+    if (updateUser && user) {
+      const updatedNotifications = {
+        email: user.notifications?.email ?? false,
+        push: user.notifications?.push ?? true,
+        matches: user.notifications?.matches ?? true,
+        channels: user.notifications?.channels ?? true,
+        [type]: value
+      };
+      await updateUser({
+        notifications: updatedNotifications
+      });
+    }
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        if (updateUser) {
+          updateUser({ avatar: base64String });
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const handleProfileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSaving(true);
+    setSaveSuccess(false);
+
+    const formData = new FormData(e.currentTarget);
+    const username = formData.get('username') as string;
+    const email = formData.get('email') as string;
+    const bio = formData.get('bio') as string;
+
+    try {
+      if (updateUser) {
+        await updateUser({
+          username,
+          email,
+          bio
+        });
+      }
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      alert('Erreur lors de la mise à jour du profil');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /* const handleLegalPageClick = (page: string) => {
+    // setActiveLegalPage(page);
+  };
+  const handleCloseLegalPage = () => {
+    // setActiveLegalPage(null);
+  }; */
+  // Fonction pour gérer la recharge du compte
+  const handleRecharge = async () => {
+    if (rechargeAmount < 10) return;
+    setIsProcessingPayment(true);
+    // Simuler un délai de traitement
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Mettre à jour le solde de l'utilisateur (simulation)
+    const currentBalance = user?.walletBalance || 0;
+    updateUser({
+      walletBalance: currentBalance + rechargeAmount
+    });
+    setIsProcessingPayment(false);
+    setShowRechargeModal(false);
+  };
+  // Fonction pour gérer le retrait
+  const handleWithdraw = async () => {
+    if (withdrawAmount < 10 || withdrawAmount > (user?.walletBalance || 0))
+    return;
+    setIsProcessingWithdraw(true);
+    // Simuler un délai de traitement
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Mettre à jour le solde de l'utilisateur (simulation)
+    const currentBalance = user?.walletBalance || 0;
+    updateUser({
+      walletBalance: currentBalance - withdrawAmount
+    });
+    setIsProcessingWithdraw(false);
+    setShowWithdrawModal(false);
+  };
+  /* const handleOpenSupportChat = (category: string = '') => {
+    setSupportCategory(category);
+    setShowSupportChat(true);
+    // Si une catégorie est spécifiée, ajoutez un message système pour contextualiser
+    if (category) {
+      const categoryMessages: Record<string, string> = {
+        account:
+        'Je vois que vous avez des questions concernant votre compte. Comment puis-je vous aider?',
+        payment:
+        "Vous avez des questions sur les paiements. N'hésitez pas à me détailler votre problème.",
+        technical:
+        'Vous rencontrez un problème technique? Décrivez-le moi en détail et je ferai de mon mieux pour vous aider.'
+      };
+      if (categoryMessages[category]) {
+        setTimeout(() => {
+          setSupportMessages((prev) => [
+          ...prev,
+          {
+            id: prev.length + 1,
+            sender: 'agent',
+            message: categoryMessages[category],
+            time: new Date().toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          }]
+          );
+        }, 500);
+      }
+    }
+  }; */
+  const handleCloseSupportChat = () => {
+    setShowSupportChat(false);
+    // Réinitialiser la conversation si l'utilisateur ferme le chat
+    if (supportMessages.length > 1) {
+      setSupportMessages([
+      {
+        id: 1,
+        sender: 'system',
+        message:
+        "Bienvenue dans le service client PronosBox! Comment pouvons-nous vous aider aujourd'hui?",
+        time: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      }]
+      );
+    }
+    // setSupportCategory('');
+  };
+  const handleSupportMessageSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supportMessage.trim()) return;
+    const newMessage: SupportMessage = {
+      id: supportMessages.length + 1,
+      sender: 'agent',
+      message: supportMessage,
+      time: new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      userType: selectedUser?.isPro ? 'pro' : 'standard'
+    };
+    setSupportMessages([...supportMessages, newMessage]);
+    setSupportMessage('');
+    // Envoyer le message via WebSocket si connecté
+    if (connected && selectedUser) {
+      send(WS_EVENTS.ADMIN_NEW_SUPPORT_MESSAGE, {
+        userId: selectedUser.id,
+        message: supportMessage
+      });
+    }
+  };
+  // Fonctions d'administration des utilisateurs
+  const handleUserSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUserSearchQuery(e.target.value);
+  };
+  const filteredUsers = usersData.filter(
+    (user) =>
+    (user.username?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+    user.email?.toLowerCase().includes(userSearchQuery.toLowerCase())) && (
+    activeAdminTab === 'users' ||
+    activeAdminTab === 'pro-users' && user.isPro ||
+    activeAdminTab === 'standard-users' && !user.isPro)
+  );
+  const handleEditUser = (user: UserData) => {
+    setSelectedUser(user);
+    setShowUserModal(true);
+  };
+  const handleSaveUserChanges = async () => {
+    try {
+      if (!selectedUser) return;
+      // Appeler l'API pour mettre à jour l'utilisateur
+      await updateUserByAdmin(selectedUser.id, selectedUser);
+      // Mettre à jour la liste des utilisateurs localement
+      setUsersData(
+        usersData.map((user) =>
+        user.id === selectedUser.id ? selectedUser : user
+        )
+      );
+      // Fermer le modal
+      setShowUserModal(false);
+      // Envoyer une notification via WebSocket
+      if (connected) {
+        send(WS_EVENTS.ADMIN_USER_UPDATED, selectedUser);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour de l'utilisateur:", error);
+      alert("Une erreur est survenue lors de la mise à jour de l'utilisateur.");
+    }
+  };
+  // Fonction pour promouvoir un utilisateur (passer en Pro)
+  const handlePromoteUser = async (userId: string) => {
+    try {
+      const userToUpdate = usersData.find((u) => u.id === userId);
+      if (!userToUpdate) return;
+      // Mettre à jour l'utilisateur
+      const updatedUser = {
+        ...userToUpdate,
+        isPro: true
+      };
+      await updateUserByAdmin(userId, {
+        isPro: true
+      });
+      // Mettre à jour la liste locale
+      setUsersData(
+        usersData.map((user) => user.id === userId ? updatedUser : user)
+      );
+      // Envoyer une notification via WebSocket
+      if (connected) {
+        send(WS_EVENTS.ADMIN_USER_UPDATED, updatedUser);
+      }
+      // Mettre à jour les statistiques
+      setSiteStats((prev) => ({
+        ...prev,
+        proUsers: prev.proUsers + 1,
+        standardUsers: prev.standardUsers - 1
+      }));
+      // Fermer le menu d'actions
+      setUserActionMenuOpen(null);
+    } catch (error) {
+      console.error("Erreur lors de la promotion de l'utilisateur:", error);
+      alert("Une erreur est survenue lors de la promotion de l'utilisateur.");
+    }
+  };
+  // Fonction pour bannir un utilisateur
+  const handleBanUser = async (userId: string) => {
+    try {
+      const userToUpdate = usersData.find((u) => u.id === userId);
+      if (!userToUpdate) return;
+      // Mettre à jour l'utilisateur
+      const updatedUser = {
+        ...userToUpdate,
+        isBanned: true,
+        status: 'banned'
+      };
+      await updateUserByAdmin(userId, {
+        isBanned: true,
+        status: 'banned'
+      });
+      // Mettre à jour la liste locale
+      setUsersData(
+        usersData.map((user) => user.id === userId ? updatedUser : user)
+      );
+      // Envoyer une notification via WebSocket
+      if (connected) {
+        send(WS_EVENTS.ADMIN_USER_UPDATED, updatedUser);
+      }
+      // Fermer le menu d'actions
+      setUserActionMenuOpen(null);
+    } catch (error) {
+      console.error("Erreur lors du bannissement de l'utilisateur:", error);
+      alert("Une erreur est survenue lors du bannissement de l'utilisateur.");
+    }
+  };
+  // Fonction pour réactiver un utilisateur banni
+  const handleUnbanUser = async (userId: string) => {
+    try {
+      const userToUpdate = usersData.find((u) => u.id === userId);
+      if (!userToUpdate) return;
+      // Mettre à jour l'utilisateur
+      const updatedUser = {
+        ...userToUpdate,
+        isBanned: false,
+        status: 'active'
+      };
+      await updateUserByAdmin(userId, {
+        isBanned: false,
+        status: 'active'
+      });
+      // Mettre à jour la liste locale
+      setUsersData(
+        usersData.map((user) => user.id === userId ? updatedUser : user)
+      );
+      // Envoyer une notification via WebSocket
+      if (connected) {
+        send(WS_EVENTS.ADMIN_USER_UPDATED, updatedUser);
+      }
+      // Fermer le menu d'actions
+      setUserActionMenuOpen(null);
+    } catch (error) {
+      console.error("Erreur lors de la réactivation de l'utilisateur:", error);
+      alert("Une erreur est survenue lors de la réactivation de l'utilisateur.");
+    }
+  };
+  // Fonction pour traiter une demande de retrait
+  const handleProcessWithdrawal = async (withdrawalId: string, approved: boolean) => {
+    try {
+      const withdrawal = withdrawalRequests.find((w) => w.id === withdrawalId);
+      if (!withdrawal) return;
+      // Appeler l'API pour mettre à jour le statut
+      await updateWithdrawalStatus(withdrawalId, approved ? 'approved' : 'rejected');
+      
+      const updatedWithdrawal: WithdrawalRequest = {
+        ...withdrawal,
+        status: approved ? 'approved' : 'rejected',
+        processedAt: new Date().toISOString(),
+        processedBy: user?.username || 'Admin'
+      };
+      // Mettre à jour la liste locale
+      setWithdrawalRequests(
+        withdrawalRequests.map((w) =>
+        w.id === withdrawalId ? updatedWithdrawal : w
+        )
+      );
+      // Si approuvé, créer une transaction
+      if (approved) {
+        const newTransaction: Transaction = {
+          id: `tr-${Date.now()}`,
+          userId: withdrawal.userId,
+          username: withdrawal.username,
+          amount: withdrawal.amount,
+          type: 'withdrawal',
+          status: 'completed',
+          method: withdrawal.method,
+          date: new Date().toISOString(),
+          description: `Retrait via ${withdrawal.method === 'bank' ? 'virement bancaire' : withdrawal.method === 'mobile' ? 'Mobile Money' : 'crypto-monnaie'}`
+        };
+        // Ajouter la transaction à la liste
+        setTransactions((prev) => [newTransaction, ...prev]);
+        // Mettre à jour le solde total du site
+        setSiteTotalBalance((prev) => prev - withdrawal.amount);
+        // Mettre à jour les statistiques
+        setSiteStats((prev) => ({
+          ...prev,
+          totalTransactions: prev.totalTransactions + 1,
+          totalVolume: prev.totalVolume + withdrawal.amount,
+          pendingWithdrawals: prev.pendingWithdrawals - 1
+        }));
+        // Envoyer une notification via WebSocket
+        if (connected) {
+          send(WS_EVENTS.TRANSACTION_COMPLETE, newTransaction);
+        }
+      } else {
+        // Si rejeté, mettre à jour les statistiques
+        setSiteStats((prev) => ({
+          ...prev,
+          pendingWithdrawals: prev.pendingWithdrawals - 1
+        }));
+      }
+      // Fermer le modal de détails
+      setShowWithdrawalDetailsModal(false);
+      setSelectedWithdrawal(null);
+    } catch (error) {
+      console.error(
+        'Erreur lors du traitement de la demande de retrait:',
+        error
+      );
+      alert(
+        'Une erreur est survenue lors du traitement de la demande de retrait.'
+      );
+    }
+  };
+  // Fonction pour afficher les détails d'une demande de retrait
+  const handleViewWithdrawalDetails = (withdrawal: WithdrawalRequest) => {
+    setSelectedWithdrawal(withdrawal);
+    setShowWithdrawalDetailsModal(true);
+  };
+  // Filtrer les messages de support en fonction du type d'utilisateur sélectionné
+  const filteredSupportMessages = supportMessages.filter((message) => {
+    if (activeUserTypeFilter === 'all') return true;
+    return message.userType === activeUserTypeFilter;
+  });
+  // Fonction pour répondre à un message de support
+  const handleReplyToSupportMessage = (userId: string, username: string, userType: string | null) => {
+    // Trouver l'utilisateur correspondant
+    const userToReply = usersData.find((u) => u.id === userId);
+    setSelectedUser(
+      userToReply || {
+        id: userId,
+        username,
+        isPro: userType === 'pro'
+      }
+    );
+    setShowSupportChat(true);
+  };
+  return (
+    <>
+      {/* En-tête du profil */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-6 flex items-center">
+        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-purple-500 flex-shrink-0">
+          <img
+            src={
+            user?.avatar ||
+            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
+            }
+            alt={user?.username || 'Utilisateur'}
+            className="w-full h-full object-cover" />
+
+        </div>
+        <div className="ml-4 flex-grow">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
+            {user?.username || 'Utilisateur'}
+            <span className="ml-2 inline-block text-xs bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100 px-2 py-0.5 rounded-full">
+              Admin
+            </span>
+            {connected &&
+            <span className="ml-2 inline-flex items-center text-xs bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 px-2 py-0.5 rounded-full">
+                <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
+                Connecté
+              </span>
+            }
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {user?.email || 'email@exemple.com'}
+          </p>
+          <div className="flex items-center mt-1">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4 text-green-500 mr-1"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor">
+
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+
+            </svg>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Solde: {user?.walletBalance?.toFixed(2) || '0.00'}€
+            </span>
+            <div className="ml-2 flex space-x-1">
+              <button
+                onClick={() => setShowRechargeModal(true)}
+                className="text-xs px-2 py-0.5 bg-green-600 text-white rounded hover:bg-green-700">
+
+                Recharger
+              </button>
+              <button
+                onClick={() => setShowWithdrawModal(true)}
+                className="text-xs px-2 py-0.5 bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600">
+
+                Retirer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Tableau de bord financier du site */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-6">
+        <h3 className="text-lg font-medium mb-4 text-gray-800 dark:text-gray-200">
+          Bilan financier du site
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-green-800 dark:text-green-300 mb-1">
+              Solde total
+            </h4>
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+              {siteTotalBalance.toFixed(2)}€
+            </p>
+            <div className="flex items-center mt-2 text-xs text-green-600 dark:text-green-400">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 mr-1"
+                viewBox="0 0 20 20"
+                fill="currentColor">
+
+                <path
+                  fillRule="evenodd"
+                  d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z"
+                  clipRule="evenodd" />
+
+              </svg>
+              <span>+2.5% cette semaine</span>
+            </div>
+          </div>
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-1">
+              Volume de transactions
+            </h4>
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+              {siteStats.totalVolume.toFixed(2)}€
+            </p>
+            <div className="flex items-center mt-2 text-xs text-blue-600 dark:text-blue-400">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 mr-1"
+                viewBox="0 0 20 20"
+                fill="currentColor">
+
+                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+              </svg>
+              <span>{siteStats.totalTransactions} transactions</span>
+            </div>
+          </div>
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-100 dark:border-yellow-800 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-1">
+              Retraits en attente
+            </h4>
+            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+              {siteStats.pendingWithdrawals}
+            </p>
+            <div className="flex items-center mt-2 text-xs text-yellow-600 dark:text-yellow-400">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 mr-1"
+                viewBox="0 0 20 20"
+                fill="currentColor">
+
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+                  clipRule="evenodd" />
+
+              </svg>
+              <span>À traiter sous 24h</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+        {/* Liste des sections */}
+        <div className="space-y-3 p-4">
+          {/* Section Administration */}
+          <div
+            className={`p-3 border ${activeSection === 'admin' ? 'border-purple-500 dark:border-purple-400 bg-purple-50 dark:bg-purple-900/20' : 'border-gray-200 dark:border-gray-700'} rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-all`}
+            onClick={() => handleSectionClick('admin')}>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor">
+
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+
+                </svg>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Administration
+                  </h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Gérer les utilisateurs et la plateforme
+                  </p>
+                </div>
+              </div>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className={`h-5 w-5 text-gray-400 transition-transform ${activeSection === 'admin' ? 'transform rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor">
+
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7" />
+
+              </svg>
+            </div>
+          </div>
+          {/* Contenu de la section Administration */}
+          {activeSection === 'admin' &&
+          <div className="ml-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm">
+              {/* Onglets d'administration */}
+              <div className="border-b border-gray-200 dark:border-gray-700 mb-4">
+                <nav className="flex space-x-4 overflow-x-auto pb-1">
+                  <button
+                  onClick={() => setActiveAdminTab('users')}
+                  className={`px-3 py-2 text-sm font-medium whitespace-nowrap ${activeAdminTab === 'users' ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}>
+
+                    Tous les utilisateurs
+                  </button>
+                  <button
+                  onClick={() => setActiveAdminTab('pro-users')}
+                  className={`px-3 py-2 text-sm font-medium whitespace-nowrap ${activeAdminTab === 'pro-users' ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}>
+
+                    Utilisateurs Pro
+                  </button>
+                  <button
+                  onClick={() => setActiveAdminTab('standard-users')}
+                  className={`px-3 py-2 text-sm font-medium whitespace-nowrap ${activeAdminTab === 'standard-users' ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}>
+
+                    Utilisateurs Standard
+                  </button>
+                  <button
+                  onClick={() => setActiveAdminTab('withdrawals')}
+                  className={`px-3 py-2 text-sm font-medium whitespace-nowrap ${activeAdminTab === 'withdrawals' ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}>
+
+                    Demandes de retrait
+                    {siteStats.pendingWithdrawals > 0 &&
+                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                        {siteStats.pendingWithdrawals}
+                      </span>
+                  }
+                  </button>
+                  <button
+                  onClick={() => setActiveAdminTab('transactions')}
+                  className={`px-3 py-2 text-sm font-medium whitespace-nowrap ${activeAdminTab === 'transactions' ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}>
+
+                    Transactions
+                  </button>
+                  <button
+                  onClick={() => setActiveAdminTab('support')}
+                  className={`px-3 py-2 text-sm font-medium whitespace-nowrap ${activeAdminTab === 'support' ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}>
+
+                    Support Client
+                  </button>
+                </nav>
+              </div>
+              {/* Contenu des onglets */}
+              {(activeAdminTab === 'users' ||
+            activeAdminTab === 'pro-users' ||
+            activeAdminTab === 'standard-users') &&
+            <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200">
+                      {activeAdminTab === 'users' ?
+                  'Gestion des utilisateurs' :
+                  activeAdminTab === 'pro-users' ?
+                  'Utilisateurs Pro' :
+                  'Utilisateurs Standard'}
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <div className="relative">
+                        <input
+                      id="user-search"
+                      title="Rechercher un utilisateur"
+                      type="text"
+                      placeholder="Rechercher un utilisateur..."
+                      value={userSearchQuery}
+                      onChange={handleUserSearch}
+                      className="w-64 px-3 py-2 pl-10 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm" />
+
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5 text-gray-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor">
+
+                            <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+
+                          </svg>
+                        </div>
+                      </div>
+                      <button
+                    onClick={loadUsers}
+                    className="p-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                    title="Rafraîchir la liste">
+
+                        <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor">
+
+                          <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  {/* Statistiques utilisateurs */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div className="bg-white dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <h5 className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                        Total utilisateurs
+                      </h5>
+                      <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                        {siteStats.totalUsers}
+                      </p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <h5 className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                        Utilisateurs Pro
+                      </h5>
+                      <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                        {siteStats.proUsers}
+                      </p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <h5 className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                        Utilisateurs Standard
+                      </h5>
+                      <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                        {siteStats.standardUsers}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Liste des utilisateurs */}
+                  <div className="overflow-x-auto">
+                    {isLoadingUsers ?
+                <div className="flex justify-center items-center py-8">
+                        <svg
+                    className="animate-spin h-8 w-8 text-purple-500"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24">
+
+                          <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4">
+                    </circle>
+                          <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                    </path>
+                        </svg>
+                      </div> :
+
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700">
+                          <tr>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Utilisateur
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Statut
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Solde
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                          {filteredUsers.length === 0 ?
+                    <tr>
+                              <td
+                        colSpan={4}
+                        className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+
+                                Aucun utilisateur trouvé
+                              </td>
+                            </tr> :
+
+                    filteredUsers.map((user) =>
+                    <tr
+                      key={user.id}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700">
+
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="flex-shrink-0 h-10 w-10">
+                                      {user.avatar ?
+                            <img
+                              src={user.avatar}
+                              alt={user.username}
+                              className="h-10 w-10 rounded-full object-cover" /> :
+
+
+                            <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                                          {user.username?.
+                              charAt(0).
+                              toUpperCase() || '?'}
+                                        </div>
+                            }
+                                    </div>
+                                    <div className="ml-4">
+                                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                                        {user.username}
+                                        {user.isPro &&
+                              <span className="ml-2 inline-block text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100 px-2 py-0.5 rounded-full">
+                                            Pro
+                                          </span>
+                              }
+                                        {user.role === 'admin' &&
+                              <span className="ml-2 inline-block text-xs bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100 px-2 py-0.5 rounded-full">
+                                            Admin
+                                          </span>
+                              }
+                                      </div>
+                                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                                        {user.email}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {user.isBanned || user.status === 'banned' ?
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                      Banni
+                                    </span> :
+                        user.status === 'suspended' ?
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                                      Suspendu
+                                    </span> :
+
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                      Actif
+                                    </span>
+                        }
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                  {user.walletBalance?.toFixed(2) || '0.00'}€
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  <div className="relative">
+                                    <button
+                            title="Actions"
+                            onClick={() =>
+                            setUserActionMenuOpen(
+                              userActionMenuOpen === user.id ?
+                              null :
+                              user.id
+                            )
+                            }
+                            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
+
+                                      <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-5 w-5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor">
+
+                                        <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+
+                                      </svg>
+                                    </button>
+                                    {userActionMenuOpen === user.id &&
+                          <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-700 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-600">
+                                        <div className="py-1">
+                                          <button
+                                onClick={() => {
+                                  handleEditUser(user);
+                                  setUserActionMenuOpen(null);
+                                }}
+                                className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600">
+
+                                            Éditer
+                                          </button>
+                                          {!user.isPro &&
+                              <button
+                                onClick={() =>
+                                handlePromoteUser(user.id)
+                                }
+                                className="block w-full text-left px-4 py-2 text-sm text-yellow-600 dark:text-yellow-400 hover:bg-gray-100 dark:hover:bg-gray-600">
+
+                                              Promouvoir en Pro
+                                            </button>
+                              }
+                                          {user.isBanned ||
+                              user.status === 'banned' ?
+                              <button
+                                onClick={() =>
+                                handleUnbanUser(user.id)
+                                }
+                                className="block w-full text-left px-4 py-2 text-sm text-green-600 dark:text-green-400 hover:bg-gray-100 dark:hover:bg-gray-600">
+
+                                              Réactiver
+                                            </button> :
+
+                              <button
+                                onClick={() =>
+                                handleBanUser(user.id)
+                                }
+                                className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600">
+
+                                              Bannir
+                                            </button>
+                              }
+                                          <button
+                                onClick={() => {
+                                  handleReplyToSupportMessage(
+                                    user.id,
+                                    user.username,
+                                    user.isPro ? 'pro' : 'standard'
+                                  );
+                                  setUserActionMenuOpen(null);
+                                }}
+                                className="block w-full text-left px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-600">
+
+                                            Envoyer un message
+                                          </button>
+                                        </div>
+                                      </div>
+                          }
+                                  </div>
+                                </td>
+                              </tr>
+                    )
+                    }
+                        </tbody>
+                      </table>
+                }
+                  </div>
+                </div>
+            }
+              {/* Onglet des demandes de retrait */}
+              {activeAdminTab === 'withdrawals' &&
+            <div>
+                  <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-4">
+                    Demandes de retrait
+                  </h3>
+                  {withdrawalRequests.length === 0 ?
+              <div className="bg-gray-50 dark:bg-gray-700 p-6 rounded-lg text-center">
+                      <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-12 w-12 mx-auto text-gray-400 dark:text-gray-500 mb-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor">
+
+                        <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+
+                      </svg>
+                      <p className="text-gray-600 dark:text-gray-300">
+                        Aucune demande de retrait en attente
+                      </p>
+                    </div> :
+
+              <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700">
+                          <tr>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Utilisateur
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Montant
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Méthode
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Date
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Éligibilité
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                          {withdrawalRequests.map((withdrawal) =>
+                    <tr
+                      key={withdrawal.id}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700">
+
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  {withdrawal.username}
+                                </div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  ID: {withdrawal.userId}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  {withdrawal.amount.toFixed(2)}€
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span
+                          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${withdrawal.method === 'bank' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : withdrawal.method === 'mobile' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'}`}>
+
+                                  {withdrawal.method === 'bank' ?
+                          'Virement bancaire' :
+                          withdrawal.method === 'mobile' ?
+                          'Mobile Money' :
+                          'Crypto-monnaie'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {new Date(withdrawal.date).toLocaleDateString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {Object.values(withdrawal.eligibility).every(
+                          Boolean
+                        ) ?
+                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                    Éligible
+                                  </span> :
+
+                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                    Non éligible
+                                  </span>
+                        }
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button
+                          onClick={() =>
+                          handleViewWithdrawalDetails(withdrawal)
+                          }
+                          className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 mr-3">
+
+                                  Détails
+                                </button>
+                              </td>
+                            </tr>
+                    )}
+                        </tbody>
+                      </table>
+                    </div>
+              }
+                </div>
+            }
+              {/* Onglet des transactions */}
+              {activeAdminTab === 'transactions' &&
+            <div>
+                  <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-4">
+                    Historique des transactions
+                  </h3>
+                  {transactions.length === 0 ?
+              <div className="bg-gray-50 dark:bg-gray-700 p-6 rounded-lg text-center">
+                      <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-12 w-12 mx-auto text-gray-400 dark:text-gray-500 mb-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor">
+
+                        <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+
+                      </svg>
+                      <p className="text-gray-600 dark:text-gray-300">
+                        Aucune transaction trouvée
+                      </p>
+                    </div> :
+
+              <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700">
+                          <tr>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              ID
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Utilisateur
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Type
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Montant
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Statut
+                            </th>
+                            <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+
+                              Date
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                          {transactions.map((transaction) =>
+                    <tr
+                      key={transaction.id}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700">
+
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {transaction.id}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  {transaction.username}
+                                </div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  ID: {transaction.userId}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span
+                          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${transaction.type === 'recharge' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : transaction.type === 'withdrawal' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : transaction.type === 'subscription' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}`}>
+
+                                  {transaction.type === 'recharge' ?
+                          'Recharge' :
+                          transaction.type === 'withdrawal' ?
+                          'Retrait' :
+                          transaction.type === 'subscription' ?
+                          'Abonnement' :
+                          'Achat'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div
+                          className={`text-sm font-medium ${transaction.type === 'recharge' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+
+                                  {transaction.type === 'recharge' ? '+' : '-'}
+                                  {transaction.amount.toFixed(2)}€
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span
+                          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${transaction.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : transaction.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
+
+                                  {transaction.status === 'completed' ?
+                          'Complété' :
+                          transaction.status === 'pending' ?
+                          'En attente' :
+                          'Échoué'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {new Date(
+                          transaction.date
+                        ).toLocaleDateString()}
+                              </td>
+                            </tr>
+                    )}
+                        </tbody>
+                      </table>
+                    </div>
+              }
+                </div>
+            }
+              {/* Onglet du support client */}
+              {activeAdminTab === 'support' &&
+            <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200">
+                      Support Client
+                    </h3>
+                    <div>
+                      <div className="flex space-x-2">
+                        <button
+                      onClick={() => setActiveUserTypeFilter('all')}
+                      className={`px-3 py-1 text-sm rounded-md ${activeUserTypeFilter === 'all' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
+
+                          Tous
+                        </button>
+                        <button
+                      onClick={() => setActiveUserTypeFilter('standard')}
+                      className={`px-3 py-1 text-sm rounded-md ${activeUserTypeFilter === 'standard' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
+
+                          Standard
+                        </button>
+                        <button
+                      onClick={() => setActiveUserTypeFilter('pro')}
+                      className={`px-3 py-1 text-sm rounded-md ${activeUserTypeFilter === 'pro' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
+
+                          Pro
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Liste des messages de support */}
+                  <div className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+                    <div className="max-h-96 overflow-y-auto p-4 space-y-4">
+                      {filteredSupportMessages.filter(
+                    (m) => m.sender === 'user'
+                  ).length === 0 ?
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                          Aucun message de support
+                        </div> :
+
+                  filteredSupportMessages.
+                  filter((m) => m.sender === 'user').
+                  map((message) =>
+                  <div
+                    key={message.id}
+                    className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex items-center">
+                                  <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                                    {message.username || 'Utilisateur'}
+                                    {message.userType &&
+                          <span
+                            className={`ml-2 text-xs px-2 py-0.5 rounded-full ${message.userType === 'pro' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}`}>
+
+                                        {message.userType === 'pro' ?
+                            'Pro' :
+                            'Standard'}
+                                      </span>
+                          }
+                                  </div>
+                                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                                    {message.time}
+                                  </span>
+                                </div>
+                                <button
+                        onClick={() =>
+                        handleReplyToSupportMessage(
+                          message.userId || '',
+                          message.username || 'Utilisateur',
+                          message.userType || null
+                        )
+                        }
+                        className="text-xs px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700">
+
+                                  Répondre
+                                </button>
+                              </div>
+                              <p className="text-gray-700 dark:text-gray-300">
+                                {message.message}
+                              </p>
+                              {/* Afficher les réponses à ce message */}
+                              {filteredSupportMessages.
+                    filter(
+                      (m) =>
+                      m.sender === 'agent' &&
+                      m.userType === message.userType
+                    ).
+                    map((reply, index) =>
+                    <div
+                      key={`reply-${message.id}-${index}`}
+                      className="mt-2 pl-4 border-l-2 border-gray-300 dark:border-gray-600">
+
+                                    <div className="flex justify-between items-start">
+                                      <div className="flex items-center">
+                                        <div className="font-medium text-green-600 dark:text-green-400">
+                                          Support
+                                        </div>
+                                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                                          {reply.time}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <p className="text-gray-700 dark:text-gray-300">
+                                      {reply.message}
+                                    </p>
+                                  </div>
+                    )}
+                            </div>
+                  )
+                  }
+                    </div>
+                  </div>
+                </div>
+            }
+            </div>
+          }
+          {/* Section Profil */}
+          <div
+            className={`p-3 border ${activeSection === 'profile' ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'} rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-all`}
+            onClick={() => handleSectionClick('profile')}>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor">
+
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+
+                </svg>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Profil
+                  </h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Modifier vos informations personnelles
+                  </p>
+                </div>
+              </div>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className={`h-5 w-5 text-gray-400 transition-transform ${activeSection === 'profile' ? 'transform rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor">
+
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7" />
+
+              </svg>
+            </div>
+          </div>
+          {/* Contenu de la section Profil */}
+          {activeSection === 'profile' &&
+          <div className="ml-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm">
+              <h3 className="text-lg font-medium mb-4 dark:text-white">
+                Profil
+              </h3>
+              <form onSubmit={handleProfileSubmit}>
+                <div className="space-y-4">
+                  <div className="flex flex-col items-center md:flex-row md:items-start mb-4">
+                    <div className="relative w-24 h-24 mb-4 md:mb-0 md:mr-6">
+                      <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-gray-300 dark:border-gray-600">
+                        <img
+                        src={
+                        user?.avatar ||
+                        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
+                        }
+                        alt={user?.username || 'Utilisateur'}
+                        className="w-full h-full object-cover" />
+
+                      </div>
+                      <div className="absolute inset-0 bg-black bg-opacity-40 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer">
+                        <label
+                        htmlFor="avatar-upload"
+                        className="text-white text-xs font-medium cursor-pointer p-2 text-center">
+
+                          Modifier
+                          <input
+                          title="Avatar"
+                          type="file"
+                          id="avatar-upload"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleAvatarChange} />
+
+                        </label>
+                      </div>
+                    </div>
+                    <div className="md:flex-1">
+                      <div className="space-y-2">
+                        <div>
+                          <label htmlFor="admin-profile-username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Nom d'utilisateur
+                          </label>
+                          <input
+                          id="admin-profile-username"
+                          name="username"
+                          title="Nom d'utilisateur"
+                          type="text"
+                          defaultValue={user?.username || ''}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm" />
+
+                        </div>
+                        <div>
+                          <label htmlFor="admin-profile-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Email
+                          </label>
+                          <input
+                          id="admin-profile-email"
+                          name="email"
+                          title="Email"
+                          type="email"
+                          defaultValue={user?.email || ''}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm" />
+
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Bio
+                    </label>
+                    <textarea
+                    id="admin-profile-bio"
+                    name="bio"
+                    title="Bio"
+                    defaultValue={user?.bio || ''}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm"
+                    rows={3}
+                    placeholder="Parlez-nous de vous...">
+                  </textarea>
+                  </div>
+                  <div className="pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+
+                      {isSaving ? 'Enregistrement...' : 'Enregistrer les modifications'}
+                    </button>
+                    {saveSuccess && (
+                      <span className="text-sm text-green-600 dark:text-green-400 font-medium animate-fade-in">
+                        Profil mis à jour !
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </form>
+            </div>
+          }
+          {/* Section Notifications */}
+          <div
+            className={`p-3 border ${activeSection === 'notifications' ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'} rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-all mb-2`}
+            onClick={() => handleSectionClick('notifications')}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Notifications
+                  </h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Gérer vos alertes et préférences
+                  </p>
+                </div>
+              </div>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className={`h-5 w-5 text-gray-400 transition-transform ${activeSection === 'notifications' ? 'transform rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Contenu de la section Notifications */}
+          {activeSection === 'notifications' &&
+          <div className="ml-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm">
+              <h3 className="text-lg font-medium mb-4 dark:text-white">
+                Préférences de notifications
+              </h3>
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Notifications par email
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Recevoir des résumés quotidiens et des annonces importantes
+                    </p>
+                  </div>
+                  <button
+                    title={`Notifications par email: ${emailNotifications ? 'Désactiver' : 'Activer'}`}
+                    onClick={() => handleNotificationChange('email', !emailNotifications)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${emailNotifications ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${emailNotifications ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Notifications push
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Notifications en temps réel sur votre navigateur ou mobile
+                    </p>
+                  </div>
+                  <button
+                    title={`Notifications push: ${pushNotifications ? 'Désactiver' : 'Activer'}`}
+                    onClick={() => handleNotificationChange('push', !pushNotifications)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${pushNotifications ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${pushNotifications ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Notifications de matchs
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Alertes sur les débuts et fins de matchs suivis
+                    </p>
+                  </div>
+                  <button
+                    title={`Notifications de matchs: ${matchNotifications ? 'Désactiver' : 'Activer'}`}
+                    onClick={() => handleNotificationChange('matches', !matchNotifications)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${matchNotifications ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${matchNotifications ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Notifications de canaux
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Alertes lors de nouvelles publications dans vos canaux
+                    </p>
+                  </div>
+                  <button
+                    title={`Notifications de canaux: ${channelNotifications ? 'Désactiver' : 'Activer'}`}
+                    onClick={() => handleNotificationChange('channels', !channelNotifications)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${channelNotifications ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${channelNotifications ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+
+          {/* Section Sécurité */}
+          <div
+            className={`p-3 border ${activeSection === 'security' ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'} rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-all mb-2`}
+            onClick={() => handleSectionClick('security')}>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor">
+
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+
+                </svg>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Sécurité
+                  </h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Mot de passe et authentification
+                  </p>
+                </div>
+              </div>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className={`h-5 w-5 text-gray-400 transition-transform ${activeSection === 'security' ? 'transform rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor">
+
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7" />
+
+              </svg>
+            </div>
+          </div>
+          {/* Contenu de la section Sécurité */}
+          {activeSection === 'security' &&
+          <div className="ml-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm">
+              <h3 className="text-lg font-medium mb-4 dark:text-white">
+                Sécurité
+              </h3>
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Changer de mot de passe
+                  </h4>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    setIsSaving(true);
+                    setTimeout(() => {
+                      setIsSaving(false);
+                      setSaveSuccess(true);
+                      setTimeout(() => setSaveSuccess(false), 3000);
+                      (e.target as HTMLFormElement).reset();
+                    }, 1000);
+                  }}>
+                    <div className="space-y-3">
+                    <div>
+                      <label htmlFor="current-password" title="Mot de passe actuel" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Mot de passe actuel
+                      </label>
+                      <input
+                      id="current-password"
+                      title="Mot de passe actuel"
+                      type="password"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm"
+                      placeholder="••••••••••••" />
+
+                    </div>
+                    <div>
+                      <label htmlFor="new-password" title="Nouveau mot de passe" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Nouveau mot de passe
+                      </label>
+                      <input
+                      id="new-password"
+                      title="Nouveau mot de passe"
+                      type="password"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm"
+                      placeholder="••••••••••••" />
+
+                    </div>
+                    <div>
+                      <label htmlFor="confirm-password" title="Confirmer le nouveau mot de passe" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Confirmer le nouveau mot de passe
+                      </label>
+                      <input
+                      id="confirm-password"
+                      title="Confirmer le nouveau mot de passe"
+                      type="password"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm"
+                      placeholder="••••••••••••" />
+
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-all">
+                        {isSaving ? 'Mise à jour...' : 'Mettre à jour le mot de passe'}
+                      </button>
+                      {saveSuccess && (
+                        <span className="text-sm text-green-600 dark:text-green-400 font-medium animate-fade-in">
+                          Mot de passe mis à jour !
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </form>
+                </div>
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Authentification à deux facteurs
+                  </h4>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        L'authentification à deux facteurs est activée
+                      </p>
+                    </div>
+                    <button className="px-3 py-1.5 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700">
+                      Désactiver
+                    </button>
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Sessions actives
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mr-3">
+                          <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4 text-green-600 dark:text-green-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor">
+
+                            <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                            Session actuelle
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Paris, France - Chrome sur Windows
+                          </p>
+                        </div>
+                      </div>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        Actif
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mr-3">
+                          <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4 text-blue-600 dark:text-blue-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor">
+
+                            <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                            Application mobile
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            iPhone 13 - iOS 15
+                          </p>
+                        </div>
+                      </div>
+                      <button className="text-xs text-red-600 dark:text-red-400 hover:underline">
+                        Déconnecter
+                      </button>
+                    </div>
+                    <div className="pt-2">
+                      <button className="text-sm text-red-600 dark:text-red-400 hover:underline font-medium">
+                        Déconnecter toutes les autres sessions
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+      {/* Modal pour recharger le compte */}
+      {showRechargeModal &&
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
+            <div className="relative px-4 py-3 bg-green-600 text-white">
+              <h3 className="text-base font-medium">Recharger mon compte</h3>
+              <button
+              title="Fermer"
+              onClick={() => setShowRechargeModal(false)}
+              className="absolute right-2 top-2 text-white hover:text-gray-200">
+
+                <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor">
+
+                  <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12" />
+
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="mb-4">
+                <label htmlFor="recharge-amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Montant à recharger (€)
+                </label>
+                <input
+                id="recharge-amount"
+                title="Montant de la recharge"
+                type="number"
+                min="10"
+                step="5"
+                value={rechargeAmount}
+                onChange={(e) =>
+                setRechargeAmount(parseFloat(e.target.value))
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm"
+                placeholder="Ex: 50" />
+
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Méthode de paiement
+                </label>
+                <div className="space-y-2">
+                  <div
+                  className="flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                  onClick={() => setRechargeMethod('card')}>
+
+                    <input
+                    title="Carte bancaire"
+                    type="radio"
+                    id="card"
+                    name="paymentMethod"
+                    checked={rechargeMethod === 'card'}
+                    onChange={() => setRechargeMethod('card')}
+                    className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500" />
+
+                    <label
+                    htmlFor="card"
+                    className="ml-3 flex items-center cursor-pointer">
+
+                      <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mr-3">
+                        <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-blue-600 dark:text-blue-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor">
+
+                          <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Carte bancaire
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Visa, Mastercard, etc.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                  <div
+                  className="flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                  onClick={() => setRechargeMethod('mobile')}>
+
+                    <input
+                    title="Mobile Money"
+                    type="radio"
+                    id="mobile"
+                    name="paymentMethod"
+                    checked={rechargeMethod === 'mobile'}
+                    onChange={() => setRechargeMethod('mobile')}
+                    className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500" />
+
+                    <label
+                    htmlFor="mobile"
+                    className="ml-3 flex items-center cursor-pointer">
+
+                      <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900 rounded-full flex items-center justify-center mr-3">
+                        <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-orange-600 dark:text-orange-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor">
+
+                          <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Mobile Money
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Orange Money, MTN Mobile Money, Moov Money
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                  <div
+                  className="flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                  onClick={() => setRechargeMethod('crypto')}>
+
+                    <input
+                    title="Crypto"
+                    type="radio"
+                    id="crypto"
+                    name="paymentMethod"
+                    checked={rechargeMethod === 'crypto'}
+                    onChange={() => setRechargeMethod('crypto')}
+                    className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500" />
+
+                    <label
+                    htmlFor="crypto"
+                    className="ml-3 flex items-center cursor-pointer">
+
+                      <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center mr-3">
+                        <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-purple-600 dark:text-purple-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor">
+
+                          <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Crypto-monnaie
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Bitcoin, Ethereum, etc.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-md mb-4">
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Montant
+                  </span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {rechargeAmount.toFixed(2)}€
+                  </span>
+                </div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Frais (2.5%)
+                  </span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {(rechargeAmount * 0.025).toFixed(2)}€
+                  </span>
+                </div>
+                <div className="border-t border-gray-200 dark:border-gray-600 pt-2 mt-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      Total à payer
+                    </span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                      {(rechargeAmount * 1.025).toFixed(2)}€
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                onClick={() => setShowRechargeModal(false)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700">
+
+                  Retour
+                </button>
+                <button
+                onClick={handleRecharge}
+                className="px-3 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 flex items-center">
+
+                  {isProcessingPayment ?
+                <>
+                      <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24">
+
+                        <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4">
+                    </circle>
+                        <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                    </path>
+                      </svg>
+                      Traitement...
+                    </> :
+
+                'Procéder au paiement'
+                }
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+      {/* Modal pour retirer des fonds */}
+      {showWithdrawModal &&
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
+            <div className="relative px-4 py-3 bg-green-600 text-white">
+              <h3 className="text-base font-medium">Retirer des fonds</h3>
+              <button
+              title="Fermer"
+              onClick={() => setShowWithdrawModal(false)}
+              className="absolute right-2 top-2 text-white hover:text-gray-200">
+
+                <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor">
+
+                  <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12" />
+
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="mb-4">
+                <label htmlFor="withdraw-amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Montant à retirer (€)
+                </label>
+                <input
+                id="withdraw-amount"
+                title="Montant"
+                type="number"
+                min="10"
+                max={user?.walletBalance || 0}
+                step="5"
+                value={withdrawAmount}
+                onChange={(e) =>
+                setWithdrawAmount(parseFloat(e.target.value))
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm"
+                placeholder="Ex: 50" />
+
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Solde disponible: {user?.walletBalance?.toFixed(2) || '0.00'}€
+                </p>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Méthode de retrait
+                </label>
+                <select
+                title="Méthode de retrait"
+                value={withdrawMethod}
+                onChange={(e) => setWithdrawMethod(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm">
+
+                  <option value="bank">Virement bancaire</option>
+                  <option value="mobile">Mobile Money</option>
+                  <option value="crypto">Crypto-monnaie</option>
+                </select>
+              </div>
+              {withdrawMethod === 'bank' &&
+            <div className="mb-4 space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Nom du titulaire
+                    </label>
+                    <input
+                  title="Nom du titulaire"
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm"
+                  placeholder="Ex: Jean Dupont" />
+
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      IBAN
+                    </label>
+                    <input
+                  title="IBAN"
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm"
+                  placeholder="Ex: FR76 1234 5678 9012 3456 7890 123" />
+
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      BIC/SWIFT
+                    </label>
+                    <input
+                  title="BIC/SWIFT"
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm"
+                  placeholder="Ex: BNPAFRPP" />
+
+                  </div>
+                </div>
+            }
+              {withdrawMethod === 'mobile' &&
+            <div className="mb-4 space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Opérateur
+                    </label>
+                    <select title="Opérateur" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm">
+                      <option value="orange">Orange Money</option>
+                      <option value="mtn">MTN Mobile Money</option>
+                      <option value="moov">Moov Money</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Numéro de téléphone
+                    </label>
+                    <input
+                  title="Numéro de téléphone"
+                  type="tel"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm"
+                  placeholder="Ex: +225 07 12 34 56 78" />
+
+                  </div>
+                </div>
+            }
+              {withdrawMethod === 'crypto' &&
+            <div className="mb-4 space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Crypto-monnaie
+                    </label>
+                    <select title="Crypto-monnaie" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm">
+                      <option value="btc">Bitcoin (BTC)</option>
+                      <option value="eth">Ethereum (ETH)</option>
+                      <option value="usdt">Tether (USDT)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Adresse de portefeuille
+                    </label>
+                    <input
+                  title="Adresse de portefeuille"
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm"
+                  placeholder="Ex: 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" />
+
+                  </div>
+                </div>
+            }
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-100 dark:border-yellow-800 rounded-md p-3 mb-4">
+                <div className="flex">
+                  <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0 mr-2"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor">
+
+                    <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+
+                  </svg>
+                  <div>
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      Les retraits sont traités sous 24-48h ouvrables. Des frais
+                      de 2,5% s'appliquent, avec un minimum de 0,50€.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                onClick={() => setShowWithdrawModal(false)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700">
+
+                  Retour
+                </button>
+                <button
+                onClick={handleWithdraw}
+                className="px-3 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 flex items-center"
+                disabled={
+                withdrawAmount > (user?.walletBalance || 0) ||
+                withdrawAmount < 10
+                }>
+
+                  {isProcessingWithdraw ?
+                <>
+                      <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24">
+
+                        <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4">
+                    </circle>
+                        <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                    </path>
+                      </svg>
+                      Traitement...
+                    </> :
+
+                'Confirmer le retrait'
+                }
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+      {/* Modal pour éditer un utilisateur */}
+      {showUserModal && selectedUser &&
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-lg mx-4 overflow-hidden">
+            <div className="relative px-4 py-3 bg-indigo-600 text-white">
+              <h3 className="text-base font-medium">Éditer l'utilisateur</h3>
+              <button
+              title="Fermer"
+              onClick={() => setShowUserModal(false)}
+              className="absolute right-2 top-2 text-white hover:text-gray-200">
+
+                <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor">
+
+                  <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12" />
+
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Nom d'utilisateur
+                  </label>
+                  <input
+                  title="Nom d'utilisateur"
+                  type="text"
+                  value={selectedUser.username}
+                  onChange={(e) =>
+                  setSelectedUser({
+                    ...selectedUser,
+                    username: e.target.value
+                  })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm" />
+
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Email
+                  </label>
+                  <input
+                  title="Email"
+                  type="email"
+                  value={selectedUser.email}
+                  onChange={(e) =>
+                  setSelectedUser({
+                    ...selectedUser,
+                    email: e.target.value
+                  })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm" />
+
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Solde du portefeuille (€)
+                  </label>
+                  <input
+                  title="Solde"
+                  type="number"
+                  value={selectedUser.walletBalance}
+                  onChange={(e) =>
+                  setSelectedUser({
+                    ...selectedUser,
+                    walletBalance: parseFloat(e.target.value)
+                  })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm" />
+
+                </div>
+                <div className="flex items-center">
+                  <input
+                  title="Utilisateur Pro"
+                  type="checkbox"
+                  id="isPro"
+                  checked={selectedUser.isPro}
+                  onChange={(e) =>
+                  setSelectedUser({
+                    ...selectedUser,
+                    isPro: e.target.checked
+                  })
+                  }
+                  className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
+
+                  <label
+                  htmlFor="isPro"
+                  className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+
+                    Utilisateur Pro
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Statut
+                  </label>
+                  <select
+                  title="Statut"
+                  value={selectedUser.status}
+                  onChange={(e) =>
+                  setSelectedUser({
+                    ...selectedUser,
+                    status: e.target.value,
+                    isBanned: e.target.value === 'banned'
+                  })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm">
+
+                    <option value="active">Actif</option>
+                    <option value="suspended">Suspendu</option>
+                    <option value="banned">Banni</option>
+                  </select>
+                </div>
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
+                  <button
+                  onClick={() => setShowUserModal(false)}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700">
+
+                    Annuler
+                  </button>
+                  <button
+                  onClick={handleSaveUserChanges}
+                  className="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700">
+
+                    Enregistrer les modifications
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+      {/* Modal de détails de demande de retrait */}
+      {showWithdrawalDetailsModal && selectedWithdrawal &&
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-lg mx-4 overflow-hidden">
+            <div className="relative px-4 py-3 bg-yellow-600 text-white">
+              <h3 className="text-base font-medium">
+                Détails de la demande de retrait
+              </h3>
+              <button
+              title="Fermer"
+              onClick={() => {
+                setShowWithdrawalDetailsModal(false);
+                setSelectedWithdrawal(null);
+              }}
+              className="absolute right-2 top-2 text-white hover:text-gray-200">
+
+                <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor">
+
+                  <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12" />
+
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Utilisateur
+                    </h4>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {selectedWithdrawal.username}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      ID: {selectedWithdrawal.userId}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Montant
+                    </h4>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {selectedWithdrawal.amount.toFixed(2)}€
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Informations de paiement
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        Méthode
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {selectedWithdrawal.method === 'bank' ?
+                      'Virement bancaire' :
+                      selectedWithdrawal.method === 'mobile' ?
+                      'Mobile Money' :
+                      'Crypto-monnaie'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        Date de demande
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {new Date(selectedWithdrawal.date).toLocaleDateString()}{' '}
+                        {new Date(selectedWithdrawal.date).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    {selectedWithdrawal.method === 'bank' &&
+                  <>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            Titulaire
+                          </span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {selectedWithdrawal.accountInfo.name}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            IBAN
+                          </span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {selectedWithdrawal.accountInfo.iban}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            BIC/SWIFT
+                          </span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {selectedWithdrawal.accountInfo.bic}
+                          </span>
+                        </div>
+                      </>
+                  }
+                    {selectedWithdrawal.method === 'mobile' &&
+                  <>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            Opérateur
+                          </span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {selectedWithdrawal.accountInfo.provider}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            Numéro
+                          </span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {selectedWithdrawal.accountInfo.number}
+                          </span>
+                        </div>
+                      </>
+                  }
+                    {selectedWithdrawal.method === 'crypto' &&
+                  <>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            Crypto-monnaie
+                          </span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {selectedWithdrawal.accountInfo.currency}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            Adresse
+                          </span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-xs">
+                            {selectedWithdrawal.accountInfo.address}
+                          </span>
+                        </div>
+                      </>
+                  }
+                  </div>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Vérification d'éligibilité
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center">
+                      <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center mr-2 ${selectedWithdrawal.eligibility.minBalance ? 'bg-green-100 dark:bg-green-900' : 'bg-red-100 dark:bg-red-900'}`}>
+
+                        {selectedWithdrawal.eligibility.minBalance ?
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3 w-3 text-green-600 dark:text-green-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor">
+
+                            <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd" />
+
+                          </svg> :
+
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3 w-3 text-red-600 dark:text-red-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor">
+
+                            <path
+                          fillRule="evenodd"
+                          d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                          clipRule="evenodd" />
+
+                          </svg>
+                      }
+                      </div>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        Solde minimum requis
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center mr-2 ${selectedWithdrawal.eligibility.completedProfile ? 'bg-green-100 dark:bg-green-900' : 'bg-red-100 dark:bg-red-900'}`}>
+
+                        {selectedWithdrawal.eligibility.completedProfile ?
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3 w-3 text-green-600 dark:text-green-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor">
+
+                            <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd" />
+
+                          </svg> :
+
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3 w-3 text-red-600 dark:text-red-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor">
+
+                            <path
+                          fillRule="evenodd"
+                          d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                          clipRule="evenodd" />
+
+                          </svg>
+                      }
+                      </div>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        Profil complété
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center mr-2 ${selectedWithdrawal.eligibility.verifiedIdentity ? 'bg-green-100 dark:bg-green-900' : 'bg-red-100 dark:bg-red-900'}`}>
+
+                        {selectedWithdrawal.eligibility.verifiedIdentity ?
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3 w-3 text-green-600 dark:text-green-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor">
+
+                            <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd" />
+
+                          </svg> :
+
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3 w-3 text-red-600 dark:text-red-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor">
+
+                            <path
+                          fillRule="evenodd"
+                          d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                          clipRule="evenodd" />
+
+                          </svg>
+                      }
+                      </div>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        Identité vérifiée
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center mr-2 ${selectedWithdrawal.eligibility.minimumActivity ? 'bg-green-100 dark:bg-green-900' : 'bg-red-100 dark:bg-red-900'}`}>
+
+                        {selectedWithdrawal.eligibility.minimumActivity ?
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3 w-3 text-green-600 dark:text-green-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor">
+
+                            <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd" />
+
+                          </svg> :
+
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3 w-3 text-red-600 dark:text-red-400"
+                        viewBox="0 0 20 20"
+                        fill="currentColor">
+
+                            <path
+                          fillRule="evenodd"
+                          d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                          clipRule="evenodd" />
+
+                          </svg>
+                      }
+                      </div>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        Activité minimum requise
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
+                  <button
+                  onClick={() => {
+                    setShowWithdrawalDetailsModal(false);
+                    setSelectedWithdrawal(null);
+                  }}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700">
+
+                    Fermer
+                  </button>
+                  <button
+                  onClick={() =>
+                  handleProcessWithdrawal(selectedWithdrawal.id, false)
+                  }
+                  className="px-3 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700">
+
+                    Rejeter
+                  </button>
+                  <button
+                  onClick={() =>
+                  handleProcessWithdrawal(selectedWithdrawal.id, true)
+                  }
+                  className="px-3 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                  disabled={
+                  !Object.values(selectedWithdrawal.eligibility).every(
+                    Boolean
+                  )
+                  }>
+
+                    Approuver
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+      {/* Support Chat */}
+      {showSupportChat &&
+      <div className="fixed inset-0 z-50 flex items-end justify-end p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-md h-96 flex flex-col overflow-hidden">
+            <div className="px-4 py-3 bg-blue-600 text-white flex justify-between items-center">
+              <div>
+                <h3 className="text-base font-medium">Support Client</h3>
+                {selectedUser &&
+              <p className="text-xs text-blue-100">
+                    Conversation avec {selectedUser.username} (
+                    {selectedUser.isPro ? 'Pro' : 'Standard'})
+                  </p>
+              }
+              </div>
+              <button
+              title="Fermer"
+              onClick={handleCloseSupportChat}
+              className="text-white hover:text-gray-200">
+
+                <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor">
+
+                  <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12" />
+
+                </svg>
+              </button>
+            </div>
+            <div
+            ref={chatContainerRef}
+            className="flex-1 overflow-y-auto p-4 space-y-3">
+
+              {supportMessages.map((message) =>
+            <div
+              key={message.id}
+              className={`flex ${message.sender === 'agent' ? 'justify-end' : 'justify-start'}`}>
+
+                  <div
+                className={`max-w-xs lg:max-w-md px-3 py-2 rounded-lg text-sm ${message.sender === 'agent' ? 'bg-blue-600 text-white' : message.sender === 'system' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'}`}>
+
+                    <p>{message.message}</p>
+                    <p
+                  className={`text-xs mt-1 ${message.sender === 'agent' ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'}`}>
+
+                      {message.time}
+                    </p>
+                  </div>
+                </div>
+            )}
+            </div>
+            <form
+            onSubmit={handleSupportMessageSubmit}
+            className="p-4 border-t border-gray-200 dark:border-gray-700">
+
+              <div className="flex space-x-2">
+                <input
+                title="Message de support"
+                type="text"
+                value={supportMessage}
+                onChange={(e) => setSupportMessage(e.target.value)}
+                placeholder="Tapez votre message..."
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+                <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+                  Envoyer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      }
+    </>);
+
+};
+export default SettingsAdminUser;
