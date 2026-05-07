@@ -223,6 +223,17 @@ const ChannelView = () => {
     setShowReactionPicker(false);
   };
 
+  const handleScrollToMessage = (messageId: number | string) => {
+    const element = document.getElementById(`message-${messageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      element.classList.add('message-highlight');
+      setTimeout(() => {
+        element.classList.remove('message-highlight');
+      }, 2000);
+    }
+  };
+
   return (
     <div className="fixed inset-0 w-full h-full flex flex-col bg-gray-100 dark:bg-gray-900 z-50">
       <ChannelHeader
@@ -240,21 +251,23 @@ const ChannelView = () => {
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {channel.messages.map((msg) => (
-          <MessageCard
-            key={msg.id}
-            message={msg}
-            currentUserId={user.id}
-            onReaction={(emoji) => addReaction(msg.id, emoji)}
-            onLongPress={() => {
-              setSelectedMessageId(msg.id);
-              setShowDeleteModal(true);
-            }}
-            onShowReactionPicker={() => {
-              setSelectedMessageId(msg.id);
-              setShowReactionPicker(true);
-            }}
-            onReply={() => setReplyToMessage(msg)}
-          />
+          <div key={msg.id} id={`message-${msg.id}`}>
+            <MessageCard
+              message={msg}
+              currentUserId={user.id}
+              onReaction={(emoji) => addReaction(msg.id, emoji)}
+              onLongPress={() => {
+                setSelectedMessageId(msg.id);
+                setShowDeleteModal(true);
+              }}
+              onShowReactionPicker={() => {
+                setSelectedMessageId(msg.id);
+                setShowReactionPicker(true);
+              }}
+              onReply={() => setReplyToMessage(msg)}
+              onScrollToMessage={handleScrollToMessage}
+            />
+          </div>
         ))}
         <div ref={messagesEndRef} />
       </div>

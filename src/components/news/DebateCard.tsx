@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Debate } from '../../types/news';
+import { Debate } from '../../services/api';
 
 interface DebateCardProps {
   debate: Debate;
@@ -79,7 +79,7 @@ export const DebateCard: React.FC<DebateCardProps> = ({
 
       <div className="p-3">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+          <span className="category-tag">
             {debate.category}
           </span>
           <span className="text-xs text-gray-500 dark:text-gray-400">

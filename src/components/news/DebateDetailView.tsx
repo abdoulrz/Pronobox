@@ -1,5 +1,5 @@
 import React from 'react';
-import { Debate, Message, Reply } from '../../types/news';
+import { Debate, Message, Reply } from '../../services/api';
 
 interface DebateDetailViewProps {
   debate: Debate;
@@ -118,7 +118,7 @@ const DebateDetailView: React.FC<DebateDetailViewProps> = ({
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex flex-col justify-end p-4 pointer-events-none">
           <div className="flex items-center justify-between mb-2 pointer-events-auto">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-green/20 text-green-300 border border-brand-green/30">
+              <span className="category-tag">
                 {debate.category}
               </span>
               <div className="flex items-center gap-1">

@@ -1,12 +1,19 @@
-require('dotenv').config();
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const User = require('./models/User');
-const Transaction = require('./models/Transaction');
-const Channel = require('./models/Channel');
+/* eslint-env node */
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, '.env') });
+import express from 'express';
+import mongoose from 'mongoose';
+import cors from 'cors';
+import jwt from 'jsonwebtoken';
+import User from './models/User.js';
+import Transaction from './models/Transaction.js';
+import Channel from './models/Channel.js';
+import Debate from './models/Debate.js';
 const app = express();
 
 // Middleware
@@ -15,15 +22,24 @@ app.use(express.json());
 
 // MongoDB Connection Options
 const mongoOptions = {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-  socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
-  family: 4, // Use IPv4, skip trying IPv6
-  maxPoolSize: 10, // Maintain up to 10 socket connections
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+  family: 4,
+  maxPoolSize: 10,
   retryWrites: true,
   retryReads: true
 };
+
+// Standardize JSON response to include 'id' and remove '_id' and '__v'
+mongoose.set('toJSON', {
+  virtuals: true,
+  transform: (doc, ret) => {
+    ret.id = ret._id;
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  }
+});
 
 // Connect to MongoDB with improved error handling and retry logic
 const connectWithRetry = () => {
@@ -71,6 +87,16 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Middleware to require Pro or Admin status
+const requireProOrAdmin = (req, res, next) => {
+  if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+  if (req.user.role === 'admin' || req.user.isPro) {
+    next();
+  } else {
+    res.status(403).json({ message: 'This action requires a Pro or Admin account' });
+  }
+};
+
 // Routes
 // Auth routes
 app.post('/api/auth/register', async (req, res) => {
@@ -88,9 +114,9 @@ app.post('/api/auth/register', async (req, res) => {
       password
     });
     await user.save();
-    // Generate token
+    // Generate token with role and isPro status
     const token = jwt.sign(
-      { id: user._id, role: user.role },
+      { id: user._id, role: user.role, isPro: user.isPro },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -218,6 +244,38 @@ app.put('/api/admin/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/admin/withdrawals', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied' });
+    const withdrawals = await Transaction.find({ type: 'withdrawal' }).sort({ createdAt: -1 });
+    res.json(withdrawals);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/admin/withdrawals/:id/status', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied' });
+    const { status } = req.body;
+    const withdrawal = await Transaction.findByIdAndUpdate(req.params.id, { status }, { new: true });
+    res.json(withdrawal);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/admin/support/messages', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied' });
+    // This is a simplified support message system
+    // In a real app, you'd have a SupportMessage model
+    res.json([]); 
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Transaction routes
 app.post('/api/transactions', authenticateToken, async (req, res) => {
   try {
@@ -263,7 +321,7 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
 });
 
 // Channel routes
-app.post('/api/channels', authenticateToken, async (req, res) => {
+app.post('/api/channels', authenticateToken, requireProOrAdmin, async (req, res) => {
   try {
     const { name, description, premium, allowComments, subscriptionPrice } = req.body;
     const channel = new Channel({
@@ -370,6 +428,124 @@ app.post('/api/channels/:id/messages', authenticateToken, async (req, res) => {
     res.status(201).json(newMessage);
   } catch (error) {
     console.error('Send message error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Debate routes
+app.post('/api/debates', authenticateToken, requireProOrAdmin, async (req, res) => {
+  try {
+    const { title, description, images, category } = req.body;
+    const debate = new Debate({
+      title,
+      description,
+      images: images || [],
+      category: category || 'Général',
+      author: req.user.id
+    });
+    await debate.save();
+    const populatedDebate = await Debate.findById(debate._id).populate('author', 'username avatar');
+    res.status(201).json(populatedDebate);
+  } catch (error) {
+    console.error('Create debate error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/debates', async (req, res) => {
+  try {
+    const debates = await Debate.find()
+      .populate('author', 'username avatar')
+      .populate('messages.user', 'username avatar')
+      .populate('messages.replies.user', 'username avatar')
+      .sort({ createdAt: -1 });
+    res.json(debates);
+  } catch (error) {
+    console.error('Get debates error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.put('/api/debates/:id', authenticateToken, async (req, res) => {
+  try {
+    const debate = await Debate.findById(req.params.id);
+    if (!debate) return res.status(404).json({ message: 'Debate not found' });
+    if (debate.author.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const { title, description, category, images } = req.body;
+    if (title) debate.title = title;
+    if (description) debate.description = description;
+    if (category) debate.category = category;
+    if (images) debate.images = images;
+    
+    await debate.save();
+    const updated = await Debate.findById(debate._id).populate('author', 'username avatar');
+    res.json(updated);
+  } catch (error) {
+    console.error('Update debate error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.delete('/api/debates/:id', authenticateToken, async (req, res) => {
+  try {
+    const debate = await Debate.findById(req.params.id);
+    if (!debate) return res.status(404).json({ message: 'Debate not found' });
+    if (debate.author.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    // Mongoose remove() is deprecated in newer versions, use deleteOne
+    await Debate.deleteOne({ _id: req.params.id });
+    res.json({ message: 'Debate deleted' });
+  } catch (error) {
+    console.error('Delete debate error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/debates/:id/like', authenticateToken, async (req, res) => {
+  try {
+    const debate = await Debate.findById(req.params.id);
+    if (!debate) return res.status(404).json({ message: 'Debate not found' });
+    
+    const userIndex = debate.likedBy.indexOf(req.user.id);
+    if (userIndex === -1) {
+      debate.likedBy.push(req.user.id);
+      debate.likes += 1;
+    } else {
+      debate.likedBy.splice(userIndex, 1);
+      debate.likes -= 1;
+    }
+    await debate.save();
+    res.json({ likes: debate.likes, likedBy: debate.likedBy });
+  } catch (error) {
+    console.error('Like debate error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/debates/:id/messages', authenticateToken, async (req, res) => {
+  try {
+    const debate = await Debate.findById(req.params.id);
+    if (!debate) return res.status(404).json({ message: 'Debate not found' });
+    
+    debate.messages.push({
+      user: req.user.id,
+      text: req.body.text
+    });
+    
+    const isParticipant = debate.messages.some(msg => msg.user.toString() === req.user.id) || debate.author.toString() === req.user.id;
+    if (!isParticipant) {
+       debate.participants += 1; 
+    }
+    await debate.save();
+    const updated = await Debate.findById(debate._id)
+      .populate('messages.user', 'username avatar')
+      .populate('author', 'username avatar');
+    res.status(201).json(updated.messages[updated.messages.length - 1]);
+  } catch (error) {
+    console.error('Add message error:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -534,6 +710,37 @@ const initializeMockData = async () => {
       }];
 
       await Transaction.insertMany(transactions);
+      
+      // Create mock debates
+      const debates = [
+        {
+          title: 'La VAR a-t-elle amélioré le football?',
+          description: "Débattez sur l'impact de la technologie d'assistance vidéo dans le football moderne.",
+          images: [
+            'https://images.unsplash.com/photo-1574629810360-7efbbe195018?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
+            'https://images.unsplash.com/photo-1508098682722-e99c643e7f76?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'
+          ],
+          category: 'Arbitrage',
+          participants: 3,
+          author: adminUser._id,
+          likes: 2,
+          likedBy: [regularUser._id, proUser._id],
+          messages: [
+            {
+              user: adminUser._id,
+              text: "La VAR a considérablement réduit les erreurs d'arbitrage flagrantes, mais ralentit trop le jeu.",
+              likes: 1,
+              likedBy: [regularUser._id]
+            },
+            {
+              user: regularUser._id,
+              text: 'Je préférais le football avant la VAR. Les erreurs font partie du jeu et créaient des moments de discussion passionnés.',
+            }
+          ]
+        }
+      ];
+      await Debate.insertMany(debates);
+      
       console.log('Mock data initialized successfully');
     }
   } catch (error) {

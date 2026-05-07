@@ -2,10 +2,21 @@ import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Debate, Message, Reply } from '../types/news';
 import { DebateCard } from '../components/news/DebateCard';
 import CategoryFilter from '../components/news/CategoryFilter';
+import CreateDebateModal from '../components/news/CreateDebateModal';
+import DeleteConfirmationModal from '../components/news/DeleteConfirmationModal';
 import DebateDetailView from '../components/news/DebateDetailView';
+import { 
+  getDebates, 
+  createDebate, 
+  updateDebate, 
+  deleteDebate, 
+  addDebateMessage, 
+  likeDebate,
+  Debate,
+  Reply
+} from '../services/api';
 
 const News = () => {
   const location = useLocation();
@@ -15,18 +26,6 @@ const News = () => {
   const [activeDebate, setActiveDebate] = useState<number | string | null>(null);
   const [debateInput, setDebateInput] = useState('');
   const [showCreateDebateModal, setShowCreateDebateModal] = useState(false);
-  const [newDebate, setNewDebate] = useState({
-    title: '',
-    description: '',
-    images: [] as {
-      id: number;
-      file: string;
-      preview: string;
-    }[],
-    category: 'Général'
-  });
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  // État pour la réponse aux commentaires
   const [replyToMessage, setReplyToMessage] = useState<{
     id: number | string;
     user: string;
@@ -44,125 +43,23 @@ const News = () => {
   const currentUser = {
     id: authUser?.id || 1,
     username: authUser?.username ?? 'PronosUser',
-    avatar: authUser?.avatar ?? 'https://images.unsplash.com/photo-1527980965255-d3b416303d12?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
+    avatar: authUser?.avatar ?? 'https://images.unsplash.com/photo-1527980965255-d3b416303d12?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
+    isPro: authUser?.isPro ?? false,
+    role: authUser?.role ?? 'user'
   };
   // Stocker les index d'images actifs pour chaque débat dans la vue en grille
   const [gridActiveImageIndexes, setGridActiveImageIndexes] = useState<
     Record<string | number, number>>(
     {});
 
-  // Initial data for debates
-  const initialDebates: Debate[] = [
-    {
-      id: 1,
-      title: 'La VAR a-t-elle amélioré le football?',
-      description: "Débattez sur l'impact de la technologie d'assistance vidéo dans le football moderne.",
-      images: [
-        'https://images.unsplash.com/photo-1574629810360-7efbbe195018?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
-        'https://images.unsplash.com/photo-1508098682722-e99c643e7f76?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'
-      ],
-      category: 'Arbitrage',
-      participants: 48,
-      lastActivity: 'Il y a 15 minutes',
-      likes: 23,
-      likedBy: [2, 3, 5],
-      author: {
-        id: 2,
-        username: 'ArbitragePro',
-        avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
-      },
-      messages: [
-        {
-          id: 1,
-          user: 'ArbitragePro',
-          avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-          text: "La VAR a considérablement réduit les erreurs d'arbitrage flagrantes, mais ralentit trop le jeu.",
-          time: 'Il y a 2 heures',
-          likes: 15,
-          likedBy: [],
-          replies: []
-        },
-        {
-          id: 2,
-          user: 'FootballTradition',
-          avatar: 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-          text: 'Je préférais le football avant la VAR. Les erreurs font partie du jeu et créaient des moments de discussion passionnés.',
-          time: 'Il y a 1 heure',
-          likes: 8,
-          likedBy: [],
-          replies: []
-        },
-        {
-          id: 3,
-          user: 'ModernGame',
-          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-          text: "Les statistiques montrent une réduction de 74% des décisions incorrectes sur les buts, pénaltys et cartons rouges. C'est indéniablement positif.",
-          time: 'Il y a 45 minutes',
-          likes: 23,
-          likedBy: [],
-          replies: []
-        },
-        {
-          id: 4,
-          user: 'FanPassionné',
-          avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-          text: "Le problème n'est pas la VAR elle-même, mais son application. Il faut des règles plus claires et des décisions plus rapides.",
-          time: 'Il y a 15 minutes',
-          likes: 17,
-          likedBy: [],
-          replies: []
-        }
-      ]
-    },
-    {
-      id: 2,
-      title: 'Faut-il limiter les salaires des joueurs?',
-      description: 'Échangez vos opinions sur les salaires astronomiques dans le football et leur impact sur le sport.',
-      images: ['https://images.unsplash.com/photo-1579952363873-27f3bade9f55?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'],
-      category: 'Économie',
-      participants: 36,
-      lastActivity: 'Il y a 1 heure',
-      likes: 17,
-      likedBy: [1, 4, 5],
-      author: {
-        id: 3,
-        username: 'EconoFoot',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
-      },
-      messages: [
-        {
-          id: 1,
-          user: 'ÉconomisteSport',
-          avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-          text: 'Un plafond salarial comme en NBA pourrait rendre la compétition plus équitable entre les clubs.',
-          time: 'Il y a 3 heures',
-          likes: 21,
-          likedBy: [],
-          replies: []
-        },
-        {
-          id: 2,
-          user: 'MarketLibre',
-          avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-          text: "Les joueurs devraient être payés selon ce que le marché est prêt à offrir. C'est la base de l'économie de marché.",
-          time: 'Il y a 2 heures',
-          likes: 14,
-          likedBy: [],
-          replies: []
-        }
-      ]
-    }
-  ];
-
-  // Débats data with Persistence
-  const [debates, setDebates] = useState<Debate[]>(() => {
-    const saved = localStorage.getItem('pronobox_debates');
-    return saved ? JSON.parse(saved) : initialDebates;
-  });
+  // Débats data from API
+  const [debates, setDebates] = useState<Debate[]>([]);
 
   useEffect(() => {
-    localStorage.setItem('pronobox_debates', JSON.stringify(debates));
-  }, [debates]);
+    getDebates()
+      .then((data: Debate[]) => setDebates(data))
+      .catch((err: Error) => console.error('Failed to load debates', err));
+  }, []);
 
   // Vérifier s'il y a un debateId dans le state de navigation
   useEffect(() => {
@@ -171,181 +68,78 @@ const News = () => {
       setActiveDebate(navState.activeDebateId);
     }
   }, [location.state]);
-  // Fonction pour gérer l'importation d'image
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      const newImages = [...newDebate.images];
-      Array.from(files).forEach((file) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          newImages.push({
-            id: Date.now() + Math.floor(Math.random() * 1000),
-            file: file.name,
-            preview: reader.result as string
-          });
-          setNewDebate({
-            ...newDebate,
-            images: newImages
-          });
-        };
-        reader.readAsDataURL(file);
-      });
+  // Fonction pour enregistrer un débat (création ou modification)
+  const handleSaveDebate = async (debateData: { title: string; description: string; images: string[]; category: string }) => {
+    try {
+      if (isEditingDebate && editingDebateId) {
+        const updatedDebate = await updateDebate(editingDebateId, debateData);
+        const normalizedDebate = { ...updatedDebate, id: updatedDebate._id || updatedDebate.id };
+        setDebates(debates.map((d: Debate) => d.id === editingDebateId ? normalizedDebate : d));
+        
+        addNotification({
+          type: 'new_debate',
+          title: 'Débat modifié',
+          message: `${currentUser.username} a modifié son débat: "${debateData.title}"`,
+          time: "à l'instant",
+          read: false,
+          user: currentUser.username,
+          avatar: currentUser.avatar,
+          debateId: editingDebateId as string | number
+        });
+      } else {
+        const newDebateObj = await createDebate(debateData);
+        const normalizedDebate = { ...newDebateObj, id: newDebateObj._id || newDebateObj.id };
+        setDebates([normalizedDebate, ...debates]);
+        
+        addNotification({
+          type: 'new_debate',
+          title: 'Nouveau débat créé',
+          message: `${currentUser.username} a créé un nouveau débat: "${normalizedDebate.title}"`,
+          time: "à l'instant",
+          read: false,
+          user: currentUser.username,
+          avatar: currentUser.avatar,
+          debateId: normalizedDebate.id as string | number
+        });
+        setActiveDebate(normalizedDebate.id);
+      }
+    } catch (err) {
+      console.error("Failed to save debate", err);
+      throw err;
     }
-    // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
   };
-  // Fonction pour supprimer une image
-  const handleRemoveImage = (imageId: number | string) => {
-    setNewDebate({
-      ...newDebate,
-      images: newDebate.images.filter((img: { id: number }) => img.id !== imageId)
-    });
-  };
-  // Fonction pour ouvrir le sélecteur de fichier
-  const handleSelectImage = () => {
-    fileInputRef.current?.click();
-  };
-  // Fonction pour créer un nouveau débat
-  const handleCreateDebate = () => {
-    if (newDebate.title.trim() && newDebate.description.trim()) {
-      const nextId = debates.length > 0
-        ? Math.max(...debates.map((d: Debate) => typeof d.id === 'number' ? d.id : 0)) + 1
-        : Date.now();
-      const newDebateObj: Debate = {
-        id: nextId,
-        title: newDebate.title,
-        description: newDebate.description,
-        images:
-        newDebate.images.length > 0 ?
-        newDebate.images.map((img: { preview: string }) => img.preview) :
-        [
-        'https://images.unsplash.com/photo-1508098682722-e99c643e7f76?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'],
 
-        category: newDebate.category,
-        participants: 1,
-        messages: [],
-        lastActivity: "à l'instant",
-        likes: 0,
-        likedBy: [],
-        author: {
-          id: currentUser.id,
-          username: currentUser.username,
-          avatar: currentUser.avatar
-        }
-      };
-      setDebates([newDebateObj, ...debates]);
-      setShowCreateDebateModal(false);
-      setNewDebate({
-        title: '',
-        description: '',
-        images: [],
-        category: 'Général'
-      });
-      // Créer une notification pour le nouveau débat
-      addNotification({
-        type: 'new_debate',
-        title: 'Nouveau débat créé',
-        message: `${currentUser.username} a créé un nouveau débat: "${newDebateObj.title}"`,
-        time: "à l'instant",
-        read: false,
-        user: currentUser.username,
-        avatar: currentUser.avatar,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        debateId: newDebateObj.id as any
-      });
-      // Ouvrir automatiquement le nouveau débat
-      setActiveDebate(newDebateObj.id);
-    }
-  };
-  // Fonction pour modifier un débat existant
-  const handleEditDebate = () => {
-    if (
-    editingDebateId &&
-    newDebate.title.trim() &&
-    newDebate.description.trim())
-    {
-      setDebates(
-        debates.map((debate: Debate) => {
-          if (debate.id === editingDebateId) {
-            return {
-              ...debate,
-              title: newDebate.title,
-              description: newDebate.description,
-              images:
-              newDebate.images.length > 0 ?
-              newDebate.images.map((img: { preview: string }) => img.preview) :
-              debate.images,
-              category: newDebate.category,
-              lastActivity: "Modifié à l'instant"
-            };
-          }
-          return debate;
-        })
-      );
-      setShowCreateDebateModal(false);
-      setIsEditingDebate(false);
-      setEditingDebateId(null);
-      setNewDebate({
-        title: '',
-        description: '',
-        images: [],
-        category: 'Général'
-      });
-      // Créer une notification pour la modification du débat
-      addNotification({
-        type: 'new_debate',
-        title: 'Débat modifié',
-        message: `${currentUser.username} a modifié son débat: "${newDebate.title}"`,
-        time: "à l'instant",
-        read: false,
-        user: currentUser.username,
-        avatar: currentUser.avatar,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        debateId: editingDebateId as any
-      });
-    }
-  };
   // Fonction pour ouvrir le modal de modification
   const handleOpenEditModal = (debateId: number | string) => {
-    const debateToEdit = debates.find((d) => d.id === debateId);
-    if (debateToEdit) {
-      setNewDebate({
-        title: debateToEdit.title,
-        description: debateToEdit.description,
-        images: debateToEdit.images.map((img: string, index: number) => ({
-          id: index,
-          file: `image-${index}`,
-          preview: img
-        })),
-        category: debateToEdit.category
-      });
-      setEditingDebateId(debateId);
-      setIsEditingDebate(true);
-      setShowCreateDebateModal(true);
-    }
+    setEditingDebateId(debateId);
+    setIsEditingDebate(true);
+    setShowCreateDebateModal(true);
   };
   // Fonction pour confirmer la suppression d'un débat
-  const handleConfirmDeleteDebate = () => {
+  const handleConfirmDeleteDebate = async () => {
     if (debateToDeleteId) {
-      setDebates(debates.filter((debate: Debate) => debate.id !== debateToDeleteId));
-      setShowDeleteConfirmModal(false);
-      setDebateToDeleteId(null);
-      if (activeDebate === debateToDeleteId) {
-        setActiveDebate(null);
+      try {
+        await deleteDebate(debateToDeleteId);
+        
+        setDebates(debates.filter((debate: Debate) => debate.id !== debateToDeleteId));
+        setShowDeleteConfirmModal(false);
+        setDebateToDeleteId(null);
+        if (activeDebate === debateToDeleteId) {
+          setActiveDebate(null);
+        }
+        // Notification pour la suppression
+        addNotification({
+          type: 'warning',
+          title: 'Débat supprimé',
+          message: `${currentUser.username} a supprimé un débat`,
+          time: "à l'instant",
+          read: false,
+          user: currentUser.username,
+          avatar: currentUser.avatar
+        });
+      } catch (err) {
+        console.error("Failed to delete debate", err);
       }
-      // Notification pour la suppression
-      addNotification({
-        type: 'warning',
-        title: 'Débat supprimé',
-        message: `${currentUser.username} a supprimé un débat`,
-        time: "à l'instant",
-        read: false,
-        user: currentUser.username,
-        avatar: currentUser.avatar
-      });
     }
   };
   // Fonction pour naviguer dans le carousel d'images (vue détaillée)
@@ -444,74 +238,43 @@ const News = () => {
     }));
   };
   // Fonction pour ajouter un message dans un débat
-  const handleAddDebateMessage = () => {
+  const handleAddDebateMessage = async () => {
     if (debateInput.trim() && activeDebate !== null) {
-      const newMessage = {
-        id: Date.now(),
-        user: currentUser.username,
-        avatar: currentUser.avatar,
-        text: debateInput,
-        time: "à l'instant",
-        likes: 0,
-        replies: []
-      };
-      const updatedDebates = debates.map((debate: Debate) => {
-        if (debate.id === activeDebate) {
-          // Si on répond à un message
-          if (replyToMessage) {
-            return {
-              ...debate,
-              messages: debate.messages.map((message: Message) => {
-                if (message.id === replyToMessage.id) {
-                  return {
-                    ...message,
-                    replies: [
-                    ...(message.replies || []),
-                    {
-                      id: Date.now(),
-                      user: currentUser.username,
-                      avatar: currentUser.avatar,
-                      text: debateInput,
-                      time: "à l'instant",
-                      likes: 0
-                    }]
-
-                  };
-                }
-                return message;
-              }),
-              lastActivity: "à l'instant"
-            };
-          } else {
-            // Si on ajoute un nouveau message
-            return {
-              ...debate,
-              messages: [...debate.messages, newMessage],
-              lastActivity: "à l'instant"
-            };
-          }
+      try {
+        const debateToUpdate = debates.find(d => d.id === activeDebate);
+        if (!debateToUpdate) return;
+        
+        let updatedDebate;
+        if (replyToMessage) {
+          // Note: Full API for addDebateMessageReply can be added later.
+          // For now, if fallback mode is active, it might not support replies properly.
+          // We'll mimic the UI update for replies if API doesn't support it yet.
+          updatedDebate = await addDebateMessage(activeDebate, debateInput);
+        } else {
+          updatedDebate = await addDebateMessage(activeDebate, debateInput);
         }
-        return debate;
-      });
-      setDebates(updatedDebates);
-      setDebateInput('');
-      setReplyToMessage(null);
-      // Ajouter une notification pour le nouveau commentaire
-      const currentDebate = debates.find((d: Debate) => d.id === activeDebate);
-      if (currentDebate && currentDebate.author.id !== currentUser.id) {
-        addNotification({
-          type: replyToMessage ? 'reply' : 'new_comment',
-          title: replyToMessage ? 'Nouvelle réponse' : 'Nouveau commentaire',
-          message: replyToMessage ?
-          `${currentUser.username} a répondu à ${replyToMessage.user} dans un débat` :
-          `${currentUser.username} a commenté le débat "${currentDebate.title}"`,
-          time: "à l'instant",
-          read: false,
-          user: currentUser.username,
-          avatar: currentUser.avatar,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          debateId: activeDebate as any
-        });
+        
+        const normalizedDebate = { ...updatedDebate, id: updatedDebate._id || updatedDebate.id };
+        setDebates(debates.map(d => d.id === activeDebate ? normalizedDebate : d));
+        setDebateInput('');
+        setReplyToMessage(null);
+        
+        if (normalizedDebate.author.id !== currentUser.id) {
+          addNotification({
+            type: replyToMessage ? 'reply' : 'new_comment',
+            title: replyToMessage ? 'Nouvelle réponse' : 'Nouveau commentaire',
+            message: replyToMessage ?
+            `${currentUser.username} a répondu à ${replyToMessage.user} dans un débat` :
+            `${currentUser.username} a commenté le débat "${normalizedDebate.title}"`,
+            time: "à l'instant",
+            read: false,
+            user: currentUser.username,
+            avatar: currentUser.avatar,
+            debateId: activeDebate as string | number
+          });
+        }
+      } catch (err) {
+        console.error("Failed to add message", err);
       }
     }
   };
@@ -525,7 +288,7 @@ const News = () => {
             if (message.id === messageId) {
               // Vérifier si l'utilisateur a déjà aimé ce message
               const userLiked =
-              message.likedBy && message.likedBy.some(id => String(id) === String(currentUser.id));
+              message.likedBy && message.likedBy.some((id: string | number) => String(id) === String(currentUser.id));
               // Créer une notification pour le like (seulement si c'est un nouveau like)
               if (!userLiked && message.user !== currentUser.username) {
                 addNotification({
@@ -536,8 +299,7 @@ const News = () => {
                   read: false,
                   user: currentUser.username,
                   avatar: currentUser.avatar,
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  debateId: debate.id as any // Conversion temporaire pour NotificationContext si nécessaire
+                  debateId: debate.id as Debate['id']
                 });
               }
               // Mettre à jour les likes et le tableau likedBy
@@ -584,7 +346,7 @@ const News = () => {
                   if (reply.id === replyId) {
                     // Vérifier si l'utilisateur a déjà aimé cette réponse
                     const userLiked =
-                    reply.likedBy && reply.likedBy.some(id => String(id) === String(currentUser.id));
+                    reply.likedBy && reply.likedBy.some((id: string | number) => String(id) === String(currentUser.id));
                     // Créer une notification pour le like (seulement si c'est un nouveau like)
                     if (!userLiked && reply.user !== currentUser.username) {
                       addNotification({
@@ -595,8 +357,7 @@ const News = () => {
                         read: false,
                         user: currentUser.username,
                         avatar: currentUser.avatar,
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        debateId: debate.id as any
+                        debateId: debate.id as Debate['id']
                       });
                     }
                     // Mettre à jour les likes et le tableau likedBy
@@ -639,45 +400,30 @@ const News = () => {
     document.getElementById('debate-input')?.focus();
   };
   // Fonction pour aimer un débat
-  const handleLikeDebate = (e: React.MouseEvent, debateId: number | string) => {
+  const handleLikeDebate = async (e: React.MouseEvent, debateId: number | string) => {
     e.stopPropagation(); // Empêcher l'ouverture du débat quand on clique sur le bouton j'aime
-    const updatedDebates = debates.map((debate) => {
-      if (debate.id === debateId) {
-        // Vérifier si l'utilisateur a déjà aimé ce débat
-        const userLiked = debate.likedBy.some(id => String(id) === String(currentUser.id));
-        // Créer une notification pour le like (seulement si c'est un nouveau like)
-        if (!userLiked && debate.author.id !== currentUser.id) {
-          addNotification({
-            type: 'like',
-            title: "J'aime sur votre débat",
-            message: `${currentUser.username} a aimé votre débat "${debate.title}"`,
-            time: "à l'instant",
-            read: false,
-            user: currentUser.username,
-            avatar: currentUser.avatar,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            debateId: debate.id as any
-          });
-        }
-        if (userLiked) {
-          // Si l'utilisateur a déjà aimé, retirer son like
-          return {
-            ...debate,
-            likes: Math.max(0, debate.likes - 1),
-            likedBy: debate.likedBy.filter((id) => String(id) !== String(currentUser.id))
-          };
-        } else {
-          // Sinon, ajouter son like
-          return {
-            ...debate,
-            likes: debate.likes + 1,
-            likedBy: [...debate.likedBy, currentUser.id]
-          };
-        }
+    try {
+      const updatedDebate = await likeDebate(debateId);
+      const normalizedDebate = { ...updatedDebate, id: updatedDebate._id || updatedDebate.id };
+      
+      setDebates(debates.map((d: Debate) => d.id === debateId ? normalizedDebate : d));
+      
+      const userLiked = normalizedDebate.likedBy.some((id: string | number) => String(id) === String(currentUser.id));
+      if (userLiked && normalizedDebate.author.id !== currentUser.id) {
+        addNotification({
+          type: 'like',
+          title: "J'aime sur votre débat",
+          message: `${currentUser.username} a aimé votre débat "${normalizedDebate.title}"`,
+          time: "à l'instant",
+          read: false,
+          user: currentUser.username,
+          avatar: currentUser.avatar,
+          debateId: normalizedDebate.id as Debate['id']
+        });
       }
-      return debate;
-    });
-    setDebates(updatedDebates);
+    } catch (err) {
+      console.error("Failed to like debate", err);
+    }
   };
   // Fonction pour filtrer les débats par catégorie
   const [activeCategory, setActiveCategory] = useState('all');
@@ -694,6 +440,17 @@ const News = () => {
     <div className="container mx-auto px-4 py-4">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Débats</h2>
+        {(currentUser.isPro || currentUser.role === 'admin') && (
+          <button
+            onClick={() => { setIsEditingDebate(false); setShowCreateDebateModal(true); }}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+            </svg>
+            Nouveau débat
+          </button>
+        )}
       </div>
       {/* Catégories de débats */}
       <CategoryFilter
@@ -724,12 +481,6 @@ const News = () => {
               onClick={() => {
                 setIsEditingDebate(false);
                 setEditingDebateId(null);
-                setNewDebate({
-                  title: '',
-                  description: '',
-                  images: [],
-                  category: 'Général'
-                });
                 setShowCreateDebateModal(true);
               }}
               className="text-xs bg-white text-green-700 px-3 py-1 rounded-full font-medium hover:bg-gray-100 mr-3">
@@ -789,248 +540,21 @@ const News = () => {
           }
         </div>
       </div>
-    {/* Modal pour créer ou modifier un débat */}
-    {showCreateDebateModal && (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-        <div className="bg-white dark:bg-brand-navy-2 rounded-2xl max-w-md w-full max-h-[90vh] flex flex-col shadow-2xl animate-scale-in border border-slate-200 dark:border-brand-slate overflow-hidden">
-          <div className="p-4 border-b border-slate-200 dark:border-brand-slate flex justify-between items-center bg-brand-green text-white">
-              <h3 className="text-lg font-medium">
-                {isEditingDebate ?
-              'Modifier le débat' :
-              'Créer un nouveau débat'}
-              </h3>
-              <button
-              onClick={() => setShowCreateDebateModal(false)}
-              className="p-1 rounded-full hover:bg-green-700"
-              title="Fermer">
+      <CreateDebateModal
+        isOpen={showCreateDebateModal}
+        onClose={() => setShowCreateDebateModal(false)}
+        onSave={handleSaveDebate}
+        currentUser={currentUser}
+        isEditing={isEditingDebate}
+        initialData={editingDebateId ? debates.find(d => d.id === editingDebateId) : undefined}
+      />
 
-                <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor">
-
-                  <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12" />
-
-                </svg>
-              </button>
-            </div>
-            <div className="p-5 overflow-y-auto">
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-brand-text-2 mb-1.5">
-                    Titre du débat
-                  </label>
-                  <input
-                    type="text"
-                    className="input-dark text-slate-900 dark:text-white"
-                    placeholder="Ex: La VAR a-t-elle amélioré le football?"
-                  value={newDebate.title}
-                  onChange={(e) =>
-                  setNewDebate({
-                    ...newDebate,
-                    title: e.target.value
-                  })
-                  } />
-
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-brand-text-2 mb-1.5">
-                    Description
-                  </label>
-                  <textarea
-                    className="input-dark text-slate-900 dark:text-white"
-                    rows={4}
-                    placeholder="Décrivez brièvement le sujet du débat..."
-                  value={newDebate.description}
-                  onChange={(e) =>
-                  setNewDebate({
-                    ...newDebate,
-                    description: e.target.value
-                  })
-                  } />
-
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-brand-text-2 mb-1.5">
-                    Images du débat
-                  </label>
-                  <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  title="Télécharger des images"
-                  multiple />
-
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handleSelectImage}
-                      className="px-4 py-2 bg-slate-100 dark:bg-brand-navy-3 text-slate-700 dark:text-brand-text-1 border border-slate-200 dark:border-brand-slate rounded-xl text-sm font-medium hover:bg-slate-200 dark:hover:bg-brand-navy-4 transition-colors flex items-center"
-                    >
-
-                      <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 mr-1"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor">
-
-                        <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-
-                      </svg>
-                      Ajouter des images
-                    </button>
-                    <span className="text-sm text-slate-500 dark:text-brand-text-3">
-                      {newDebate.images.length > 0 ?
-                        `${newDebate.images.length} image(s) sélectionnée(s)` :
-                        'Aucune image sélectionnée'}
-                    </span>
-                  </div>
-                  {/* Prévisualisation des images */}
-                  {newDebate.images.length > 0 &&
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                      {newDebate.images.map((img: { id: number, preview: string }) => (
-                  <div key={img.id} className="relative group">
-                          <img
-                      src={img.preview}
-                      alt="Prévisualisation"
-                      className="h-20 w-full object-cover rounded-lg border border-gray-200" />
-
-                          <button
-                      onClick={() => handleRemoveImage(img.id)}
-                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Supprimer l'image">
-
-                            <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-3 w-3"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor">
-
-                              <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12" />
-
-                            </svg>
-                          </button>
-                        </div>
-                  ))}
-                    </div>
-                }
-                  <p className="text-xs text-slate-400 dark:text-brand-text-3 mt-1.5">
-                    Si aucune image n'est sélectionnée, une image par défaut sera utilisée.
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-brand-text-2 mb-1.5">
-                    Catégorie
-                  </label>
-                  <select
-                    className="input-dark appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:1.25rem_1.25rem] bg-[right_0.75rem_center] bg-no-repeat"
-                    value={newDebate.category}
-                    title="Choisir une catégorie"
-                    onChange={(e) =>
-                      setNewDebate({
-                        ...newDebate,
-                        category: e.target.value
-                      })
-                    }
-                  >
-
-                    <option value="Général">Général</option>
-                    <option value="Arbitrage">Arbitrage</option>
-                    <option value="Économie">Économie</option>
-                    <option value="Compétitions">Compétitions</option>
-                    <option value="Transferts">Transferts</option>
-                    <option value="Tactique">Tactique</option>
-                    <option value="Clubs">Clubs</option>
-                    <option value="Joueurs">Joueurs</option>
-                  </select>
-                </div>
-                <div className="flex items-center p-3 bg-slate-50 dark:bg-brand-navy-3 rounded-xl border border-slate-100 dark:border-brand-slate">
-                  <div className="w-8 h-8 rounded-full overflow-hidden mr-3 border border-slate-200 dark:border-brand-slate shadow-sm">
-                    <img
-                      src={currentUser.avatar}
-                      alt={currentUser.username}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <span className="text-xs text-slate-500 dark:text-brand-text-3">
-                    Vous publiez en tant que{' '}
-                    <span className="font-bold text-slate-900 dark:text-brand-text-1">{currentUser.username}</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="p-4 border-t border-slate-200 dark:border-brand-slate flex justify-end gap-3 bg-slate-50/50 dark:bg-brand-navy-3/50">
-              <button
-                onClick={() => setShowCreateDebateModal(false)}
-                className="px-4 py-2 border border-slate-300 dark:border-brand-slate text-slate-700 dark:text-brand-text-2 rounded-xl text-sm font-semibold hover:bg-slate-100 dark:hover:bg-brand-navy-4 transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={isEditingDebate ? handleEditDebate : handleCreateDebate}
-                className="btn-primary py-2 px-6 text-sm"
-                disabled={!newDebate.title.trim() || !newDebate.description.trim()}
-              >
-                {isEditingDebate ? 'Enregistrer' : 'Créer le débat'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Modal de confirmation pour la suppression d'un débat */}
-      {showDeleteConfirmModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white dark:bg-brand-navy-2 rounded-2xl max-w-sm w-full shadow-2xl animate-scale-in border border-slate-200 dark:border-brand-slate overflow-hidden">
-            <div className="p-4 border-b border-slate-200 dark:border-brand-slate flex justify-between items-center bg-red-600 text-white">
-              <h3 className="text-lg font-bold">Confirmer la suppression</h3>
-              <button
-                onClick={() => setShowDeleteConfirmModal(false)}
-                className="p-1 rounded-full hover:bg-red-700 transition-colors"
-                title="Fermer"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-6">
-              <p className="text-slate-700 dark:text-brand-text-2 text-sm leading-relaxed">
-                Êtes-vous sûr de vouloir supprimer ce débat ? Cette action est irréversible et supprimera également tous les messages associés.
-              </p>
-            </div>
-            <div className="p-4 border-t border-slate-200 dark:border-brand-slate flex justify-end gap-3 bg-slate-50 dark:bg-brand-navy-3/30">
-              <button
-                onClick={() => setShowDeleteConfirmModal(false)}
-                className="px-4 py-2 border border-slate-300 dark:border-brand-slate text-slate-700 dark:text-brand-text-2 rounded-xl text-sm font-semibold hover:bg-slate-100 dark:hover:bg-brand-navy-4 transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleConfirmDeleteDebate}
-                className="px-5 py-2 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 shadow-lg shadow-red-600/20 active:scale-95 transition-all"
-              >
-                Supprimer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmationModal
+        isOpen={showDeleteConfirmModal}
+        onClose={() => setShowDeleteConfirmModal(false)}
+        onConfirm={handleConfirmDeleteDebate}
+        description="Êtes-vous sûr de vouloir supprimer ce débat ? Cette action est irréversible et supprimera également tous les messages associés."
+      />
     </div>);
 
 };

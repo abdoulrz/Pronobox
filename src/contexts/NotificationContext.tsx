@@ -18,7 +18,7 @@ export interface Notification {
   type: NotificationType;
   user?: string;
   avatar?: string;
-  debateId?: number;
+  debateId?: string | number;
   linkTo?: string;
 }
 interface NotificationContextType {

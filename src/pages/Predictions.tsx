@@ -25,14 +25,14 @@ const Predictions = () => {
         <div className="flex">
           <button
             title="Afficher les pronostics gratuits"
-            className={`flex-1 py-3 text-sm font-bold transition-all duration-200 ${activeTab === 'free' ? 'text-white border-b-2 border-white' : 'text-green-100 hover:text-white'}`}
+            className={`flex-1 py-3 text-sm font-bold transition-all duration-200 ${activeTab === 'free' ? 'text-brand-green border-b-2 border-brand-green' : 'text-slate-400 dark:text-slate-500 hover:text-brand-green'}`}
             onClick={() => setActiveTab('free')}
           >
             Gratuits
           </button>
           <button
             title="Afficher les pronostics premium"
-            className={`flex-1 py-3 text-sm font-bold transition-all duration-200 ${activeTab === 'premium' ? 'text-white border-b-2 border-white' : 'text-green-100 hover:text-white'}`}
+            className={`flex-1 py-3 text-sm font-bold transition-all duration-200 ${activeTab === 'premium' ? 'text-brand-green border-b-2 border-brand-green' : 'text-slate-400 dark:text-slate-500 hover:text-brand-green'}`}
             onClick={() => setActiveTab('premium')}
           >
             ✦ Premium

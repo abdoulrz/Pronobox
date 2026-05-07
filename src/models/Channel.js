@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 const MessageSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -78,4 +78,4 @@ const ChannelSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
-module.exports = mongoose.model('Channel', ChannelSchema);
+export default mongoose.model('Channel', ChannelSchema);

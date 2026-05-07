@@ -8,6 +8,7 @@ interface MessageCardProps {
   onLongPress: () => void;
   onShowReactionPicker: () => void;
   onReply: () => void;
+  onScrollToMessage: (messageId: number | string) => void;
 }
 
 export const MessageCard: React.FC<MessageCardProps> = ({
@@ -16,7 +17,8 @@ export const MessageCard: React.FC<MessageCardProps> = ({
   onReaction,
   onLongPress,
   onShowReactionPicker,
-  onReply
+  onReply,
+  onScrollToMessage
 }) => {
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -190,6 +192,9 @@ export const MessageCard: React.FC<MessageCardProps> = ({
               <div className={`mb-2 p-2 rounded-lg border-l-4 bg-black/5 dark:bg-white/5 border-green-500 text-left overflow-hidden cursor-pointer hover:bg-black/10 transition-colors`}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (message.replyTo?.id) {
+                    onScrollToMessage(message.replyTo.id);
+                  }
                 }}
               >
                 <p className="text-[10px] font-bold text-green-500 truncate">{message.replyTo.username}</p>
