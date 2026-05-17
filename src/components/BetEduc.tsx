@@ -1,74 +1,117 @@
 
 import React, { useState } from 'react';
 import UnifiedPaymentModal from './payment/UnifiedPaymentModal';
+import { markdownToHtml } from '../utils/markdownToHtml';
 
 interface BetEducProps {
-  onClose: () => void;
+  onClose?: () => void;
+}
+
+interface EducComment {
+  username: string;
+  avatar?: string;
+  text: string;
+  createdAt: string;
 }
 
 interface EducResource {
-  id: number;
+  _id: string;
   title: string;
   type: string;
+  category: 'free' | 'premium';
+  price: number;
   image: string;
-  price?: number;
+  contentType: 'file' | 'link' | 'text';
+  content: string;
+  description: string;
+  comments?: EducComment[];
 }
 
 const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
-  const [activeTab, setActiveTab] = useState('gratuits');
+  const [activeTab, setActiveTab] = useState<'free' | 'premium'>('free');
+  const [resources, setResources] = useState<EducResource[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedResource, setSelectedResource] = useState<EducResource | null>(null);
+  const [viewingText, setViewingText] = useState<EducResource | null>(null);
+  const [newComment, setNewComment] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
-  // Mock data for free resources
-  const freeResources = [
-    {
-      id: 1,
-      title: 'Guide débutant des paris sportifs',
-      type: 'E-Book',
-      image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80'
-    },
-    {
-      id: 2,
-      title: 'Les bases des statistiques sportives',
-      type: 'Vidéo',
-      image: 'https://images.unsplash.com/photo-1512020949297-fd0ec9a3a438?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80'
-    },
-    {
-      id: 3,
-      title: 'Comprendre les cotes et probabilités',
-      type: 'Article',
-      image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80'
+  React.useEffect(() => {
+    const fetchResources = async () => {
+      try {
+        const res = await fetch('/api/beteduc');
+        const data = await res.json();
+        setResources(data);
+      } catch (err) {
+        console.error("Failed to fetch beteduc data", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchResources();
+  }, []);
+
+  const getTypeIcon = (type: string) => {
+    const lower = type.toLowerCase();
+    if (lower.includes('book') || lower.includes('livre')) return '📖';
+    if (lower.includes('vidéo') || lower.includes('film') || lower.includes('video')) return '🎬';
+    if (lower.includes('article') || lower.includes('texte')) return '📝';
+    if (lower.includes('formation') || lower.includes('cours')) return '🎓';
+    return '📄';
+  };
+
+  const getEmbedUrl = (url: string) => {
+    if (!url) return '';
+    if (url.includes('youtube.com/watch')) {
+      try {
+        const urlParams = new URLSearchParams(new URL(url).search);
+        const v = urlParams.get('v');
+        if (v) return `https://www.youtube.com/embed/${v}`;
+      } catch (e) {
+        console.error(e);
+      }
     }
-  ];
-
-  // Mock data for pro resources
-  const proResources = [
-    {
-      id: 1,
-      title: 'Masterclass Trading Sportif',
-      type: 'Formation',
-      price: 79.99,
-      image: 'https://images.unsplash.com/photo-1543286386-2e659306cd6c?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'
-    },
-    {
-      id: 2,
-      title: 'Stratégies avancées de paris',
-      type: 'E-Book Premium',
-      price: 24.99,
-      image: 'https://images.unsplash.com/photo-1569025690938-a00729c9e1f9?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'
-    },
-    {
-      id: 3,
-      title: 'Analyse statistique approfondie',
-      type: 'Webinaire',
-      price: 49.99,
-      image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'
+    if (url.includes('youtu.be/')) {
+      const id = url.split('youtu.be/')[1]?.split('?')[0];
+      if (id) return `https://www.youtube.com/embed/${id}`;
     }
-  ];
+    return url;
+  };
 
-  const handleDownload = (resource: EducResource) => {
-    // Simulation de téléchargement
-    alert(`Téléchargement de "${resource.title}" en cours...`);
+  const handleAction = (resource: EducResource) => {
+    setViewingText(resource);
+  };
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim() || !viewingText) return;
+    setIsSubmittingComment(true);
+    try {
+      const resourceId = viewingText.id || viewingText._id;
+      const response = await fetch(`/api/beteduc/${resourceId}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ text: newComment })
+      });
+      if (response.ok) {
+        const updatedResource = await response.json();
+        setViewingText(updatedResource);
+        setResources(prev => prev.map(r => (r.id === updatedResource.id || r._id === updatedResource.id) ? updatedResource : r));
+        setNewComment('');
+      } else {
+        const errData = await response.json();
+        alert(errData.message || "Impossible d'ajouter le commentaire.");
+      }
+    } catch (err) {
+      console.error("Failed to add comment", err);
+      alert("Une erreur s'est produite lors de l'envoi.");
+    } finally {
+      setIsSubmittingComment(false);
+    }
   };
 
   const handleBuyResource = (resource: EducResource) => {
@@ -79,113 +122,101 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
   const handlePaymentSuccess = () => {
     setShowPaymentModal(false);
     if (selectedResource) {
-      alert(`Félicitations! Vous avez acheté "${selectedResource.title}". Le contenu est maintenant disponible dans votre bibliothèque.`);
+      handleAction(selectedResource);
     }
   };
 
+  const filteredResources = resources.filter(r => r.category === activeTab);
+
   return (
-    <div className="h-full flex flex-col">
-      <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-green-600 text-white">
-        <h2 className="text-xl font-bold">BET-EDUC</h2>
-        <button
-          onClick={onClose}
-          className="p-1 rounded-full hover:bg-green-700"
-          aria-label="Fermer"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+    <div className={onClose 
+      ? "h-full flex flex-col bg-slate-50 dark:bg-brand-navy-3 relative overflow-hidden"
+      : "max-w-[1400px] mx-auto px-4 py-6 w-full flex flex-col animate-fade-in relative"
+    }>
+      {/* Premium Header */}
+      <div className={onClose 
+        ? "relative p-6 pb-4 border-b border-slate-200 dark:border-brand-slate/30 bg-white/80 dark:bg-brand-navy-2/80 backdrop-blur-xl z-20"
+        : "relative pb-6 mb-6 border-b border-slate-200 dark:border-brand-slate/30"
+      }>
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tighter italic">BET-EDUC</h2>
+            <p className="text-[10px] font-black text-brand-green uppercase tracking-[0.2em] opacity-80">Centre d'apprentissage</p>
+          </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-brand-navy-3 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Tab System */}
+        <div className="flex p-1 bg-slate-100 dark:bg-brand-navy-3 rounded-2xl border border-slate-200/50 dark:border-brand-slate/20">
+          <button
+            className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'free' ? 'bg-white dark:bg-brand-navy-2 text-brand-green shadow-lg shadow-black/5' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+            onClick={() => setActiveTab('free')}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+            Gratuit
+          </button>
+          <button
+            className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'premium' ? 'bg-white dark:bg-brand-navy-2 text-yellow-500 shadow-lg shadow-black/5' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+            onClick={() => setActiveTab('premium')}
+          >
+            Premium
+          </button>
+        </div>
       </div>
 
-      <div className="flex border-b border-gray-200">
-        <button
-          className={`flex-1 py-3 font-medium text-sm ${activeTab === 'gratuits' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}
-          onClick={() => setActiveTab('gratuits')}
-        >
-          Gratuits
-        </button>
-        <button
-          className={`flex-1 py-3 font-medium text-sm ${activeTab === 'pro' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}
-          onClick={() => setActiveTab('pro')}
-        >
-          Pro
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4">
-        {activeTab === 'gratuits' ? (
-          <div className="space-y-4">
-            {freeResources.map((resource) => (
-              <div
-                key={resource.id}
-                className="border border-gray-200 rounded-lg overflow-hidden"
-              >
-                <div className="h-32 overflow-hidden">
-                  <img
-                    src={resource.image}
-                    alt={resource.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="p-3">
-                  <span className="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full mb-2">
-                    {resource.type}
-                  </span>
-                  <h3 className="font-medium">{resource.title}</h3>
-                  <div className="mt-3 flex justify-end">
-                    <button
-                      className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm font-medium"
-                      onClick={() => handleDownload(resource)}
-                    >
-                      Télécharger
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+      <div className={onClose ? "flex-1 overflow-y-auto no-scrollbar p-6" : "w-full"}>
+        {loading ? (
+          <div className="h-full flex flex-col items-center justify-center space-y-4 py-20">
+            <div className="w-10 h-10 border-4 border-brand-green border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Chargement des ressources...</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {proResources.map((resource) => (
+          <div className={`grid grid-cols-1 gap-4 pb-20 ${onClose ? 'sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
+            {filteredResources.length === 0 ? (
+              <div className="col-span-full py-20 text-center space-y-3">
+                <div className="text-4xl opacity-20">📭</div>
+                <p className="text-sm font-bold text-slate-400 italic">Aucune ressource disponible pour le moment.</p>
+              </div>
+            ) : filteredResources.map((resource, index) => (
               <div
-                key={resource.id}
-                className="border border-gray-200 rounded-lg overflow-hidden"
+                key={resource._id || resource.id || index}
+                className="group bg-white dark:bg-brand-navy-2 rounded-2xl border border-slate-200 dark:border-brand-slate/50 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-brand-green/10 dark:hover:shadow-none transition-all duration-300"
               >
-                <div className="h-32 overflow-hidden">
+                <div className="h-32 relative overflow-hidden">
                   <img
                     src={resource.image}
                     alt={resource.title}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                   />
-                </div>
-                <div className="p-3">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="inline-block px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                      {resource.type}
-                    </span>
-                    <span className="font-bold text-green-600">
-                      {resource.price} €
-                    </span>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60"></div>
+                  <div className="absolute top-2 right-2 px-2 py-1 bg-black/30 backdrop-blur-md rounded-lg text-[9px] font-black text-white uppercase tracking-wider">
+                    {getTypeIcon(resource.type)} {resource.type}
                   </div>
-                  <h3 className="font-medium">{resource.title}</h3>
-                  <div className="mt-3 flex justify-end">
+                </div>
+                <div className="p-4">
+                  <h3 className="font-black text-slate-800 dark:text-white text-sm leading-snug mb-1 line-clamp-1 group-hover:text-brand-green transition-colors">{resource.title}</h3>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-4">{resource.description}</p>
+                  
+                  <div className="flex justify-between items-center pt-3 border-t border-slate-50 dark:border-brand-slate/20">
+                    {resource.category === 'premium' ? (
+                      <span className="text-sm font-black text-brand-green">{resource.price}€</span>
+                    ) : (
+                      <span className="text-[9px] font-black text-brand-green uppercase tracking-widest px-2 py-1 bg-brand-green/10 rounded">Offert</span>
+                    )}
+                    
                     <button
-                      className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm font-medium"
-                      onClick={() => handleBuyResource(resource)}
+                      className="px-4 py-1.5 bg-brand-green text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-brand-green/20"
+                      onClick={() => resource.category === 'premium' ? handleBuyResource(resource) : handleAction(resource)}
                     >
-                      Acheter
+                      {resource.category === 'premium' ? 'Débloquer' : (resource.contentType === 'text' ? 'Lire' : 'Accéder')}
                     </button>
                   </div>
                 </div>
@@ -194,6 +225,197 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
           </div>
         )}
       </div>
+
+      {/* Full Content Reader Modal */}
+      {viewingText && (
+        <div className="absolute inset-0 bg-white dark:bg-brand-navy-2 z-[60] flex flex-col animate-slide-in-right">
+          <div className="p-6 border-b border-slate-200 dark:border-brand-slate/30 flex justify-between items-center bg-white dark:bg-brand-navy-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{getTypeIcon(viewingText.type)}</span>
+              <div>
+                <h3 className="font-black text-slate-800 dark:text-white text-sm uppercase tracking-tight truncate max-w-[200px]">{viewingText.title}</h3>
+                <p className="text-[10px] font-black text-brand-green uppercase tracking-widest">Lecture en cours</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setViewingText(null)} 
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-brand-navy-2 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-6 py-8">
+            <div className="max-w-prose mx-auto">
+              
+              {/* Dynamic Content Types */}
+              {viewingText.contentType === 'text' ? (
+                <div
+                  className="prono-md text-slate-700 dark:text-slate-300 leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: markdownToHtml(viewingText.content) || '<p class="italic text-slate-400 text-center py-10">Aucun contenu disponible.</p>' }}
+                />
+              ) : viewingText.contentType === 'link' ? (
+                <div className="space-y-6">
+                  <div className="w-full h-[450px] rounded-2xl overflow-hidden border border-slate-200 dark:border-brand-slate/30 bg-black relative shadow-lg">
+                    <iframe 
+                      src={getEmbedUrl(viewingText.content)} 
+                      className="w-full h-full" 
+                      title={viewingText.title}
+                      sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
+                      allowFullScreen
+                    />
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 bg-slate-50 dark:bg-brand-navy-3 rounded-2xl border border-slate-200/50 dark:border-brand-slate/20">
+                    <div className="flex items-center gap-3 text-left">
+                      <span className="text-2xl">🌐</span>
+                      <div>
+                        <p className="text-xs font-black uppercase text-slate-700 dark:text-white">Lien externe associé</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">Si l'affichage direct est bloqué, visitez le site externe.</p>
+                      </div>
+                    </div>
+                    <a 
+                      href={viewingText.content} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="w-full sm:w-auto px-6 py-2.5 bg-brand-green hover:bg-brand-green/80 text-white rounded-xl text-xs font-black uppercase tracking-wider text-center transition-all shadow-lg shadow-brand-green/20"
+                    >
+                      Ouvrir le lien externe
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Local file resource */}
+                  {viewingText.content.toLowerCase().endsWith('.pdf') ? (
+                    <div className="w-full h-[500px] rounded-2xl overflow-hidden border border-slate-200 dark:border-brand-slate/30 bg-slate-900 relative shadow-lg">
+                      <embed src={viewingText.content} type="application/pdf" className="w-full h-full" />
+                    </div>
+                  ) : viewingText.content.toLowerCase().match(/\.(mp4|webm|ogg)$/) ? (
+                    <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-brand-slate/30 bg-black relative shadow-lg">
+                      <video controls src={viewingText.content} className="w-full h-auto max-h-[450px]" />
+                    </div>
+                  ) : viewingText.content.toLowerCase().match(/\.(mp3|wav|ogg)$/) ? (
+                    <div className="flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-brand-navy-3 rounded-2xl border border-slate-200/50 dark:border-brand-slate/20 shadow-md">
+                      <span className="text-5xl mb-4 animate-bounce">🎵</span>
+                      <p className="text-sm font-black text-slate-700 dark:text-white mb-4">Lecture audio de la ressource</p>
+                      <audio controls src={viewingText.content} className="w-full max-w-md" />
+                    </div>
+                  ) : viewingText.content.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/) ? (
+                    <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-brand-slate/30 bg-slate-900 relative shadow-lg">
+                      <img src={viewingText.content} alt={viewingText.title} className="w-full h-auto object-contain mx-auto" />
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 bg-slate-50 dark:bg-brand-navy-3 rounded-2xl border border-slate-200/50 dark:border-brand-slate/20">
+                    <div className="flex items-center gap-3 text-left">
+                      <span className="text-2xl">📁</span>
+                      <div>
+                        <p className="text-xs font-black uppercase text-slate-700 dark:text-white">Fichier de formation local</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">Consultez ou conservez la ressource sur votre appareil.</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = viewingText.content;
+                        link.download = viewingText.title;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                      className="w-full sm:w-auto px-6 py-2.5 bg-brand-green hover:bg-brand-green/80 text-white rounded-xl text-xs font-black uppercase tracking-wider text-center transition-all shadow-lg shadow-brand-green/20"
+                    >
+                      Télécharger le fichier
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Comments Section */}
+              <div className="mt-12 pt-8 border-t border-slate-200 dark:border-brand-slate/30 text-left">
+                <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider mb-6 flex items-center gap-2">
+                  <span>💬</span> Commentaires ({viewingText.comments?.length || 0})
+                </h4>
+
+                {/* List of comments */}
+                <div className="space-y-4 mb-6">
+                  {!viewingText.comments || viewingText.comments.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic py-4 text-center">Aucun commentaire pour le moment. Soyez le premier à réagir !</p>
+                  ) : (
+                    viewingText.comments.map((comment, index) => (
+                      <div 
+                        key={index} 
+                        className="flex gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-brand-navy-3 border border-slate-100 dark:border-brand-slate/20 animate-fade-in"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-brand-green/10 flex items-center justify-center text-sm font-bold text-brand-green overflow-hidden">
+                          {comment.avatar ? (
+                            <img src={comment.avatar} alt={comment.username} className="w-full h-full object-cover" />
+                          ) : (
+                            comment.username.slice(0, 2).toUpperCase()
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-black text-slate-700 dark:text-white">{comment.username}</span>
+                            <span className="text-[8px] font-medium text-slate-400 uppercase">
+                              {new Date(comment.createdAt).toLocaleDateString('fr-FR', {
+                                day: 'numeric',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed break-words">{comment.text}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Comment submission form */}
+                <form onSubmit={handleAddComment} className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={newComment}
+                    onChange={e => setNewComment(e.target.value)}
+                    placeholder="Partager votre avis ou poser une question..."
+                    disabled={isSubmittingComment}
+                    className="flex-1 bg-slate-50 dark:bg-brand-navy-3 border border-slate-100 dark:border-brand-slate/20 rounded-xl px-4 py-3 text-xs outline-none focus:ring-2 focus:ring-brand-green/30 text-slate-700 dark:text-white transition-all placeholder:text-slate-400"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSubmittingComment || !newComment.trim()}
+                    className="px-5 bg-brand-green hover:bg-brand-green/90 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    {isSubmittingComment ? '...' : (
+                      <>
+                        <span>Envoyer</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 rotate-45 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+
+              <div className="mt-12 pt-8 border-t border-slate-100 dark:border-brand-slate/20 text-center">
+                <button 
+                  onClick={() => setViewingText(null)}
+                  className="px-8 py-3 bg-slate-100 dark:bg-brand-navy-3 text-slate-600 dark:text-slate-400 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-brand-green hover:text-white transition-all"
+                >
+                  Revenir à la bibliothèque
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
 
       {showPaymentModal && selectedResource && (
         <UnifiedPaymentModal

@@ -19,43 +19,39 @@ This document outlines the path to taking PronosBox from its current state to a 
 *Goal: Make the website look premium and work flawlessly.*
 
 - [x] **Component Refactoring**:
-    - [x] Break down `Box.tsx` into `ChannelListItem`, `ChannelTabs`, `CreateChannelModal`, and `SubscribeChannelModal`.
-    - [x] Break down `ChannelView.tsx` into `ChannelHeader`, `MessageCard`, and `MessageInput`.
-    - [ ] Break down `News.tsx` into `CategoryFilter`, `FeaturedNews`, and `NewsGrid`.
-- [ ] **Visual Overhaul (Design System)**:
-    - [ ] Implement **Glassmorphism** for Sidebar and TopNav.
-    - [x] Standardize `border-radius` (12px) and `shadows` across all cards.
-    - [x] Update color palette to match `PRONOBOX_DESIGN_SYSTEM.md` (Deep Navy + Vibrant Green).
+    - [x] Break down monoliths into maintainable sub-components (Box, News, Channels).
+- [x] **Visual Overhaul (Design System)**:
+    - [x] Implement **Glassmorphism** for Sidebar and TopNav.
+    - [x] Standardize `border-radius` (12px) and `shadows`.
+    - [x] Update color palette (Deep Navy + Vibrant Green).
 - [x] **Zero Defaut Stabilization**:
-    - [x] Eliminate all inline styles in Settings modules.
-    - [x] Full Accessibility audit (labels, aria-labels) for Settings and Payment modules.
-    - [x] Convert core services (WebSocket) to strict TypeScript (.ts).
-    - [x] **Modularization**: Extract hooks (`usePayment`, `useWebSocket`) to resolve Fast Refresh warnings.
-    - [x] **UI Hardening**: Resolve input visibility in Auth/Settings and fix notification feedback.
-    - [x] **Settings Stabilization**: Implement asynchronous, state-driven profile updates (Bio, Avatar, Notifications) with real cross-session persistence.
-- [x] **UI Rationalization**: Removed redundant Theme section from parameters to streamline the interface.
-- [x] **Type Safety**: Full audit of `AuthContext` and settings components, resolving all implicit `any` and props mismatches.
-- [ ] **Social Enhancements**:
-    - [ ] Add Online Status indicator (green dot) on avatars.
-    - [ ] Implement Real-time updates for DMs (using existing `WebSocketService`).
-    - [ ] Add Emoji Picker to Chat and Comments.
+    - [x] Full Accessibility audit and inline style removal.
+    - [x] Asynchronous profile updates with database persistence.
+- [x] **UI Rationalization**: Removed redundant Theme section.
+- [x] **Type Safety**: Full audit of `AuthContext` and settings components.
+- [x] **Social Enhancements**:
+    - [x] Online Status indicators.
+    - [x] Real-time DM updates via WebSocket.
+    - [x] Emoji Pickers.
 - [ ] **Mobile Optimization**:
     - [ ] Refine the Bottom Navigation Bar for better ergonomics.
     - [ ] Improve horizontal scrolling for Match lists.
 
 ---
 
-## 💰 Phase 3: Monetization & Pro Features
+## 🧪 Phase 3: Beta Testing & Pronos (Current Focus)
 
-- [ ] **Payment Integration**:
-    - [ ] Connect **NowPayments.io** or **FedaPay** to the existing Wallet system.
-    - [ ] Finalize "Buy Pro" flow with success/error states.
-- [ ] **IA Pronos (AI Predictions)**:
-    - [ ] Connect real sports data API (Fotmob/Opta) to the Prediction engine.
-    - [ ] Implement "Premium Only" filter for expert analyses.
-- [ ] **Channel Monetization**:
-    - [ ] Allow Pro users to set a subscription price for their channels.
-    - [ ] Implement the 10% commission logic for the platform.
+- [x] **API Integrations**:
+    - [x] **Sports Data (API-Football)**:
+        - [x] Implement fixtures proxy in `server.js` with Free Tier compliance.
+        - [x] **Beta Testing**: Stabilize season fallbacks for cup tournaments and older data.
+        - [x] Replicate FotMob sidebar navigation and categorization.
+    - [x] **News Feed Integration**:
+        - [x] Integrated real-time RSS feeds from sports.fr (Complete).
+- [x] **Pronos**:
+    - [x] **Free Version**: Connect real sports data API for basic predictions. Implemented a CRUD section in the Admin Dashboard to manage free predictions.
+    - [x] **Premium Version**: Deep analysis combined with an AI opinion. Built a dedicated CRUD section in the Admin Dashboard.
+    - [x] **UX & Rendering**: Modernized the match perspective UI and standardized markdown rendering for 1:1 editor parity.
 
 ---
 
@@ -65,12 +61,33 @@ This document outlines the path to taking PronosBox from its current state to a 
     - [ ] User management (Ban/Pro status).
     - [ ] Transaction validation queue.
     - [ ] Channel moderation tools.
+    - [x] **Pronos Management**: CRUD interfaces for Free and Premium predictions.
+    - [x] **BET-EDUC Management**: CRUD interfaces for Free and Premium educational content (E-books, Videos, Articles) with internal async uploads.
+    - [x] **Universal Media Player Integration**: Play videos, audios, and read PDFs directly inline with user commenting (Recommendation 4).
 - [ ] **Performance**:
     - [ ] Implement image lazy loading.
     - [ ] Optimize MongoDB queries for the "Box" feed (Pagination).
+    - [ ] **Admin Dashboard Optimization**: Implement code splitting for management tabs.
 - [ ] **Deployment**:
     - [ ] Finalize Contabo VPS setup (Nginx, PM2, MongoDB).
     - [ ] Set up SSL (Certbot).
+
+---
+
+## 💰 Phase 5: Payment & Monetization
+
+- [ ] **Payment Integration**:
+    - [ ] Connect **FedaPay** / **NowPayments.io** to the Wallet system.
+    - [ ] Finalize "Buy Pro" flow with success/error states and automatic status update.
+    - [ ] Implement Pro user commission logic (10% platform fee).
+
+---
+
+## 🤖 Phase 6: Advanced Pronos Automation
+
+- [ ] **Admin UX**: Implement dynamic match search lookup for prono creation (Recommendation 1).
+- [ ] **Broadcaster Logic**: Allow match-specific broadcaster overrides in the database (Recommendation 2).
+- [ ] **Real-time Data**: Implement background syncing for live odds (Recommendation 3).
 
 ---
 

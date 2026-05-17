@@ -2,6 +2,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,15 +11,27 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
+import axios from 'axios';
+import Parser from 'rss-parser';
 import User from './models/User.js';
 import Transaction from './models/Transaction.js';
 import Channel from './models/Channel.js';
 import Debate from './models/Debate.js';
+import BetEduc from './models/BetEduc.js';
+import Prono from './models/Prono.js';
 const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Statically serve uploaded files from the root /uploads folder
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
 
 // MongoDB Connection Options
 const mongoOptions = {
@@ -94,6 +107,15 @@ const requireProOrAdmin = (req, res, next) => {
     next();
   } else {
     res.status(403).json({ message: 'This action requires a Pro or Admin account' });
+  }
+};
+
+const requireAdmin = (req, res, next) => {
+  if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+  if (req.user.role === 'admin') {
+    next();
+  } else {
+    res.status(403).json({ message: 'This action requires an Admin account' });
   }
 };
 
@@ -175,6 +197,300 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: error.message });
+  }
+});
+
+// Football API proxy route
+app.get('/api/football/matches', async (req, res) => {
+  try {
+    const { date } = req.query; // Expecting YYYY-MM-DD
+    
+    if (!date) {
+      return res.status(400).json({ message: 'Date parameter is required (YYYY-MM-DD)' });
+    }
+
+    console.log(`Fetching matches for date: ${date}`);
+    
+    const response = await axios.get('https://v3.football.api-sports.io/fixtures', {
+      params: { date },
+      headers: {
+        'x-apisports-key': '9a068a21856b2e7f20dedff6b4322352'
+      }
+    });
+    
+    console.log(`API-Football response status: ${response.status}`);
+    console.log(`API-Football response data count: ${response.data.response?.length || 0}`);
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching football data:', error.message);
+    res.status(500).json({ message: 'Error fetching football data' });
+  }
+});
+
+// Fetch detailed match information
+app.get('/api/football/match/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`Fetching match details for ID: ${id}`);
+    
+    const response = await axios.get('https://v3.football.api-sports.io/fixtures', {
+      params: { id },
+      headers: {
+        'x-apisports-key': '9a068a21856b2e7f20dedff6b4322352'
+      }
+    });
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error(`Error fetching match ${req.params.id}:`, error.message);
+    res.status(500).json({ message: 'Error fetching match details' });
+  }
+});
+
+// Fetch league standings
+app.get('/api/football/standings/:league/:season', async (req, res) => {
+  try {
+    const { league, season } = req.params;
+    console.log(`Fetching standings for league: ${league}, season: ${season}`);
+    
+    const response = await axios.get('https://v3.football.api-sports.io/standings', {
+      params: { league, season },
+      headers: {
+        'x-apisports-key': '9a068a21856b2e7f20dedff6b4322352'
+      }
+    });
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error(`Error fetching standings for ${req.params.league}:`, error.message);
+    res.status(500).json({ message: 'Error fetching league standings' });
+  }
+});
+
+// Fetch league fixtures
+app.get('/api/football/fixtures/:league/:season', async (req, res) => {
+  try {
+    const { league, season } = req.params;
+    console.log(`Fetching fixtures for league: ${league}, season: ${season}`);
+    
+    // Free plans do not have access to the 'next' parameter, so we fetch all fixtures for the season.
+    const response = await axios.get('https://v3.football.api-sports.io/fixtures', {
+      params: { league, season },
+      headers: {
+        'x-apisports-key': '9a068a21856b2e7f20dedff6b4322352'
+      }
+    });
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error(`Error fetching fixtures for ${req.params.league}:`, error.message);
+    res.status(500).json({ message: 'Error fetching league fixtures' });
+  }
+});
+
+const parser = new Parser({
+  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+});
+
+app.get('/api/news', async (req, res) => {
+  try {
+    const feed = await parser.parseURL('https://www.sports.fr/football/feed/');
+    
+    const items = feed.items.map(item => {
+      const content = item.content || '';
+      const imgRegex = /<img[^>]+src="([^">]+)"/g;
+      const match = imgRegex.exec(content);
+      
+      const image = item.enclosure?.url || (match ? match[1] : 'https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&q=80&w=400&h=250');
+      
+      return {
+        title: item.title,
+        link: item.link,
+        pubDate: item.pubDate,
+        content: item.contentSnippet || item.content,
+        image: image
+      };
+    });
+    
+    res.json(items);
+  } catch (error) {
+    console.error('Error fetching RSS feed:', error.message);
+    res.status(500).json({ message: 'Error fetching news' });
+  }
+});
+
+// BET-EDUC routes
+app.get('/api/beteduc', async (req, res) => {
+  try {
+    const resources = await BetEduc.find().sort({ createdAt: -1 });
+    res.json(resources);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/beteduc', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const resource = new BetEduc(req.body);
+    await resource.save();
+    res.status(201).json(resource);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+app.put('/api/beteduc/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const resource = await BetEduc.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!resource) return res.status(404).json({ message: 'Resource not found' });
+    res.json(resource);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+app.delete('/api/beteduc/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const resource = await BetEduc.findByIdAndDelete(req.params.id);
+    if (!resource) return res.status(404).json({ message: 'Resource not found' });
+    res.json({ message: 'Success' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Post a comment on a BET-EDUC resource
+app.post('/api/beteduc/:id/comments', authenticateToken, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: 'Le texte du commentaire est requis.' });
+    }
+    
+    // Find the user to get their username and avatar
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'Utilisateur non trouvé.' });
+    
+    const resource = await BetEduc.findById(req.params.id);
+    if (!resource) return res.status(404).json({ message: 'Ressource non trouvée.' });
+    
+    if (!resource.comments) {
+      resource.comments = [];
+    }
+    
+    resource.comments.push({
+      username: user.username,
+      avatar: user.avatar || '',
+      text: text.trim(),
+      createdAt: new Date()
+    });
+    
+    await resource.save();
+    res.status(201).json(resource);
+  } catch (error) {
+    console.error('Error adding comment to beteduc:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Secure API for uploading files locally using Base64 strings (Admin-only)
+app.post('/api/upload', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { filename, base64Data } = req.body;
+    if (!filename || !base64Data) {
+      return res.status(400).json({ message: 'Le nom du fichier et les données Base64 sont requis.' });
+    }
+
+    // Generate unique, safe filename
+    const cleanFilename = Date.now() + '_' + filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+
+    // Ensure uploads directory exists
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const filePath = path.join(uploadsDir, cleanFilename);
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    // Write file safely and asynchronously
+    await fs.promises.writeFile(filePath, buffer);
+
+    res.status(201).json({ url: `/uploads/${cleanFilename}` });
+  } catch (error) {
+    console.error('File upload error:', error);
+    res.status(500).json({ message: 'Erreur lors du téléversement du fichier.' });
+  }
+});
+
+// ----------------------------------------------------------------------
+// Pronos API
+// ----------------------------------------------------------------------
+
+app.get('/api/pronos', async (req, res) => {
+  try {
+    // Use createdAt for sorting since matchDate might not be in the schema
+    const pronos = await Prono.find().sort({ createdAt: -1 });
+    res.json(pronos);
+  } catch (err) {
+    console.error('Error fetching pronos:', err);
+    res.status(500).json({ error: 'Failed to fetch pronos' });
+  }
+});
+
+app.get('/api/pronos/:matchId', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    console.log(`Searching for prono with matchId: ${matchId}`);
+    
+    // Find by either numeric or string matchId to be safe
+    const prono = await Prono.findOne({ 
+      $or: [
+        { matchId: parseInt(matchId) },
+        { matchId: matchId }
+      ]
+    });
+    
+    if (!prono) {
+      console.log(`No prono found for matchId: ${matchId}`);
+      return res.status(404).json({ error: 'Prono not found' });
+    }
+    
+    res.json(prono);
+  } catch (err) {
+    console.error('Error fetching single prono:', err);
+    res.status(500).json({ error: 'Failed to fetch prono' });
+  }
+});
+
+app.post('/api/pronos', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const newProno = new Prono(req.body);
+    await newProno.save();
+    res.status(201).json(newProno);
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to create prono' });
+  }
+});
+
+app.put('/api/pronos/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const prono = await Prono.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!prono) return res.status(404).json({ error: 'Prono not found' });
+    res.json(prono);
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to update prono' });
+  }
+});
+
+app.delete('/api/pronos/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const prono = await Prono.findByIdAndDelete(req.params.id);
+    if (!prono) return res.status(404).json({ error: 'Prono not found' });
+    res.json({ message: 'Prono deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete prono' });
   }
 });
 
