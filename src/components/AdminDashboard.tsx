@@ -377,45 +377,26 @@ const BetEducManagement = () => {
   const handleFileUpload = async (file: File, targetField: 'image' | 'content', setUploading: (u: boolean) => void) => {
     setUploading(true);
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const base64Data = e.target?.result?.toString().split(',')[1];
-          if (!base64Data) {
-            setUploading(false);
-            return;
-          }
-          
-          const response = await fetch('/api/upload', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({
-              filename: file.name,
-              base64Data
-            })
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            setFormData(prev => ({ ...prev, [targetField]: data.url }));
-          } else {
-            const errorData = await response.json();
-            alert(`Erreur de téléversement: ${errorData.message}`);
-          }
-        } catch (fetchErr) {
-          console.error("Fetch upload error", fetchErr);
-          alert("Erreur de téléversement : Fichier trop volumineux ou erreur réseau.");
-        } finally {
-          setUploading(false);
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error("Error uploading file", err);
-      alert("Une erreur s'est produite lors du téléversement.");
+      const response = await fetch(`/api/upload-binary?filename=${encodeURIComponent(file.name)}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': file.type || 'application/octet-stream'
+        },
+        body: file // Browser streams the binary directly, 100% efficient!
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setFormData(prev => ({ ...prev, [targetField]: data.url }));
+      } else {
+        const errorData = await response.json();
+        alert(`Erreur de téléversement: ${errorData.message}`);
+      }
+    } catch (fetchErr) {
+      console.error("Fetch upload error", fetchErr);
+      alert("Erreur de téléversement : Problème réseau ou fichier trop volumineux.");
+    } finally {
       setUploading(false);
     }
   };

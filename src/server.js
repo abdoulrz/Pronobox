@@ -424,6 +424,35 @@ app.post('/api/upload', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// Secure API for high-speed local binary stream uploading (Admin-only)
+app.post('/api/upload-binary', authenticateToken, requireAdmin, express.raw({ type: '*/*', limit: '50mb' }), async (req, res) => {
+  try {
+    const filename = req.query.filename;
+    if (!filename) {
+      return res.status(400).json({ message: 'Le paramètre filename est requis.' });
+    }
+
+    // Generate unique, safe filename
+    const cleanFilename = Date.now() + '_' + filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+
+    // Ensure uploads directory exists
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const filePath = path.join(uploadsDir, cleanFilename);
+
+    // Save binary buffer directly to disk asynchronously
+    await fs.promises.writeFile(filePath, req.body);
+
+    res.status(201).json({ url: `/uploads/${cleanFilename}` });
+  } catch (error) {
+    console.error('Binary upload error:', error);
+    res.status(500).json({ message: 'Erreur lors du téléversement binaire.' });
+  }
+});
+
 // ----------------------------------------------------------------------
 // Pronos API
 // ----------------------------------------------------------------------
