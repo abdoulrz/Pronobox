@@ -373,6 +373,7 @@ const BetEducManagement = () => {
   const [isUploadingContent, setIsUploadingContent] = useState(false);
   const [imageSource, setImageSource] = useState<'url' | 'file'>('url');
   const [contentSource, setContentSource] = useState<'url' | 'file'>('url');
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   const handleFileUpload = async (file: File, targetField: 'image' | 'content', setUploading: (u: boolean) => void) => {
     setUploading(true);
@@ -466,7 +467,7 @@ const BetEducManagement = () => {
     });
     setImageSource(resource.image && resource.image.startsWith('/uploads/') ? 'file' : 'url');
     setContentSource(resource.content && resource.content.startsWith('/uploads/') ? 'file' : 'url');
-    setEditingId(resource._id);
+    setEditingId(resource.id || resource._id);
     setIsAdding(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -779,47 +780,63 @@ const BetEducManagement = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredResources.map(res => (
-            <div key={res._id} className="bg-white dark:bg-brand-navy-2 rounded-2xl border border-slate-200 dark:border-brand-slate overflow-hidden group shadow-sm hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-none transition-all duration-300">
-              <div className="h-44 relative overflow-hidden">
-                <img src={res.image} alt={res.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60"></div>
-                <div className={`absolute top-4 right-4 px-3 py-1 rounded-lg text-[10px] font-black uppercase shadow-lg backdrop-blur-md ${res.category === 'premium' ? 'bg-yellow-400/90 text-brand-navy-1' : 'bg-brand-green/90 text-white'}`}>
-                  {res.category === 'premium' ? `PRO (${res.price}€)` : 'GRATUIT'}
+          {filteredResources.map(res => {
+            const resourceId = res.id || res._id;
+            const hasImageError = !res.image || imageErrors[resourceId];
+            return (
+              <div key={resourceId} className="bg-white dark:bg-brand-navy-2 rounded-2xl border border-slate-200 dark:border-brand-slate overflow-hidden group shadow-sm hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-none transition-all duration-300">
+                <div className="h-44 relative overflow-hidden bg-slate-50 dark:bg-brand-navy-3 flex items-center justify-center">
+                  {hasImageError ? (
+                    <div className="w-full h-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-brand-navy-3 dark:to-brand-navy-2 flex flex-col items-center justify-center gap-2 border-b border-slate-100 dark:border-brand-slate/10">
+                      <span className="text-4xl drop-shadow-md">{getTypeIcon(res.type)}</span>
+                      <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Image non disponible</span>
+                    </div>
+                  ) : (
+                    <img 
+                      src={res.image} 
+                      alt={res.title} 
+                      onError={() => setImageErrors(prev => ({ ...prev, [resourceId]: true }))}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60"></div>
+                  <div className={`absolute top-4 right-4 px-3 py-1 rounded-lg text-[10px] font-black uppercase shadow-lg backdrop-blur-md ${res.category === 'premium' ? 'bg-yellow-400/90 text-brand-navy-1' : 'bg-brand-green/90 text-white'}`}>
+                    {res.category === 'premium' ? `PRO (${res.price}€)` : 'GRATUIT'}
+                  </div>
+                  <div className="absolute bottom-4 left-4 flex items-center gap-2">
+                    <span className="text-2xl drop-shadow-md">{getTypeIcon(res.type)}</span>
+                    <span className="text-[10px] font-black text-white uppercase tracking-wider bg-black/30 backdrop-blur-sm px-2 py-1 rounded">{res.type}</span>
+                  </div>
                 </div>
-                <div className="absolute bottom-4 left-4 flex items-center gap-2">
-                  <span className="text-2xl drop-shadow-md">{getTypeIcon(res.type)}</span>
-                  <span className="text-[10px] font-black text-white uppercase tracking-wider bg-black/30 backdrop-blur-sm px-2 py-1 rounded">{res.type}</span>
+                <div className="p-5">
+                  <h4 className="font-bold text-slate-800 dark:text-white mb-2 line-clamp-1 group-hover:text-brand-green transition-colors">{res.title}</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 line-clamp-2 leading-relaxed">{res.description}</p>
+                  <div className="flex items-center gap-2 pt-4 border-t border-slate-100 dark:border-brand-slate/30">
+                    <button 
+                      onClick={() => setViewingResource(res)}
+                      className="flex-1 py-2 bg-slate-50 dark:bg-brand-navy-3 text-slate-600 dark:text-slate-400 rounded-xl text-[10px] font-black uppercase hover:bg-brand-green/10 hover:text-brand-green transition-all"
+                    >
+                      Aperçu
+                    </button>
+                    <button 
+                      onClick={() => handleEdit(res)} 
+                      className="p-2 bg-slate-50 dark:bg-brand-navy-3 text-yellow-500 rounded-xl hover:bg-yellow-500/10 transition-all"
+                      title="Modifier"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(resourceId)} 
+                      className="p-2 bg-slate-50 dark:bg-brand-navy-3 text-red-500 rounded-xl hover:bg-red-500/10 transition-all"
+                      title="Supprimer"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div className="p-5">
-                <h4 className="font-bold text-slate-800 dark:text-white mb-2 line-clamp-1 group-hover:text-brand-green transition-colors">{res.title}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 line-clamp-2 leading-relaxed">{res.description}</p>
-                <div className="flex items-center gap-2 pt-4 border-t border-slate-100 dark:border-brand-slate/30">
-                  <button 
-                    onClick={() => setViewingResource(res)}
-                    className="flex-1 py-2 bg-slate-50 dark:bg-brand-navy-3 text-slate-600 dark:text-slate-400 rounded-xl text-[10px] font-black uppercase hover:bg-brand-green/10 hover:text-brand-green transition-all"
-                  >
-                    Aperçu
-                  </button>
-                  <button 
-                    onClick={() => handleEdit(res)} 
-                    className="p-2 bg-slate-50 dark:bg-brand-navy-3 text-yellow-500 rounded-xl hover:bg-yellow-500/10 transition-all"
-                    title="Modifier"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(res._id)} 
-                    className="p-2 bg-slate-50 dark:bg-brand-navy-3 text-red-500 rounded-xl hover:bg-red-500/10 transition-all"
-                    title="Supprimer"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
           {filteredResources.length === 0 && (
             <div className="col-span-full py-20 text-center">
               <p className="text-slate-400 italic text-sm">Aucune ressource ne correspond à votre recherche.</p>
