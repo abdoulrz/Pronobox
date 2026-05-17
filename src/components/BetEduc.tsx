@@ -63,18 +63,12 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
 
   const getEmbedUrl = (url: string) => {
     if (!url) return '';
-    if (url.includes('youtube.com/watch')) {
-      try {
-        const urlParams = new URLSearchParams(new URL(url).search);
-        const v = urlParams.get('v');
-        if (v) return `https://www.youtube.com/embed/${v}`;
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    if (url.includes('youtu.be/')) {
-      const id = url.split('youtu.be/')[1]?.split('?')[0];
-      if (id) return `https://www.youtube.com/embed/${id}`;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    
+    if (match && match[2].length === 11) {
+      const videoId = match[2];
+      return `https://www.youtube.com/embed/${videoId}`;
     }
     return url;
   };

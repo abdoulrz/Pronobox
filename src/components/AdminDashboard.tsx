@@ -427,10 +427,37 @@ const BetEducManagement = () => {
     return '📄';
   };
 
+  const getUnsplashDirectUrl = (url: string) => {
+    if (!url) return '';
+    if (url.includes('unsplash.com') && !url.includes('images.unsplash.com')) {
+      try {
+        const urlObj = new URL(url);
+        const segments = urlObj.pathname.split('/').filter(Boolean);
+        if (segments.length > 0) {
+          const lastSegment = segments[segments.length - 1];
+          const idParts = lastSegment.split('-');
+          const photoId = idParts[idParts.length - 1];
+          if (photoId && photoId.length >= 8) {
+            return `https://images.unsplash.com/photo-${photoId}?auto=format&fit=crop&w=800&q=80`;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse Unsplash URL", e);
+      }
+    }
+    return url;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const url = editingId ? `/api/beteduc/${editingId}` : '/api/beteduc';
     const method = editingId ? 'PUT' : 'POST';
+    
+    // Clean and normalize URLs prior to persistence
+    const cleanedFormData = {
+      ...formData,
+      image: getUnsplashDirectUrl(formData.image)
+    };
     
     try {
       const res = await fetch(url, {
@@ -439,7 +466,7 @@ const BetEducManagement = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(cleanedFormData)
       });
       if (res.ok) {
         setIsAdding(false);
@@ -605,7 +632,7 @@ const BetEducManagement = () => {
                 <input 
                   id="beteduc-image" type="text" required
                   placeholder="https://images.unsplash.com/..."
-                  value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})}
+                  value={formData.image} onChange={e => setFormData({...formData, image: getUnsplashDirectUrl(e.target.value)})}
                   className="w-full bg-slate-50 dark:bg-brand-navy-3 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all"
                 />
               ) : (
