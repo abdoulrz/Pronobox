@@ -7,15 +7,26 @@ interface BetEducProps {
   onClose?: () => void;
 }
 
-interface EducComment {
+interface EducReply {
   username: string;
   avatar?: string;
   text: string;
   createdAt: string;
 }
 
+interface EducComment {
+  _id?: string;
+  id?: string;
+  username: string;
+  avatar?: string;
+  text: string;
+  createdAt: string;
+  replies?: EducReply[];
+}
+
 interface EducResource {
   _id: string;
+  id?: string;
   title: string;
   type: string;
   category: 'free' | 'premium';
@@ -27,6 +38,27 @@ interface EducResource {
   comments?: EducComment[];
 }
 
+const getUnsplashDirectUrl = (url: string) => {
+  if (!url) return '';
+  if (url.includes('unsplash.com') && !url.includes('images.unsplash.com')) {
+    try {
+      const urlObj = new URL(url);
+      const segments = urlObj.pathname.split('/').filter(Boolean);
+      if (segments.length > 0) {
+        const lastSegment = segments[segments.length - 1];
+        const idParts = lastSegment.split('-');
+        const photoId = idParts[idParts.length - 1];
+        if (photoId && photoId.length >= 8) {
+          return `https://images.unsplash.com/photo-${photoId}?auto=format&fit=crop&w=800&q=80`;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse Unsplash URL", e);
+    }
+  }
+  return url;
+};
+
 const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<'free' | 'premium'>('free');
   const [resources, setResources] = useState<EducResource[]>([]);
@@ -36,6 +68,9 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
   const [viewingText, setViewingText] = useState<EducResource | null>(null);
   const [newComment, setNewComment] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
 
   React.useEffect(() => {
     const fetchResources = async () => {
@@ -105,6 +140,37 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
       alert("Une erreur s'est produite lors de l'envoi.");
     } finally {
       setIsSubmittingComment(false);
+    }
+  };
+
+  const handleSubmitReply = async (commentId: string) => {
+    if (!replyText.trim() || !viewingText) return;
+    setIsSubmittingReply(true);
+    try {
+      const resourceId = viewingText.id || viewingText._id;
+      const response = await fetch(`/api/beteduc/${resourceId}/comments/${commentId}/replies`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ text: replyText })
+      });
+      if (response.ok) {
+        const updatedResource = await response.json();
+        setViewingText(updatedResource);
+        setResources(prev => prev.map(r => (r.id === updatedResource.id || r._id === updatedResource.id) ? updatedResource : r));
+        setReplyText('');
+        setReplyingToCommentId(null);
+      } else {
+        const errData = await response.json();
+        alert(errData.message || "Impossible d'ajouter la réponse.");
+      }
+    } catch (err) {
+      console.error("Failed to add reply", err);
+      alert("Une erreur s'est produite lors de l'envoi.");
+    } finally {
+      setIsSubmittingReply(false);
     }
   };
 
@@ -186,7 +252,7 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
               >
                 <div className="h-32 relative overflow-hidden">
                   <img
-                    src={resource.image}
+                    src={getUnsplashDirectUrl(resource.image)}
                     alt={resource.title}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                   />
@@ -249,7 +315,7 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
                   className="prono-md text-slate-700 dark:text-slate-300 leading-relaxed"
                   dangerouslySetInnerHTML={{ __html: markdownToHtml(viewingText.content) || '<p class="italic text-slate-400 text-center py-10">Aucun contenu disponible.</p>' }}
                 />
-              ) : viewingText.contentType === 'link' ? (
+              ) : (viewingText.contentType === 'link' || (viewingText.content.startsWith('http') && (viewingText.content.includes('youtube.com') || viewingText.content.includes('youtu.be') || viewingText.content.includes('vimeo.com')))) ? (
                 <div className="space-y-6">
                   <div className="w-full h-[450px] rounded-2xl overflow-hidden border border-slate-200 dark:border-brand-slate/30 bg-black relative shadow-lg">
                     <iframe 
@@ -330,7 +396,7 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
               {/* Comments Section */}
               <div className="mt-12 pt-8 border-t border-slate-200 dark:border-brand-slate/30 text-left">
                 <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider mb-6 flex items-center gap-2">
-                  <span>💬</span> Commentaires ({viewingText.comments?.length || 0})
+                  <span>💬</span> Commentaires ({viewingText.comments?.reduce((acc, curr) => acc + 1 + (curr.replies?.length || 0), 0) || 0})
                 </h4>
 
                 {/* List of comments */}
@@ -338,34 +404,114 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
                   {!viewingText.comments || viewingText.comments.length === 0 ? (
                     <p className="text-xs text-slate-400 italic py-4 text-center">Aucun commentaire pour le moment. Soyez le premier à réagir !</p>
                   ) : (
-                    viewingText.comments.map((comment, index) => (
-                      <div 
-                        key={index} 
-                        className="flex gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-brand-navy-3 border border-slate-100 dark:border-brand-slate/20 animate-fade-in"
-                      >
-                        <div className="w-8 h-8 rounded-full bg-brand-green/10 flex items-center justify-center text-sm font-bold text-brand-green overflow-hidden">
-                          {comment.avatar ? (
-                            <img src={comment.avatar} alt={comment.username} className="w-full h-full object-cover" />
-                          ) : (
-                            comment.username.slice(0, 2).toUpperCase()
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-black text-slate-700 dark:text-white">{comment.username}</span>
-                            <span className="text-[8px] font-medium text-slate-400 uppercase">
-                              {new Date(comment.createdAt).toLocaleDateString('fr-FR', {
-                                day: 'numeric',
-                                month: 'short',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </span>
+                    viewingText.comments.map((comment, index) => {
+                      const commentId = comment.id || comment._id;
+                      return (
+                        <div 
+                          key={commentId || index} 
+                          className="p-3 rounded-2xl bg-slate-50 dark:bg-brand-navy-3 border border-slate-100 dark:border-brand-slate/20 animate-fade-in"
+                        >
+                          <div className="flex gap-3">
+                            <div className="w-8 h-8 rounded-full bg-brand-green/10 flex items-center justify-center text-sm font-bold text-brand-green overflow-hidden flex-shrink-0">
+                              {comment.avatar ? (
+                                <img src={comment.avatar} alt={comment.username} className="w-full h-full object-cover" />
+                              ) : (
+                                comment.username.slice(0, 2).toUpperCase()
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-black text-slate-700 dark:text-white">{comment.username}</span>
+                                <span className="text-[8px] font-medium text-slate-400 uppercase">
+                                  {new Date(comment.createdAt).toLocaleDateString('fr-FR', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed break-words">{comment.text}</p>
+                              
+                              <div className="flex items-center gap-4 mt-2">
+                                <button
+                                  onClick={() => {
+                                    if (commentId) {
+                                      setReplyingToCommentId(replyingToCommentId === commentId ? null : commentId);
+                                      setReplyText('');
+                                    }
+                                  }}
+                                  className="text-[9px] font-black uppercase text-brand-green tracking-wider hover:underline flex items-center gap-1"
+                                >
+                                  <span>↳</span> {replyingToCommentId === commentId ? 'Annuler' : 'Répondre'}
+                                </button>
+                              </div>
+                              
+                              {/* Replies Render List */}
+                              {comment.replies && comment.replies.length > 0 && (
+                                <div className="mt-3 pl-3 border-l-2 border-slate-200 dark:border-brand-slate/30 space-y-2.5">
+                                  {comment.replies.map((reply, rIdx) => (
+                                    <div key={rIdx} className="flex gap-2.5 p-2.5 rounded-xl bg-slate-100/50 dark:bg-brand-navy-2 border border-slate-100/30 dark:border-brand-slate/10 animate-fade-in">
+                                      <div className="w-6 h-6 rounded-full bg-brand-green/10 flex items-center justify-center text-[9px] font-bold text-brand-green overflow-hidden flex-shrink-0">
+                                        {reply.avatar ? (
+                                          <img src={reply.avatar} alt={reply.username} className="w-full h-full object-cover" />
+                                        ) : (
+                                          reply.username.slice(0, 2).toUpperCase()
+                                        )}
+                                      </div>
+                                      <div className="flex-1 min-w-0 text-left">
+                                        <div className="flex items-center justify-between mb-0.5">
+                                          <span className="text-[10px] font-black text-slate-700 dark:text-white">{reply.username}</span>
+                                          <span className="text-[7px] font-medium text-slate-400 uppercase">
+                                            {new Date(reply.createdAt).toLocaleDateString('fr-FR', {
+                                              day: 'numeric',
+                                              month: 'short',
+                                              hour: '2-digit',
+                                              minute: '2-digit'
+                                            })}
+                                          </span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-600 dark:text-slate-300 leading-relaxed break-words">{reply.text}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              
+                              {/* Reply Input Form */}
+                              {replyingToCommentId === commentId && commentId && (
+                                <div className="mt-3 flex gap-2 animate-slide-down">
+                                  <input
+                                    type="text"
+                                    required
+                                    autoFocus
+                                    value={replyText}
+                                    onChange={e => setReplyText(e.target.value)}
+                                    placeholder={`Répondre à ${comment.username}...`}
+                                    disabled={isSubmittingReply}
+                                    className="flex-1 bg-slate-100 dark:bg-brand-navy-2 border border-slate-200/50 dark:border-brand-slate/20 rounded-xl px-3 py-2 text-[10px] outline-none focus:ring-2 focus:ring-brand-green/30 text-slate-700 dark:text-white transition-all placeholder:text-slate-400"
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleSubmitReply(commentId);
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => handleSubmitReply(commentId)}
+                                    disabled={isSubmittingReply || !replyText.trim()}
+                                    className="px-4 py-2 bg-brand-green hover:bg-brand-green/90 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all disabled:opacity-50 flex items-center justify-center"
+                                  >
+                                    {isSubmittingReply ? '...' : 'Envoyer'}
+                                  </button>
+                                </div>
+                              )}
+                              
+                            </div>
                           </div>
-                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed break-words">{comment.text}</p>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
 
