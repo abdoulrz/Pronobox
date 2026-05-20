@@ -27,6 +27,7 @@ export type User = {
     details: string;
     icon: string;
   }>;
+  unlockedResources?: string[];
 };
 type AuthContextType = {
   user: User | null;
@@ -74,7 +75,8 @@ export const AuthProvider: React.FC<{
             push: true,
             matches: true,
             channels: true
-          }
+          },
+          unlockedResources: userData.unlockedResources || []
         });
         // If we successfully retrieved user data, we're not in fallback mode
         if (fallbackMode && !userData.fallback) {
@@ -104,7 +106,8 @@ export const AuthProvider: React.FC<{
                 push: true,
                 matches: true,
                 channels: true
-              }
+              },
+              unlockedResources: fallbackUser.unlockedResources || []
             });
           } else {
             localStorage.removeItem('token');
@@ -141,7 +144,8 @@ export const AuthProvider: React.FC<{
           matches: true,
           channels: true
         },
-        paymentMethods: data.user.paymentMethods || []
+        paymentMethods: data.user.paymentMethods || [],
+        unlockedResources: data.user.unlockedResources || []
       });
       // Check if we're in fallback mode
       setIsFallbackMode(localStorage.getItem('fallbackMode') === 'true');
@@ -175,7 +179,8 @@ export const AuthProvider: React.FC<{
           push: true,
           matches: true,
           channels: true
-        }
+        },
+        unlockedResources: data.user.unlockedResources || []
       });
       // Check if we're in fallback mode
       setIsFallbackMode(localStorage.getItem('fallbackMode') === 'true');
@@ -212,7 +217,8 @@ export const AuthProvider: React.FC<{
             matches: true,
             channels: true
           },
-          paymentMethods: updatedUserData.paymentMethods || []
+          paymentMethods: updatedUserData.paymentMethods || [],
+          unlockedResources: updatedUserData.unlockedResources || []
         });
         return updatedUserData;
       } catch (error) {

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { Debate, Message, Reply } from '../../services/api';
 
 interface DebateDetailViewProps {
@@ -44,6 +45,23 @@ const DebateDetailView: React.FC<DebateDetailViewProps> = ({
   onTouchStart,
   onTouchEnd,
 }) => {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const onEmojiClick = (emojiData: EmojiClickData) => {
+    onInputChange(debateInput + emojiData.emoji);
+  };
+
   const isLiked = debate.likedBy.some(id => String(id) === String(currentUserId));
 
   return (
@@ -171,83 +189,111 @@ const DebateDetailView: React.FC<DebateDetailViewProps> = ({
 
       {/* Messages list */}
       <div className="space-y-3 mb-4">
-        {debate.messages.map((message: Message) => (
-          <div
-            key={message.id}
-            className="card p-3 hover:border-brand-green/20 transition-colors"
-          >
-            <div className="flex gap-2">
-              <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-slate-200 dark:border-brand-slate">
-                <img src={message.avatar} alt={message.user} className="w-full h-full object-cover" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-start mb-1">
-                  <span className="font-semibold text-sm text-slate-900 dark:text-brand-text-1">{message.user}</span>
-                  <span className="text-xs text-slate-400 dark:text-brand-text-3 ml-2 flex-shrink-0">{message.time}</span>
-                </div>
-                <p className="text-sm text-slate-700 dark:text-brand-text-2 mb-2">{message.text}</p>
+        {debate.messages.map((message: Message) => {
+          // Robust user data extraction for messages (populated objects vs strings)
+          const msgUser = typeof message.user === 'object' && message.user !== null 
+            ? (message.user as any).username 
+            : (message.user || message.author || 'Anonyme');
+            
+          const msgAvatar = typeof message.user === 'object' && message.user !== null 
+            ? (message.user as any).avatar 
+            : (message.avatar || '');
+            
+          const msgTime = message.time || 
+            ((message as any).createdAt ? new Date((message as any).createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "à l'instant");
 
-                {/* Message actions */}
-                <div className="flex items-center gap-4 text-xs">
-                  <button
-                    className={`flex items-center gap-1 transition-colors ${
-                      message.likedBy?.some(id => String(id) === String(currentUserId)) ? 'text-red-500 font-bold' : 'text-slate-400 dark:text-brand-text-3 hover:text-red-500'
-                    }`}
-                    onClick={(e) => { e.stopPropagation(); onLikeMessage(debate.id, message.id); }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-3.5 w-3.5 ${message.likedBy?.some(id => String(id) === String(currentUserId)) ? 'fill-current animate-pulse-heart' : 'fill-none'}`} viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                    </svg>
-                    {message.likes}
-                  </button>
-                  <button
-                    className="flex items-center gap-1 hover:text-brand-green transition-colors"
-                    onClick={(e) => { e.stopPropagation(); onReply(debate.id, message.id, message.user); }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                    </svg>
-                    Répondre
-                  </button>
+          return (
+            <div
+              key={message.id}
+              className="card p-3 hover:border-brand-green/20 transition-colors"
+            >
+              <div className="flex gap-2">
+                <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-slate-200 dark:border-brand-slate">
+                  <img src={msgAvatar} alt={msgUser} className="w-full h-full object-cover" />
                 </div>
-
-                {/* Replies */}
-                {message.replies && message.replies.length > 0 && (
-                  <div className="mt-3 pl-3 border-l-2 border-slate-200 dark:border-brand-slate space-y-2">
-                    <p className="text-xs text-slate-400 dark:text-brand-text-3 mb-1">Réponses</p>
-                    {message.replies.map((reply: Reply) => (
-                      <div key={reply.id} className="bg-slate-50 dark:bg-brand-navy-3 border border-slate-100 dark:border-brand-slate rounded-lg p-2">
-                        <div className="flex gap-1.5">
-                          <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-slate-200 dark:border-brand-slate">
-                            <img src={reply.avatar} alt={reply.user} className="w-full h-full object-cover" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start mb-0.5">
-                              <span className="font-semibold text-xs text-slate-900 dark:text-brand-text-1">{reply.user}</span>
-                              <span className="text-xs text-slate-400 dark:text-brand-text-3">{reply.time}</span>
-                            </div>
-                            <p className="text-xs text-slate-700 dark:text-brand-text-2 mb-1">{reply.text}</p>
-                            <button
-                              className={`flex items-center gap-1 text-xs transition-colors ${
-                                reply.likedBy?.some(id => String(id) === String(currentUserId)) ? 'text-red-500 font-bold' : 'text-slate-400 dark:text-brand-text-3 hover:text-red-500'
-                              }`}
-                              onClick={(e) => { e.stopPropagation(); onLikeReply(debate.id, message.id, reply.id); }}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 ${reply.likedBy?.some(id => String(id) === String(currentUserId)) ? 'fill-current animate-pulse-heart' : 'fill-none'}`} viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                              </svg>
-                              {reply.likes}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="font-semibold text-sm text-slate-900 dark:text-brand-text-1">{msgUser}</span>
+                    <span className="text-xs text-slate-400 dark:text-brand-text-3 ml-2 flex-shrink-0">{msgTime}</span>
                   </div>
-                )}
+                  <p className="text-sm text-slate-700 dark:text-brand-text-2 mb-2">{message.text}</p>
+
+                  {/* Message actions */}
+                  <div className="flex items-center gap-4 text-xs">
+                    <button
+                      className={`flex items-center gap-1 transition-colors ${
+                        message.likedBy?.some(id => String(id) === String(currentUserId)) ? 'text-red-500 font-bold' : 'text-slate-400 dark:text-brand-text-3 hover:text-red-500'
+                      }`}
+                      onClick={(e) => { e.stopPropagation(); onLikeMessage(debate.id, message.id); }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className={`h-3.5 w-3.5 ${message.likedBy?.some(id => String(id) === String(currentUserId)) ? 'fill-current animate-pulse-heart' : 'fill-none'}`} viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                      {message.likes}
+                    </button>
+                    <button
+                      className="flex items-center gap-1 hover:text-brand-green transition-colors"
+                      onClick={(e) => { e.stopPropagation(); onReply(debate.id, message.id, msgUser); }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                      </svg>
+                      Répondre
+                    </button>
+                  </div>
+
+                  {/* Replies */}
+                  {message.replies && message.replies.length > 0 && (
+                    <div className="mt-3 pl-3 border-l-2 border-slate-200 dark:border-brand-slate space-y-2">
+                      <p className="text-xs text-slate-400 dark:text-brand-text-3 mb-1">Réponses</p>
+                      {message.replies.map((reply: Reply) => {
+                        // Robust user data extraction for replies
+                        const replyUser = typeof reply.user === 'object' && reply.user !== null 
+                          ? (reply.user as any).username 
+                          : (reply.user || 'Anonyme');
+                          
+                        const replyAvatar = typeof reply.user === 'object' && reply.user !== null 
+                          ? (reply.user as any).avatar 
+                          : (reply.avatar || '');
+                          
+                        const replyTime = reply.time || 
+                          ((reply as any).createdAt ? new Date((reply as any).createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "à l'instant");
+
+                        return (
+                          <div key={reply.id} className="bg-slate-50 dark:bg-brand-navy-3 border border-slate-100 dark:border-brand-slate rounded-lg p-2">
+                            <div className="flex gap-1.5">
+                              <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-slate-200 dark:border-brand-slate">
+                                <img src={replyAvatar} alt={replyUser} className="w-full h-full object-cover" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start mb-0.5">
+                                  <span className="font-semibold text-xs text-slate-900 dark:text-brand-text-1">{replyUser}</span>
+                                  <span className="text-xs text-slate-400 dark:text-brand-text-3">{replyTime}</span>
+                                </div>
+                                <p className="text-xs text-slate-700 dark:text-brand-text-2 mb-1">{reply.text}</p>
+                                <button
+                                  className={`flex items-center gap-1 text-xs transition-colors ${
+                                    reply.likedBy?.some(id => String(id) === String(currentUserId)) ? 'text-red-500 font-bold' : 'text-slate-400 dark:text-brand-text-3 hover:text-red-500'
+                                  }`}
+                                  onClick={(e) => { e.stopPropagation(); onLikeReply(debate.id, message.id, reply.id); }}
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 ${reply.likedBy?.some(id => String(id) === String(currentUserId)) ? 'fill-current animate-pulse-heart' : 'fill-none'}`} viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                                  </svg>
+                                  {reply.likes}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Reply indicator */}
@@ -269,16 +315,33 @@ const DebateDetailView: React.FC<DebateDetailViewProps> = ({
       )}
 
       {/* Message input */}
-      <div className="flex gap-2">
-        <input
-          id="debate-input"
-          type="text"
-          className="flex-1 input-dark rounded-xl px-4 py-2.5 text-sm"
-          placeholder={replyToMessage ? 'Écrivez votre réponse...' : 'Participez au débat...'}
-          value={debateInput}
-          onChange={(e) => onInputChange(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') onSend(); }}
-        />
+      <div className="flex gap-2 relative">
+        <div className="flex-1 relative">
+          <input
+            id="debate-input"
+            type="text"
+            className="w-full input-dark rounded-xl px-4 py-2.5 text-sm pr-10"
+            placeholder={replyToMessage ? 'Écrivez votre réponse...' : 'Participez au débat...'}
+            value={debateInput}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') onSend(); }}
+          />
+          <button
+            type="button"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-green"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+          
+          {showEmojiPicker && (
+            <div className="absolute bottom-full right-0 mb-2 z-50" ref={emojiPickerRef}>
+              <EmojiPicker onEmojiClick={onEmojiClick} searchDisabled skinTonesDisabled />
+            </div>
+          )}
+        </div>
         <button
           className="btn-primary text-sm px-4 py-2 rounded-xl"
           onClick={onSend}

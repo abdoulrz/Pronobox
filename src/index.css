@@ -104,9 +104,9 @@
 
   /* Glassmorphism utilities for immersive UI layers */
   .glass-panel {
-    @apply bg-white/90 border-b border-black/10 shadow-sm;
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
+    @apply bg-white/75 border-b border-black/10 shadow-sm;
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
   }
   .dark .glass-panel {
     background: rgba(21, 27, 44, 0.85); /* brand-navy-2 with alpha */
@@ -116,8 +116,21 @@
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
   }
 
+  .glass-modal {
+    @apply bg-white/80 shadow-2xl;
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+  }
+  .dark .glass-modal {
+    background: rgba(21, 27, 44, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
   .glass-sidebar {
-    @apply bg-white border-r border-slate-200;
+    @apply bg-white/75 border-r border-slate-200/50;
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
   }
   .dark .glass-sidebar {
     background: rgba(11, 15, 26, 0.92); /* brand-navy with alpha */
@@ -127,7 +140,7 @@
   }
 
   .glass-bottom-nav {
-    @apply bg-white/95 border-t border-black/10 shadow-lg;
+    @apply bg-white/75 border-t border-black/10 shadow-lg;
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
   }
@@ -226,3 +239,90 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ── Markdown Rendered Content (Premium Modal & BetEduc) ─────────────────── */
+.prono-md p { margin-bottom: 0.4rem; }
+.prono-md p:last-child { margin-bottom: 0; }
+.prono-md strong { font-weight: 800; }
+.prono-md em { font-style: italic; }
+.prono-md del { text-decoration: line-through; opacity: 0.55; }
+
+/* Highlight */
+.prono-md mark {
+  background-color: rgba(251, 191, 36, 0.28);
+  color: inherit;
+  padding: 0.06em 0.3em;
+  border-radius: 4px;
+}
+.dark .prono-md mark { background-color: rgba(251, 191, 36, 0.18); }
+
+/* Headings */
+.prono-md h2 {
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #F8FAFC;
+  padding-bottom: 0.3rem;
+  margin-top: 0.6rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(34,197,94,0.25);
+}
+.prono-md h3 {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #94A3B8;
+  margin-top: 0.5rem;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Blockquote */
+.prono-md blockquote {
+  border-left: 3px solid #22C55E;
+  padding: 0.5rem 0.85rem;
+  margin: 0.5rem 0;
+  background: rgba(34,197,94,0.06);
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+  color: #CBD5E1;
+}
+.prono-md blockquote p { margin: 0; }
+
+/* Horizontal rule */
+.prono-md hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.12), transparent);
+  margin: 0.75rem 0;
+}
+
+/* Bullet list */
+.prono-md ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.35rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.prono-md ul li {
+  position: relative;
+  padding-left: 1.1rem;
+  line-height: 1.6;
+}
+.prono-md ul li::before {
+  content: '▸';
+  color: #22C55E;
+  font-size: 0.6rem;
+  position: absolute;
+  left: 0;
+  top: 0.3em;
+}
+.prono-md br { display: block; margin: 0.15rem 0; content: ''; }
+
+/* Light-mode variant (for Perspectives du match on white card) */
+.prono-md--light h2 { color: #1E293B; border-color: rgba(34,197,94,0.3); }
+.prono-md--light h3 { color: #64748B; }
+.prono-md--light blockquote { color: #475569; background: rgba(34,197,94,0.05); }
+.prono-md--light hr { background: linear-gradient(to right, transparent, rgba(0,0,0,0.08), transparent); }

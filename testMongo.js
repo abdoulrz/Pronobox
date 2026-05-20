@@ -1,0 +1,13 @@
+import mongoose from 'mongoose';
+
+const uri = "mongodb://abdoulrazackzemane_db_user:UgHQGMF7ujQzYbNM@ac-eheckov-shard-00-00.e97s2zy.mongodb.net:27017,ac-eheckov-shard-00-01.e97s2zy.mongodb.net:27017,ac-eheckov-shard-00-02.e97s2zy.mongodb.net:27017/pronobox?ssl=true&replicaSet=atlas-l04agw-shard-0&authSource=admin&appName=PronoboxCluster0";
+
+mongoose.connect(uri)
+  .then(() => {
+    console.log("Connected successfully!");
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error("Connection failed:", err.message);
+    process.exit(1);
+  });

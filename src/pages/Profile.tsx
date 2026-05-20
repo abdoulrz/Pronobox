@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import Transactions from './Transactions';
+
 interface BetHistory {
   id: string;
   match: string;
@@ -28,7 +30,7 @@ interface SubscribedChannel {
 }
 const Profile: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'stats'>(
+  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'stats' | 'transactions'>(
     'overview'
   );
   const [betHistory, setBetHistory] = useState<BetHistory[]>([]);
@@ -244,10 +246,14 @@ const Profile: React.FC = () => {
             <button
               className={`px-6 py-3 text-sm font-medium ${activeTab === 'stats' ? 'border-b-2 border-green-500 text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
               onClick={() => setActiveTab('stats')}>
-
                 Statistiques
               </button>
             }
+            <button
+              className={`px-6 py-3 text-sm font-medium ${activeTab === 'transactions' ? 'border-b-2 border-green-500 text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              onClick={() => setActiveTab('transactions')}>
+              Transactions
+            </button>
           </nav>
         </div>
         {/* Contenu de l'onglet */}
@@ -399,18 +405,19 @@ const Profile: React.FC = () => {
                   {/* Actions spécifiques par type de compte */}
                   {(user.isPro || user.role === 'admin') &&
               <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <button className="flex items-center justify-center p-3 bg-green-100 dark:bg-green-800/40 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-800/60 transition-colors">
+                      <button 
+                        className="flex items-center justify-center p-3 bg-green-100 dark:bg-green-800/40 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-800/60 transition-colors"
+                        onClick={() => navigate('/channels')}
+                      >
                         <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 mr-2"
-                    viewBox="0 0 20 20"
-                    fill="currentColor">
-
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5 mr-2"
+                          viewBox="0 0 20 20"
+                          fill="currentColor">
                           <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 11-16 0 8 8 0 0116 0zm1-11a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                      clipRule="evenodd" />
-
+                            fillRule="evenodd"
+                            d="M10 18a8 8 0 11-16 0 8 8 0 0116 0zm1-11a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                            clipRule="evenodd" />
                         </svg>
                         Créer un canal
                       </button>
@@ -1026,11 +1033,15 @@ const Profile: React.FC = () => {
                     </div>
                   </div>
             }
+              {activeTab === 'transactions' && (
+                <div>
+                  <Transactions isEmbedded={true} />
+                </div>
+              )}
             </>
           }
         </div>
       </div>
     </div>);
-
 };
 export default Profile;

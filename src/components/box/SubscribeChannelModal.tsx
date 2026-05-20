@@ -19,8 +19,8 @@ export const SubscribeChannelModal: React.FC<SubscribeChannelModalProps> = ({
   if (!isOpen || !channel) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-xs mx-4 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="glass-modal rounded-lg shadow-lg w-full max-w-xs mx-4 overflow-hidden">
         <div className="relative px-3 py-2 bg-yellow-600 text-white">
           <h3 className="text-base font-medium">S'abonner au canal</h3>
           <p className="text-xs opacity-90">{channel.name}</p>

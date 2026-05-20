@@ -5,7 +5,12 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-const Transactions = () => {
+
+interface TransactionsProps {
+  isEmbedded?: boolean;
+}
+
+const Transactions: React.FC<TransactionsProps> = ({ isEmbedded = false }) => {
   const { user } = useAuth();
   const { paymentHistory, fetchTransactions } = usePayment();
   const [filter, setFilter] = useState<PaymentType | 'all'>('all');
@@ -70,30 +75,29 @@ const Transactions = () => {
     }
   }, 0);
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Historique des transactions</h1>
-        <button
-          onClick={() => navigate('/settings')}
-          className="flex items-center text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-green-600 dark:hover:text-green-400">
-
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5 mr-1"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor">
-
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-
-          </svg>
-          Retour aux paramètres
-        </button>
-      </div>
+    <div className={isEmbedded ? "py-2" : "container mx-auto px-4 py-6"}>
+      {!isEmbedded && (
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Historique des transactions</h1>
+          <button
+            onClick={() => navigate('/settings')}
+            className="flex items-center text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-green-600 dark:hover:text-green-400">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 mr-1"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Retour aux paramètres
+          </button>
+        </div>
+      )}
 
       {/* Bannière Pro pour les utilisateurs standard */}
       {!isUserPro &&

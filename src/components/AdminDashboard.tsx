@@ -1,27 +1,183 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { WS_EVENTS } from '../services/WebSocketService';
+import { useWebSocket } from '../hooks/useWebSocket';
+import { getUsers, updateUserByAdmin, getAdminTransactions, getAdminWithdrawals, getSupportMessages, updateWithdrawalStatus, sendAdminSupportMessage } from '../services/api';
+import { UserData, SupportMessage, Transaction, WithdrawalRequest } from './settings/SettingsAdminUser';
 import { useAuth } from '../contexts/AuthContext';
 import MarkdownEditor from './MarkdownEditor';
+import { markdownToHtml } from '../utils/markdownToHtml';
 const AdminDashboard = () => {
   const { isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState('statistics');
-  
-  // State for mock users to allow actions
-  const [users, setUsers] = useState([
-    { id: 1, name: 'Jean Dupont', email: 'jean.dupont@example.com', role: 'Pro', status: 'Actif', date: '15/04/2023', initials: 'JD', color: 'blue' },
-    { id: 2, name: 'Marie Lambert', email: 'marie.lambert@example.com', role: 'Standard', status: 'Actif', date: '02/05/2023', initials: 'ML', color: 'green' },
-    { id: 3, name: 'Pierre Blanc', email: 'pierre.blanc@example.com', role: 'Standard', status: 'Banni', date: '10/03/2023', initials: 'PB', color: 'red' }
-  ]);
 
+  const { connected, subscribe } = useWebSocket();
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [usersData, setUsersData] = useState<UserData[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [userActionMenuOpen, setUserActionMenuOpen] = useState<string | null>(null);
+
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
+  const [selectedWithdrawal, setSelectedWithdrawal] = useState<WithdrawalRequest | null>(null);
+  const [showWithdrawalDetailsModal, setShowWithdrawalDetailsModal] = useState(false);
+
+  const [showSupportChat, setShowSupportChat] = useState(false);
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
+  const [activeUserTypeFilter, setActiveUserTypeFilter] = useState('all');
+
+  const [activeTransactionsTab, setActiveTransactionsTab] = useState('historique');
+
+  const loadUsers = useCallback(async () => {
+    setIsLoadingUsers(true);
+    try { 
+      const response = await getUsers() as UserData[]; 
+      setUsersData(response); 
+    } catch (error) {
+      console.error(error);
+    } finally { 
+      setIsLoadingUsers(false); 
+    }
+  }, []);
+
+  const loadTransactions = async () => {
+    try {
+      const response = await getAdminTransactions();
+      setTransactions(response);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const loadWithdrawalRequests = async () => {
+    try { 
+      const response = await getAdminWithdrawals(); 
+      setWithdrawalRequests(response); 
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const loadSupportMessages = async () => {
+    try { 
+      const response = await getSupportMessages(); 
+      setSupportMessages(response); 
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => { 
+    loadUsers(); 
+    loadTransactions(); 
+    loadWithdrawalRequests(); 
+    loadSupportMessages(); 
+  }, [loadUsers]);
+
+  useEffect(() => {
+    if (connected) {
+      const unsubscribeSupportMessage = subscribe(WS_EVENTS.ADMIN_NEW_SUPPORT_MESSAGE, (payload: any) => {
+        setSupportMessages(prev => [...prev, { 
+          id: prev.length + 1, 
+          sender: 'user', 
+          message: payload.message, 
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+          userType: payload.userType, 
+          userId: payload.userId, 
+          username: payload.username 
+        }]);
+      });
+      const unsubscribeWithdrawal = subscribe(WS_EVENTS.ADMIN_WITHDRAWAL_REQUEST, (payload: any) => {
+        setWithdrawalRequests(prev => [payload, ...prev]);
+      });
+      const unsubscribeUserUpdate = subscribe(WS_EVENTS.ADMIN_USER_UPDATED, (payload: any) => {
+        setUsersData(prev => prev.map(u => u.id === payload.id ? { ...u, ...payload } : u));
+      });
+      const unsubscribeTransaction = subscribe(WS_EVENTS.TRANSACTION_COMPLETE, (payload: any) => {
+        setTransactions(prev => [payload, ...prev]);
+      });
+      return () => { 
+        unsubscribeSupportMessage(); 
+        unsubscribeWithdrawal(); 
+        unsubscribeUserUpdate(); 
+        unsubscribeTransaction(); 
+      };
+    }
+  }, [connected, subscribe]);
+
+  const handleUserSearch = (e: React.ChangeEvent<HTMLInputElement>) => setUserSearchQuery(e.target.value);
+  const handleEditUser = (user: UserData) => { setSelectedUser(user); setShowUserModal(true); };
+  
+  const handleBanUserAction = async (id: string, ban: boolean) => {
+    try { 
+      await updateUserByAdmin(id, { status: ban ? 'banned' : 'active', isBanned: ban }); 
+      setUsersData(prev => prev.map(u => u.id === id ? { ...u, status: ban ? 'banned' : 'active', isBanned: ban } : u)); 
+    } catch (error) {
+      console.error(error);
+    }
+  };
+  
+  const handlePromoteUser = async (id: string) => {
+    try { 
+      await updateUserByAdmin(id, { isPro: true }); 
+      setUsersData(prev => prev.map(u => u.id === id ? { ...u, isPro: true } : u)); 
+    } catch (error) {
+      console.error(error);
+    }
+  };
+  
+  const handleSaveUserChanges = async () => {
+    if (!selectedUser) return;
+    try { 
+      await updateUserByAdmin(selectedUser.id, selectedUser); 
+      setUsersData(prev => prev.map(u => u.id === selectedUser.id ? selectedUser : u)); 
+      setShowUserModal(false); 
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleProcessWithdrawal = async (id: string, approved: boolean) => {
+    try { 
+      await updateWithdrawalStatus(id, approved ? 'approved' : 'rejected'); 
+      setWithdrawalRequests(prev => prev.map(w => w.id === id ? { ...w, status: approved ? 'approved' : 'rejected' } : w)); 
+      setShowWithdrawalDetailsModal(false); 
+      setSelectedWithdrawal(null); 
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleSupportMessageSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supportMessage.trim() || !selectedUser) return;
+    try { 
+      const newMsg = await sendAdminSupportMessage({ userId: selectedUser.id, message: supportMessage }); 
+      setSupportMessages(prev => [...prev, newMsg]); 
+      setSupportMessage(''); 
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleReplyToSupportMessage = (userId: string, username: string, userType: any) => {
+    setSelectedUser({ id: userId, username, isPro: userType === 'pro' } as any);
+    setShowSupportChat(true);
+  };
+  
+  const filteredUsers = usersData.filter(u => 
+    u.username.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
+    (u.email && u.email.toLowerCase().includes(userSearchQuery.toLowerCase()))
+  );
+  
   // State for mock channels
   const [adminChannels, setAdminChannels] = useState([
     { id: 1, name: 'PronosBox Officiel', owner: 'Admin', type: 'Officiel', members: '15.4k', initials: 'PO', color: 'green' },
     { id: 2, name: 'Pronos Premium', owner: 'Jean Dupont', type: 'Premium', members: '5.2k', initials: 'PP', color: 'yellow' },
     { id: 3, name: 'Foot Expert', owner: 'Marie Lambert', type: 'Gratuit', members: '1.8k', initials: 'FE', color: 'blue' }
   ]);
-
-  const handleBanUser = (id: number) => {
-    setUsers(users.map(u => u.id === id ? { ...u, status: u.status === 'Banni' ? 'Actif' : 'Banni' } : u));
-  };
 
   const handleDeleteChannel = (id: number) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce canal ?')) {
@@ -161,6 +317,8 @@ const AdminDashboard = () => {
               { id: 'users', label: 'Utilisateurs', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" /></svg> },
               { id: 'channels', label: 'Canaux', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" /><path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" /></svg> },
               { id: 'pronos', label: 'Pronos', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z" clipRule="evenodd" /></svg> },
+              { id: 'transactions', label: 'Transactions', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg> },
+              { id: 'support', label: 'Support', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" /></svg> },
               { id: 'bet-educ', label: 'BET-EDUC', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12V12.5a1 1 0 00.617.924l4.417 1.935a1 1 0 00.733 0l4.417-1.935A1 1 0 0016 12.5V10.12l1.69-.724a1 1 0 00.583-1.23l-1.02-3.06a1 1 0 00-1.23-.583l-3.06 1.02a1 1 0 00-.583 1.23l1.02 3.06z" /></svg> }
             ].map(tab => (
               <button
@@ -187,18 +345,18 @@ const AdminDashboard = () => {
                   </div>
                   <div className="p-2">
                     <ul className="divide-y divide-slate-100 dark:divide-brand-slate/30">
-                      {users.slice(0, 3).map(u => (
+                      {usersData.slice(0, 3).map(u => (
                         <li key={u.id} className="p-3 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-brand-navy-3/30 transition-colors rounded-xl">
                           <div className="flex items-center">
-                            <div className={`w-10 h-10 rounded-full bg-${u.color}-100 dark:bg-${u.color}-900/30 flex items-center justify-center text-${u.color}-600 dark:text-${u.color}-400 mr-3 shadow-inner`}>
-                              <span className="text-xs font-bold">{u.initials}</span>
+                            <div className="w-10 h-10 rounded-full bg-brand-green/10 flex items-center justify-center text-brand-green mr-3 shadow-inner">
+                              <span className="text-xs font-bold">{u.username ? u.username.charAt(0).toUpperCase() : '?'}</span>
                             </div>
                             <div>
-                              <p className="text-sm font-bold text-slate-800 dark:text-white">{u.name}</p>
+                              <p className="text-sm font-bold text-slate-800 dark:text-white">{u.username}</p>
                               <p className="text-[11px] text-slate-500 dark:text-slate-400">{u.email}</p>
                             </div>
                           </div>
-                          <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-brand-navy-3 px-2 py-1 rounded-full uppercase">{u.date.split('/')[0]}/{u.date.split('/')[1]}</span>
+                          <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-brand-navy-3 px-2 py-1 rounded-full uppercase">{u.joinDate ? new Date(u.joinDate).toLocaleDateString() : 'N/A'}</span>
                         </li>
                       ))}
                     </ul>
@@ -233,59 +391,188 @@ const AdminDashboard = () => {
                 <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Gestion des utilisateurs</h3>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <div className="relative flex-1 sm:w-64">
-                    <input type="text" placeholder="Rechercher..." className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-brand-navy-3 border border-slate-200 dark:border-brand-slate rounded-lg text-xs focus:ring-2 focus:ring-brand-green/30 outline-none" />
+                    <input type="text" value={userSearchQuery} onChange={handleUserSearch} placeholder="Rechercher..." className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-brand-navy-3 border border-slate-200 dark:border-brand-slate rounded-lg text-xs focus:ring-2 focus:ring-brand-green/30 outline-none" />
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                   </div>
-                  <button className="p-2 rounded-lg bg-slate-100 dark:bg-brand-navy-3 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-brand-slate">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                  <button onClick={loadUsers} className="p-2 rounded-lg bg-slate-100 dark:bg-brand-navy-3 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-brand-slate hover:bg-slate-200 dark:hover:bg-brand-navy-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                   </button>
                 </div>
               </div>
 
-              <div className="border border-slate-200 dark:border-brand-slate rounded-xl overflow-x-auto shadow-sm">
-                <table className="min-w-full divide-y divide-slate-200 dark:divide-brand-slate/30">
-                  <thead className="bg-slate-50 dark:bg-brand-navy-3">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Utilisateur</th>
-                      <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Email</th>
-                      <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Status</th>
-                      <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Date</th>
-                      <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-brand-navy-2 divide-y divide-slate-100 dark:divide-brand-slate/30">
-                    {users.map(u => (
-                      <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-brand-navy-3/30 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className={`w-9 h-9 rounded-full bg-${u.color}-100 dark:bg-${u.color}-900/30 flex items-center justify-center text-${u.color}-600 dark:text-${u.color}-400 mr-3 border border-slate-200 dark:border-brand-slate shadow-inner`}>
-                              <span className="text-xs font-black">{u.initials}</span>
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-slate-800 dark:text-white">{u.name}</p>
-                              <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${u.role === 'Pro' ? 'bg-brand-green/10 text-brand-green' : 'bg-slate-100 dark:bg-brand-navy-1 text-slate-500'}`}>{u.role}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400 font-medium">{u.email}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${u.status === 'Actif' ? 'bg-brand-green/10 text-brand-green' : 'bg-red-500/10 text-red-500'}`}>{u.status}</span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400 font-medium">{u.date}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <div className="flex justify-end gap-2">
-                            <button onClick={() => handleBanUser(u.id)} className={`p-1.5 rounded-lg transition-colors ${u.status === 'Banni' ? 'text-brand-green hover:bg-brand-green/10' : 'text-red-500 hover:bg-red-500/10'}`} title={u.status === 'Banni' ? 'Débannir' : 'Bannir'}>
-                              {u.status === 'Banni' ? <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>}
-                            </button>
-                            <button className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-brand-navy-3 transition-colors">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" /></svg>
-                            </button>
-                          </div>
-                        </td>
+              {isLoadingUsers ? (
+                <div className="flex justify-center items-center py-12">
+                  <svg className="animate-spin h-8 w-8 text-brand-green" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                </div>
+              ) : (
+                <div className="border border-slate-200 dark:border-brand-slate rounded-xl overflow-x-auto shadow-sm">
+                  <table className="min-w-full divide-y divide-slate-200 dark:divide-brand-slate/30">
+                    <thead className="bg-slate-50 dark:bg-brand-navy-3">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Utilisateur</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Solde</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Status</th>
+                        <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="bg-white dark:bg-brand-navy-2 divide-y divide-slate-100 dark:divide-brand-slate/30">
+                      {filteredUsers.length === 0 ? (
+                        <tr><td colSpan={4} className="px-6 py-8 text-center text-sm text-slate-500">Aucun utilisateur trouvé</td></tr>
+                      ) : filteredUsers.map(u => (
+                        <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-brand-navy-3/30 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="w-9 h-9 rounded-full overflow-hidden bg-brand-green/10 flex items-center justify-center text-brand-green mr-3 border border-slate-200 dark:border-brand-slate shadow-inner">
+                                {u.avatar ? <img src={u.avatar} alt={u.username} className="w-full h-full object-cover" /> : <span className="text-xs font-black">{u.username ? u.username.charAt(0).toUpperCase() : '?'}</span>}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-bold text-slate-800 dark:text-white">{u.username}</p>
+                                  {u.isPro && <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-brand-gold/10 text-brand-gold border border-brand-gold/20">Pro</span>}
+                                  {u.role === 'admin' && <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20">Admin</span>}
+                                </div>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400">{u.email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-green font-bold">{(u.walletBalance || 0).toFixed(2)}€</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${u.isBanned || u.status === 'banned' ? 'bg-red-500/10 text-red-500' : u.status === 'suspended' ? 'bg-orange-500/10 text-orange-500' : 'bg-brand-green/10 text-brand-green'}`}>
+                              {u.isBanned || u.status === 'banned' ? 'Banni' : u.status === 'suspended' ? 'Suspendu' : 'Actif'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right relative">
+                            <button onClick={() => setUserActionMenuOpen(userActionMenuOpen === u.id ? null : u.id)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-brand-navy-3 transition-colors">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
+                            </button>
+                            {userActionMenuOpen === u.id && (
+                              <div className="absolute right-6 top-10 mt-1 w-48 bg-white dark:bg-brand-navy-3 rounded-xl shadow-lg z-50 border border-slate-200 dark:border-brand-slate py-1">
+                                <button onClick={() => { handleEditUser(u); setUserActionMenuOpen(null); }} className="block w-full text-left px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-brand-navy-2">Éditer</button>
+                                {!u.isPro && <button onClick={() => { handlePromoteUser(u.id); setUserActionMenuOpen(null); }} className="block w-full text-left px-4 py-2 text-xs font-bold text-brand-gold hover:bg-slate-50 dark:hover:bg-brand-navy-2">Promouvoir en Pro</button>}
+                                {u.isBanned || u.status === 'banned' ? 
+                                  <button onClick={() => { handleBanUserAction(u.id, false); setUserActionMenuOpen(null); }} className="block w-full text-left px-4 py-2 text-xs font-bold text-brand-green hover:bg-slate-50 dark:hover:bg-brand-navy-2">Réactiver</button>
+                                  : <button onClick={() => { handleBanUserAction(u.id, true); setUserActionMenuOpen(null); }} className="block w-full text-left px-4 py-2 text-xs font-bold text-red-500 hover:bg-slate-50 dark:hover:bg-brand-navy-2">Bannir</button>
+                                }
+                                <button onClick={() => { handleReplyToSupportMessage(u.id, u.username, u.isPro ? 'pro' : 'standard'); setUserActionMenuOpen(null); }} className="block w-full text-left px-4 py-2 text-xs font-bold text-blue-500 hover:bg-slate-50 dark:hover:bg-brand-navy-2">Envoyer message</button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'transactions' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Transactions & Retraits</h3>
+                <div className="flex bg-slate-100 dark:bg-brand-navy-3 p-1 rounded-lg">
+                  <button onClick={() => setActiveTransactionsTab('historique')} className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${activeTransactionsTab === 'historique' ? 'bg-white dark:bg-brand-navy-2 text-brand-green shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Historique</button>
+                  <button onClick={() => setActiveTransactionsTab('retraits')} className={`px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center gap-2 ${activeTransactionsTab === 'retraits' ? 'bg-white dark:bg-brand-navy-2 text-brand-green shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
+                    Demandes de retrait
+                    {withdrawalRequests.filter(w => w.status === 'pending').length > 0 && <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">{withdrawalRequests.filter(w => w.status === 'pending').length}</span>}
+                  </button>
+                </div>
+              </div>
+
+              {activeTransactionsTab === 'historique' && (
+                <div className="border border-slate-200 dark:border-brand-slate rounded-xl overflow-x-auto shadow-sm">
+                  <table className="min-w-full divide-y divide-slate-200 dark:divide-brand-slate/30">
+                    <thead className="bg-slate-50 dark:bg-brand-navy-3">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Utilisateur</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Type</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Montant</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Statut</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-brand-navy-2 divide-y divide-slate-100 dark:divide-brand-slate/30">
+                      {transactions.map(tr => (
+                        <tr key={tr.id} className="hover:bg-slate-50 dark:hover:bg-brand-navy-3/30 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-800 dark:text-white">{tr.username}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${tr.type === 'recharge' ? 'bg-brand-green/10 text-brand-green' : tr.type === 'withdrawal' ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'}`}>{tr.type}</span>
+                          </td>
+                          <td className={`px-6 py-4 whitespace-nowrap text-sm font-black ${tr.type === 'recharge' ? 'text-brand-green' : 'text-red-500'}`}>{tr.type === 'recharge' ? '+' : '-'}{tr.amount.toFixed(2)}€</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${tr.status === 'completed' ? 'bg-brand-green/10 text-brand-green' : tr.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-red-500/10 text-red-500'}`}>{tr.status}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-xs font-medium text-slate-500">{new Date(tr.date).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                      {transactions.length === 0 && <tr><td colSpan={5} className="px-6 py-8 text-center text-sm text-slate-500">Aucune transaction</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {activeTransactionsTab === 'retraits' && (
+                <div className="border border-slate-200 dark:border-brand-slate rounded-xl overflow-x-auto shadow-sm">
+                  <table className="min-w-full divide-y divide-slate-200 dark:divide-brand-slate/30">
+                    <thead className="bg-slate-50 dark:bg-brand-navy-3">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Utilisateur</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Montant</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Méthode</th>
+                        <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Date</th>
+                        <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-brand-navy-2 divide-y divide-slate-100 dark:divide-brand-slate/30">
+                      {withdrawalRequests.map(w => (
+                        <tr key={w.id} className="hover:bg-slate-50 dark:hover:bg-brand-navy-3/30 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-800 dark:text-white">{w.username}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-slate-800 dark:text-white">{w.amount.toFixed(2)}€</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-slate-100 dark:bg-brand-navy-1 text-slate-600 dark:text-slate-300">{w.method}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-xs font-medium text-slate-500">{new Date(w.date).toLocaleDateString()}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            {w.status === 'pending' ? (
+                              <button onClick={() => { setSelectedWithdrawal(w); setShowWithdrawalDetailsModal(true); }} className="btn-primary text-xs px-3 py-1">Examiner</button>
+                            ) : (
+                              <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${w.status === 'approved' ? 'bg-brand-green/10 text-brand-green' : 'bg-red-500/10 text-red-500'}`}>{w.status}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {withdrawalRequests.length === 0 && <tr><td colSpan={5} className="px-6 py-8 text-center text-sm text-slate-500">Aucune demande</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'support' && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Support Client</h3>
+              <div className="bg-white dark:bg-brand-navy-2 rounded-2xl border border-slate-200 dark:border-brand-slate overflow-hidden shadow-sm flex flex-col h-[500px]">
+                <div className="p-4 border-b border-slate-200 dark:border-brand-slate flex gap-2">
+                  <button onClick={() => setActiveUserTypeFilter('all')} className={`px-3 py-1 text-xs font-bold rounded-lg ${activeUserTypeFilter === 'all' ? 'bg-brand-green/10 text-brand-green' : 'bg-slate-100 dark:bg-brand-navy-3 text-slate-500'}`}>Tous</button>
+                  <button onClick={() => setActiveUserTypeFilter('pro')} className={`px-3 py-1 text-xs font-bold rounded-lg ${activeUserTypeFilter === 'pro' ? 'bg-brand-gold/10 text-brand-gold' : 'bg-slate-100 dark:bg-brand-navy-3 text-slate-500'}`}>Pro</button>
+                  <button onClick={() => setActiveUserTypeFilter('standard')} className={`px-3 py-1 text-xs font-bold rounded-lg ${activeUserTypeFilter === 'standard' ? 'bg-blue-500/10 text-blue-500' : 'bg-slate-100 dark:bg-brand-navy-3 text-slate-500'}`}>Standard</button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {supportMessages.filter(m => activeUserTypeFilter === 'all' || m.userType === activeUserTypeFilter).map(msg => (
+                    <div key={msg.id} className={`flex flex-col max-w-2xl ${msg.sender === 'agent' ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{msg.sender === 'agent' ? 'Support (Vous)' : msg.username || 'Utilisateur'}</span>
+                        <span className="text-[9px] text-slate-400">{msg.time}</span>
+                        {msg.sender === 'user' && <button onClick={() => handleReplyToSupportMessage(msg.userId || '', msg.username || '', msg.userType)} className="text-[10px] text-brand-green hover:underline">Répondre</button>}
+                      </div>
+                      <div className={`p-3 rounded-2xl ${msg.sender === 'agent' ? 'bg-brand-green text-white rounded-tr-sm' : msg.sender === 'system' ? 'bg-slate-100 dark:bg-brand-navy-3 text-slate-600 dark:text-slate-300' : 'bg-slate-100 dark:bg-brand-navy-3 text-slate-800 dark:text-white rounded-tl-sm border border-slate-200 dark:border-brand-slate'}`}>
+                        <p className="text-sm leading-relaxed">{msg.message}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {supportMessages.length === 0 && <div className="text-center py-10 text-slate-500">Aucun message de support</div>}
+                </div>
               </div>
             </div>
           )}
@@ -345,6 +632,122 @@ const AdminDashboard = () => {
           {activeTab === 'bet-educ' && (
             <BetEducManagement />
           )}
+        
+
+      {/* Edit User Modal */}
+      {showUserModal && selectedUser && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-brand-navy-2 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-200 dark:border-brand-slate animate-scale-up">
+            <div className="p-4 border-b border-slate-200 dark:border-brand-slate flex justify-between items-center bg-slate-50 dark:bg-brand-navy-3">
+              <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tight">Modifier l'utilisateur</h3>
+              <button onClick={() => setShowUserModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Nom d'utilisateur</label>
+                <input type="text" value={selectedUser.username} onChange={(e) => setSelectedUser({...selectedUser, username: e.target.value})} className="w-full bg-slate-50 dark:bg-brand-navy-3 border border-slate-200 dark:border-brand-slate rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Email</label>
+                <input type="email" value={selectedUser.email || ''} onChange={(e) => setSelectedUser({...selectedUser, email: e.target.value})} className="w-full bg-slate-50 dark:bg-brand-navy-3 border border-slate-200 dark:border-brand-slate rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Solde (€)</label>
+                <input type="number" value={selectedUser.walletBalance || 0} onChange={(e) => setSelectedUser({...selectedUser, walletBalance: parseFloat(e.target.value)})} className="w-full bg-slate-50 dark:bg-brand-navy-3 border border-slate-200 dark:border-brand-slate rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none" />
+              </div>
+              <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-brand-slate/50">
+                <input type="checkbox" id="isPro" checked={selectedUser.isPro} onChange={(e) => setSelectedUser({...selectedUser, isPro: e.target.checked})} className="rounded text-brand-green focus:ring-brand-green" />
+                <label htmlFor="isPro" className="text-sm font-bold text-slate-700 dark:text-slate-300">Compte Premium (Pro)</label>
+              </div>
+            </div>
+            <div className="p-4 bg-slate-50 dark:bg-brand-navy-3 border-t border-slate-200 dark:border-brand-slate flex justify-end gap-3">
+              <button onClick={() => setShowUserModal(false)} className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700">Annuler</button>
+              <button onClick={handleSaveUserChanges} className="btn-primary px-6 py-2 text-xs">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Withdrawal Details Modal */}
+      {showWithdrawalDetailsModal && selectedWithdrawal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-brand-navy-2 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-200 dark:border-brand-slate animate-scale-up">
+            <div className="p-4 border-b border-slate-200 dark:border-brand-slate flex justify-between items-center bg-slate-50 dark:bg-brand-navy-3">
+              <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tight">Détails du retrait</h3>
+              <button onClick={() => setShowWithdrawalDetailsModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-brand-navy-3 rounded-xl border border-slate-200 dark:border-brand-slate">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Montant demandé</p>
+                  <p className="text-2xl font-black text-slate-800 dark:text-white">{selectedWithdrawal.amount.toFixed(2)}€</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Méthode</p>
+                  <span className="inline-block px-2 py-1 bg-slate-200 dark:bg-brand-navy-1 rounded-md text-xs font-bold">{selectedWithdrawal.method}</span>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-slate-700 dark:text-slate-300 border-b border-slate-100 dark:border-brand-slate pb-2">Informations du compte</h4>
+                {selectedWithdrawal.accountInfo ? (
+                  <div className="bg-slate-50 dark:bg-brand-navy-3 p-4 rounded-xl space-y-2 text-sm border border-slate-200 dark:border-brand-slate">
+                    {Object.entries(selectedWithdrawal.accountInfo).map(([key, val]) => (
+                      <div key={key} className="flex justify-between">
+                        <span className="text-slate-500 capitalize">{key}:</span>
+                        <span className="font-bold text-slate-800 dark:text-white">{String(val)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500 italic">Aucune information détaillée fournie.</p>
+                )}
+              </div>
+            </div>
+            <div className="p-4 bg-slate-50 dark:bg-brand-navy-3 border-t border-slate-200 dark:border-brand-slate flex justify-end gap-3">
+              <button onClick={() => handleProcessWithdrawal(selectedWithdrawal.id, false)} className="px-4 py-2 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">Rejeter</button>
+              <button onClick={() => handleProcessWithdrawal(selectedWithdrawal.id, true)} className="btn-primary px-6 py-2 text-xs">Approuver & Payer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Support Chat Reply Modal */}
+      {showSupportChat && selectedUser && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-brand-navy-2 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-200 dark:border-brand-slate animate-scale-up flex flex-col h-[60vh]">
+            <div className="p-4 border-b border-slate-200 dark:border-brand-slate flex justify-between items-center bg-slate-50 dark:bg-brand-navy-3">
+              <div>
+                <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tight">Support: {selectedUser.username}</h3>
+                <p className="text-[10px] text-brand-green font-bold uppercase">{selectedUser.isPro ? 'Premium' : 'Standard'}</p>
+              </div>
+              <button onClick={() => setShowSupportChat(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-brand-navy-3/30 border border-slate-200 dark:border-brand-slate">
+              {supportMessages.filter(m => m.userId === selectedUser.id || (!m.userId && m.sender === 'system')).map(msg => (
+                <div key={msg.id} className={`flex flex-col max-w-[80%] ${msg.sender === 'agent' ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
+                  <div className={`p-3 rounded-2xl ${msg.sender === 'agent' ? 'bg-brand-green text-white rounded-tr-sm' : 'bg-white dark:bg-brand-navy-2 text-slate-800 dark:text-white rounded-tl-sm shadow-sm'}`}>
+                    <p className="text-sm">{msg.message}</p>
+                  </div>
+                  <span className="text-[9px] text-slate-400 mt-1">{msg.time}</span>
+                </div>
+              ))}
+            </div>
+            <form onSubmit={handleSupportMessageSubmit} className="p-4 bg-white dark:bg-brand-navy-2 border-t border-slate-200 dark:border-brand-slate flex gap-2">
+              <input type="text" value={supportMessage} onChange={(e) => setSupportMessage(e.target.value)} placeholder="Votre réponse..." className="flex-1 bg-slate-50 dark:bg-brand-navy-3 border border-slate-200 dark:border-brand-slate rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none" />
+              <button type="submit" disabled={!supportMessage.trim()} className="btn-primary px-4 py-2 rounded-xl disabled:opacity-50 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" /></svg>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
         </div>
       </div>
     </div>

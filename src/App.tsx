@@ -6,9 +6,9 @@ import {
   Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Matches from './pages/Matches';
-import Predictions from './pages/Predictions';
 import Box from './pages/Box';
-import News from './pages/News';
+import MatchDetails from './pages/MatchDetails';
+import LeagueDetails from './pages/LeagueDetails';
 import Settings from './pages/Settings';
 import Transactions from './pages/Transactions';
 import Profile from './pages/Profile';
@@ -16,7 +16,9 @@ import Auth from './pages/Auth';
 import CompareAccounts from './pages/CompareAccounts';
 import Channels from './pages/Channels';
 import ChannelView from './pages/ChannelView';
+import AdminDashboard from './components/AdminDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
+import BetEduc from './components/BetEduc';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { PaymentProvider } from './contexts/PaymentContext';
@@ -55,14 +57,26 @@ export function App() {
                       } />
 
                     <Route
-                      path="/predictions"
+                      path="/match/:id"
                       element={
                       <ProtectedRoute>
                           <Layout>
-                            <Predictions />
+                            <MatchDetails />
                           </Layout>
                         </ProtectedRoute>
                       } />
+
+                    <Route
+                      path="/league/:id"
+                      element={
+                      <ProtectedRoute>
+                          <Layout>
+                            <LeagueDetails />
+                          </Layout>
+                        </ProtectedRoute>
+                      } />
+
+                    <Route path="/predictions" element={<Navigate to="/" replace />} />
 
                     <Route
                       path="/box"
@@ -74,12 +88,14 @@ export function App() {
                         </ProtectedRoute>
                       } />
 
+                    <Route path="/news" element={<Navigate to="/box" replace />} />
+
                     <Route
-                      path="/news"
+                      path="/beteduc"
                       element={
                       <ProtectedRoute>
                           <Layout>
-                            <News />
+                            <BetEduc />
                           </Layout>
                         </ProtectedRoute>
                       } />
@@ -139,6 +155,16 @@ export function App() {
                       element={
                       <ProtectedRoute>
                           <ChannelView />
+                        </ProtectedRoute>
+                      } />
+
+                    <Route
+                      path="/admin"
+                      element={
+                        <ProtectedRoute>
+                          <Layout>
+                            <AdminDashboard />
+                          </Layout>
                         </ProtectedRoute>
                       } />
 

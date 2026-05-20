@@ -1,258 +1,388 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import MatchCard from '../components/MatchCard';
+import type { Match } from '../components/MatchCard';
+import LeagueSidebar from '../components/matches/LeagueSidebar';
+import NewsSidebar from '../components/matches/NewsSidebar';
+import DateNavigator from '../components/matches/DateNavigator';
 
 // Static data defined outside component — stable references, no useEffect dep warnings
 const FIFA_LEAGUE_IMPORTANCE = [
   'Champions League', 'Premier League', 'La Liga', 'Bundesliga',
   'Serie A', 'Ligue 1', 'Europa League', 'Conference League',
+  'Eredivisie', 'Primeira Liga', 'Serie A (Brazil)', 'MLS',
+  'Ligue 2', 'Championship', 'Segunda Division',
 ];
 
-const MATCHES = [
-  { id: 1, league: 'Ligue 1', homeTeam: 'PSG', awayTeam: 'Marseille', homeScore: 3, awayScore: 1, status: 'FT', date: '2023-06-18T20:00:00', stadium: 'Parc des Princes', homeOdds: 1.45, drawOdds: 4.5, awayOdds: 7.25, homeTeamLogo: 'https://via.placeholder.com/30', awayTeamLogo: 'https://via.placeholder.com/30' },
-  { id: 2, league: 'Premier League', homeTeam: 'Manchester City', awayTeam: 'Arsenal', homeScore: 2, awayScore: 2, status: 'FT', date: '2023-06-18T17:30:00', stadium: 'Etihad Stadium', homeOdds: 1.95, drawOdds: 3.5, awayOdds: 4.1, homeTeamLogo: 'https://via.placeholder.com/30', awayTeamLogo: 'https://via.placeholder.com/30' },
-  { id: 3, league: 'La Liga', homeTeam: 'Barcelona', awayTeam: 'Real Madrid', homeScore: 0, awayScore: 0, status: 'Live', date: '2023-06-19T21:00:00', stadium: 'Camp Nou', homeOdds: 2.25, drawOdds: 3.25, awayOdds: 3.5, homeTeamLogo: 'https://via.placeholder.com/30', awayTeamLogo: 'https://via.placeholder.com/30' },
-  { id: 4, league: 'Bundesliga', homeTeam: 'Bayern Munich', awayTeam: 'Dortmund', homeScore: null, awayScore: null, status: 'Scheduled', date: '2023-06-20T19:30:00', stadium: 'Allianz Arena', homeOdds: 1.65, drawOdds: 4.0, awayOdds: 5.5, homeTeamLogo: 'https://via.placeholder.com/30', awayTeamLogo: 'https://via.placeholder.com/30' },
-  { id: 5, league: 'Serie A', homeTeam: 'Inter', awayTeam: 'Juventus', homeScore: null, awayScore: null, status: 'Scheduled', date: '2023-06-21T20:45:00', stadium: 'San Siro', homeOdds: 2.1, drawOdds: 3.25, awayOdds: 3.75, homeTeamLogo: 'https://via.placeholder.com/30', awayTeamLogo: 'https://via.placeholder.com/30' },
-  { id: 6, league: 'Ligue 1', homeTeam: 'Lyon', awayTeam: 'Monaco', homeScore: null, awayScore: null, status: 'Scheduled', date: '2023-06-22T19:00:00', stadium: 'Groupama Stadium', homeOdds: 2.4, drawOdds: 3.3, awayOdds: 3.1, homeTeamLogo: 'https://via.placeholder.com/30', awayTeamLogo: 'https://via.placeholder.com/30' },
-  { id: 7, league: 'Champions League', homeTeam: 'Liverpool', awayTeam: 'AC Milan', homeScore: null, awayScore: null, status: 'Scheduled', date: '2023-06-19T20:00:00', stadium: 'Anfield', homeOdds: 1.8, drawOdds: 3.6, awayOdds: 4.5, homeTeamLogo: 'https://via.placeholder.com/30', awayTeamLogo: 'https://via.placeholder.com/30' },
-  { id: 8, league: 'Europa League', homeTeam: 'Sevilla', awayTeam: 'Roma', homeScore: null, awayScore: null, status: 'Scheduled', date: '2023-06-20T18:45:00', stadium: 'Ramón Sánchez Pizjuán', homeOdds: 2.2, drawOdds: 3.2, awayOdds: 3.4, homeTeamLogo: 'https://via.placeholder.com/30', awayTeamLogo: 'https://via.placeholder.com/30' },
-  { id: 9, league: 'Champions League', homeTeam: 'Manchester United', awayTeam: 'PSG', homeScore: 2, awayScore: 1, status: 'FT', date: '2023-06-18T20:00:00', stadium: 'Old Trafford', homeOdds: 2.1, drawOdds: 3.5, awayOdds: 3.25, homeTeamLogo: 'https://via.placeholder.com/30', awayTeamLogo: 'https://via.placeholder.com/30' },
-  { id: 10, league: 'Premier League', homeTeam: 'Liverpool', awayTeam: 'Chelsea', homeScore: 1, awayScore: 1, status: 'Live', date: '2023-06-19T17:30:00', stadium: 'Anfield', homeOdds: 1.85, drawOdds: 3.5, awayOdds: 4.3, homeTeamLogo: 'https://via.placeholder.com/30', awayTeamLogo: 'https://via.placeholder.com/30' },
-];
+const COUNTRY_TRANSLATIONS: Record<string, string> = {
+  'IVORY-COAST': "Côte d'Ivoire",
+  'IVORY COAST': "Côte d'Ivoire",
+  'SPAIN': 'Espagne',
+  'ENGLAND': 'Angleterre',
+  'GERMANY': 'Allemagne',
+  'ITALY': 'Italie',
+  'FRANCE': 'France',
+  'BRAZIL': 'Brésil',
+  'ARGENTINA': 'Argentine',
+};
+
+const PRIORITY_COUNTRIES = ['FRANCE', 'ESPAGNE', 'ANGLETERRE', 'ALLEMAGNE', 'ITALIE']; // Top European nations first
+
+
 
 const Matches = () => {
-  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
-  const [leagueOrder, setLeagueOrder] = useState<string[]>([]);
-  const [isCustomOrder, setIsCustomOrder] = useState(false);
-  const [showOrderModal, setShowOrderModal] = useState(false);
+  const navigate = useNavigate();
+  const [favoriteLeagues, setFavoriteLeagues] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-
-  const uniqueDates = [...new Set(MATCHES.map((m) => m.date.split('T')[0]))].sort();
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const dateDay = new Date(date);
-    dateDay.setHours(0, 0, 0, 0);
-    if (dateDay.getTime() === today.getTime()) return "Aujourd'hui";
-    if (dateDay.getTime() === tomorrow.getTime()) return 'Demain';
-    return date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-  };
+  const [favoriteMatches, setFavoriteMatches] = useState<number[]>([]);
+  const [collapsedLeagues, setCollapsedLeagues] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [liveOnly, setLiveOnly] = useState(false);
+  const [showAllLeagues, setShowAllLeagues] = useState(false);
+  const [availableLeagues, setAvailableLeagues] = useState<{id: number, name: string, logo: string, country: string}[]>([]);
+  
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const uniqueLeagues = Array.from(new Set(MATCHES.map((m) => m.league)));
-    const sorted = [...uniqueLeagues].sort((a, b) => {
-      const ia = FIFA_LEAGUE_IMPORTANCE.indexOf(a);
-      const ib = FIFA_LEAGUE_IMPORTANCE.indexOf(b);
-      if (ia !== -1 && ib !== -1) return ia - ib;
-      if (ia !== -1) return -1;
-      if (ib !== -1) return 1;
-      return a.localeCompare(b);
-    });
-    setLeagueOrder(sorted);
     const today = new Date().toISOString().split('T')[0];
-    const dates = [...new Set(MATCHES.map((m) => m.date.split('T')[0]))].sort();
-    setSelectedDate(dates.includes(today) ? today : dates[0] ?? null);
-  }, []); // MATCHES and FIFA_LEAGUE_IMPORTANCE are module-level constants — stable references
+    setSelectedDate(today);
+  }, []);
 
-  const filteredMatches = selectedDate ? MATCHES.filter((m) => m.date.startsWith(selectedDate)) : MATCHES;
+  useEffect(() => {
+    if (selectedDate) {
+      fetchMatches(selectedDate);
+    }
+  }, [selectedDate]);
 
-  const groupedByLeague = filteredMatches.reduce((groups, match) => {
-    if (!groups[match.league]) groups[match.league] = [];
-    groups[match.league].push(match);
-    return groups;
-  }, {} as Record<string, typeof MATCHES>);
-
-  const sortedLeagues = Object.keys(groupedByLeague).sort((a, b) => {
-    const ia = leagueOrder.indexOf(a);
-    const ib = leagueOrder.indexOf(b);
-    if (ia === -1 && ib === -1) return a.localeCompare(b);
-    if (ia === -1) return 1;
-    if (ib === -1) return -1;
-    return ia - ib;
-  });
-
-  const moveLeague = (league: string, direction: 'up' | 'down') => {
-    const idx = leagueOrder.indexOf(league);
-    if (direction === 'up' && idx <= 0) return;
-    if (direction === 'down' && idx >= leagueOrder.length - 1) return;
-    const newOrder = [...leagueOrder];
-    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
-    [newOrder[idx], newOrder[newIdx]] = [newOrder[newIdx], newOrder[idx]];
-    setLeagueOrder(newOrder);
-    setIsCustomOrder(true);
+  const fetchMatches = async (date: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/football/matches?date=${date}`);
+      const data = await response.json();
+      
+      if (data && data.response) {
+        const mappedMatches: Match[] = data.response.map((item: any) => ({
+          id: item.fixture.id,
+          leagueId: item.league.id,
+          league: item.league.name,
+          homeTeam: item.teams.home.name,
+          awayTeam: item.teams.away.name,
+          homeScore: item.goals.home,
+          awayScore: item.goals.away,
+          status: mapStatus(item.fixture.status.short),
+          date: item.fixture.date,
+          stadium: item.fixture.venue?.name || 'N/A',
+          homeOdds: 0,
+          drawOdds: 0,
+          awayOdds: 0,
+          homeTeamLogo: item.teams.home.logo,
+          awayTeamLogo: item.teams.away.logo,
+          leagueCountry: item.league.country,
+          leagueLogo: item.league.logo,
+        }));
+        setMatches(mappedMatches);
+        
+        // Extract unique leagues with logos for the sidebar, keyed by ID to avoid name collisions
+        const leaguesMap = new Map<number, {id: number, name: string, logo: string, country: string}>();
+        data.response.forEach((item: any) => {
+          leaguesMap.set(item.league.id, {id: item.league.id, name: item.league.name, logo: item.league.logo, country: item.league.country});
+        });
+        setAvailableLeagues(Array.from(leaguesMap.values()));
+        
+      }
+    } catch (err) {
+      console.error('Error fetching matches:', err);
+      setError('Failed to fetch matches');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const resetToFifaOrder = () => {
-    const uniqueLeagues = Array.from(new Set(MATCHES.map((m) => m.league)));
-    const sorted = [...uniqueLeagues].sort((a, b) => {
-      const ia = FIFA_LEAGUE_IMPORTANCE.indexOf(a);
-      const ib = FIFA_LEAGUE_IMPORTANCE.indexOf(b);
-      if (ia !== -1 && ib !== -1) return ia - ib;
-      if (ia !== -1) return -1;
-      if (ib !== -1) return 1;
-      return a.localeCompare(b);
-    });
-    setLeagueOrder(sorted);
-    setIsCustomOrder(false);
+  const mapStatus = (status: string): string => {
+    switch (status) {
+      case 'NS': return 'Scheduled';
+      case '1H':
+      case '2H':
+      case 'HT':
+      case 'ET':
+      case 'P':
+      case 'BT':
+      case 'LIVE': return 'Live';
+      case 'FT':
+      case 'AET':
+      case 'PEN': return 'FT';
+      default: return 'Scheduled';
+    }
+  };
+
+  const filteredMatches = matches.filter((m) => {
+    const matchesSearch = searchQuery 
+      ? m.homeTeam.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        m.awayTeam.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.league.toLowerCase().includes(searchQuery.toLowerCase())
+      : true;
+      
+    const matchesLive = liveOnly ? m.status === 'Live' : true;
+    
+    return matchesSearch && matchesLive;
+  });
+
+  const groupedByLeague = filteredMatches.reduce((groups, match) => {
+    const normalizedCountry = match.leagueCountry.toUpperCase();
+    const displayCountry = COUNTRY_TRANSLATIONS[normalizedCountry] || match.leagueCountry;
+    const key = `${displayCountry} - ${match.league}`;
+    
+    if (!groups[key]) {
+      groups[key] = {
+        id: match.leagueId,
+        name: match.league,
+        country: displayCountry,
+        logo: match.leagueLogo,
+        matches: []
+      };
+    }
+    groups[key].matches.push(match);
+    return groups;
+  }, {} as Record<string, { id: number; name: string; country: string; logo: string; matches: Match[] }>);
+
+  const favoriteMatchesList = filteredMatches.filter(m => favoriteMatches.includes(m.id));
+
+  const sortedLeagues = Object.keys(groupedByLeague).sort((a, b) => {
+    // 1. Check favorite leagues
+    const isFavA = favoriteLeagues.includes(a);
+    const isFavB = favoriteLeagues.includes(b);
+    if (isFavA && !isFavB) return -1;
+    if (!isFavA && isFavB) return 1;
+
+    const countryA = a.split(' - ')[0];
+    const countryB = b.split(' - ')[0];
+    const nameA = a.split(' - ')[1] || a;
+    const nameB = b.split(' - ')[1] || b;
+    
+    // 2. Check priority countries
+    const isPriorityA = PRIORITY_COUNTRIES.includes(countryA.toUpperCase());
+    const isPriorityB = PRIORITY_COUNTRIES.includes(countryB.toUpperCase());
+    if (isPriorityA && !isPriorityB) return -1;
+    if (!isPriorityA && isPriorityB) return 1;
+    
+    // 3. Check importance
+    const ia = FIFA_LEAGUE_IMPORTANCE.indexOf(nameA);
+    const ib = FIFA_LEAGUE_IMPORTANCE.indexOf(nameB);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    
+    // 4. Alphabetical
+    return a.localeCompare(b);
+  });
+
+  const handleToggleFavorite = (e: React.MouseEvent, matchId: number) => {
+    e.stopPropagation();
+    setFavoriteMatches(prev => 
+      prev.includes(matchId) ? prev.filter(id => id !== matchId) : [...prev, matchId]
+    );
   };
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Matchs</h2>
-        <div className="flex items-center gap-2">
-          <button
-            className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-brand-green hover:bg-brand-green/10 transition-colors"
-            onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-            title="Recherche avancée"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-            </svg>
-          </button>
-          <button
-            className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-brand-green hover:bg-brand-green/10 transition-colors"
-            onClick={() => setShowOrderModal(!showOrderModal)}
-            title="Organiser les ligues"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
-            </svg>
-          </button>
-        </div>
-      </div>
+    <div className="max-w-[1400px] mx-auto px-4 flex gap-6 justify-center animate-fade-in pb-12 pt-6">
+      
+      {/* Left Sidebar (Desktop Only) */}
+      <LeagueSidebar leagues={availableLeagues} />
 
-      {/* Advanced Search */}
-      {showAdvancedSearch && (
-        <div className="card p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Équipe</label>
-              <input type="text" placeholder="Rechercher une équipe..." className="input-dark" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Statut</label>
-              <select className="input-dark" title="Filtrer par statut de match" aria-label="Statut du match">
-                <option value="">Tous</option>
-                <option value="Live">En direct</option>
-                <option value="FT">Terminé</option>
-                <option value="Scheduled">À venir</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex justify-end mt-4">
-            <button className="btn-primary text-sm">Appliquer les filtres</button>
-          </div>
-        </div>
-      )}
+      {/* Main Content (Center) */}
+      <div className="flex-1 max-w-[700px] min-w-0">
+        
+        {/* Date Navigator */}
+        <DateNavigator selectedDate={selectedDate} onSelectDate={setSelectedDate} />
 
-      {/* Date Bar */}
-      <div className="mb-6 overflow-x-auto pb-1">
-        <div className="flex gap-2 py-1 min-w-max">
-          {uniqueDates.map((date) => (
-            <button
-              key={date}
-              onClick={() => setSelectedDate(date)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-200 ${
-                selectedDate === date
-                  ? 'bg-brand-green text-white shadow-[0_2px_12px_rgba(34,197,94,0.4)]'
-                  : 'bg-brand-navy-3 text-brand-text-2 border border-brand-slate hover:border-brand-green/40 hover:text-brand-text-1'
-              }`}
-            >
-              {formatDate(date)}
-            </button>
-          ))}
-          <button
-            onClick={() => setSelectedDate(null)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-200 ${
-              selectedDate === null
-                ? 'bg-brand-green text-white shadow-[0_2px_12px_rgba(34,197,94,0.4)]'
-                : 'bg-brand-navy-3 text-brand-text-2 border border-brand-slate hover:border-brand-green/40 hover:text-brand-text-1'
+        {/* Filters Bar */}
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto no-scrollbar pb-1">
+          <button 
+            onClick={() => setLiveOnly(!liveOnly)}
+            className={`px-4 py-1.5 rounded-full text-[13px] font-bold transition-colors whitespace-nowrap ${
+              liveOnly 
+                ? 'bg-brand-green text-white border border-brand-green' 
+                : 'bg-slate-100 dark:bg-brand-navy-2 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-brand-slate hover:bg-slate-200 dark:hover:bg-brand-navy-1'
             }`}
           >
-            Tous les matchs
+            En direct
           </button>
-        </div>
-      </div>
-
-      {/* League Order Modal */}
-      {showOrderModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="card w-full max-w-md p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Organiser les ligues</h3>
-              <button
-                onClick={() => setShowOrderModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-                aria-label="Fermer"
-                title="Fermer"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+          <button className="px-4 py-1.5 rounded-full text-[13px] font-bold bg-slate-100 dark:bg-brand-navy-2 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-brand-slate hover:bg-slate-200 dark:hover:bg-brand-navy-1 transition-colors whitespace-nowrap">
+            En TV
+          </button>
+          <button className="px-4 py-1.5 rounded-full text-[13px] font-bold bg-slate-100 dark:bg-brand-navy-2 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-brand-slate hover:bg-slate-200 dark:hover:bg-brand-navy-1 transition-colors whitespace-nowrap">
+            Par horaire
+          </button>
+          <div className="flex-1"></div>
+          
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <input 
+                type="text" 
+                placeholder="Filtre" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-48 bg-slate-100 dark:bg-brand-navy-2 border border-slate-200 dark:border-brand-slate rounded-full py-1.5 pl-8 pr-3 text-[13px] font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-brand-green focus:bg-white dark:focus:bg-brand-navy-1 transition-colors"
+              />
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 absolute left-2.5 top-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
             </div>
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {leagueOrder.map((league) => (
-                <div key={league} className="flex items-center justify-between bg-slate-50 dark:bg-brand-navy-2 border border-slate-200 dark:border-brand-slate p-3 rounded-lg">
-                  <span className="font-medium text-slate-800 dark:text-brand-text-1 text-sm">{league}</span>
-                  <div className="flex gap-1">
-                    <button onClick={() => moveLeague(league, 'up')} className="p-1 text-slate-400 hover:text-brand-green transition-colors" title="Monter">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                      </svg>
-                    </button>
-                    <button onClick={() => moveLeague(league, 'down')} className="p-1 text-brand-text-3 hover:text-brand-green transition-colors" title="Descendre">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-between mt-4">
-              <button onClick={resetToFifaOrder} className="btn-ghost text-sm">
-                Réinitialiser (ordre FIFA)
-              </button>
-              <button onClick={() => setShowOrderModal(false)} className="btn-primary text-sm">
-                Appliquer
-              </button>
-            </div>
+            
+            <button 
+              onClick={() => {
+                if (collapsedLeagues.length === sortedLeagues.length) {
+                  setCollapsedLeagues([]);
+                } else {
+                  setCollapsedLeagues(sortedLeagues);
+                }
+              }}
+              className="p-1.5 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-brand-navy-2 transition-colors border border-slate-200 dark:border-brand-slate"
+              title={collapsedLeagues.length === sortedLeagues.length ? "Développer tout" : "Réduire tout"}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${collapsedLeagues.length === sortedLeagues.length ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            </button>
           </div>
         </div>
-      )}
 
-      {/* No matches */}
-      {sortedLeagues.length === 0 && (
-        <div className="text-center py-16">
-          <p className="text-slate-400 dark:text-slate-500">Aucun match disponible pour cette date.</p>
-        </div>
-      )}
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-16">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-green mx-auto"></div>
+            <p className="text-slate-400 dark:text-slate-500 mt-4">Chargement des matchs...</p>
+          </div>
+        )}
 
-      {/* Matches by league */}
-      {sortedLeagues.map((league) => (
-        <div key={league} className="mb-8">
-          <div className="flex items-center gap-2 mb-3">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{league}</h3>
-            {isCustomOrder && (
-              <span className="text-[10px] font-semibold bg-brand-green/15 text-brand-green border border-brand-green/30 px-2 py-0.5 rounded-full">
-                Ordre personnalisé
-              </span>
+        {/* Error State */}
+        {error && (
+          <div className="text-center py-16">
+            <p className="text-red-500 font-medium">{error}</p>
+          </div>
+        )}
+
+        {/* No matches */}
+        {!loading && !error && sortedLeagues.length === 0 && (
+          <div className="text-center py-16">
+            <p className="text-slate-400 dark:text-slate-500">Aucun match disponible pour cette date.</p>
+          </div>
+        )}
+
+        {/* Matches by league */}
+        {!loading && !error && (
+          <div className="space-y-4">
+            {/* Favoris Section */}
+            {favoriteMatchesList.length > 0 && (
+              <div className="card overflow-hidden mb-6 border border-brand-green/30">
+                <div className="flex items-center gap-3 px-3 py-2 bg-brand-green/10 border-b border-brand-green/20">
+                  <span className="text-brand-green text-lg">⭐</span>
+                  <h3 className="text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">Matchs Favoris</h3>
+                </div>
+                <div className="flex flex-col">
+                  {favoriteMatchesList.map((match, index) => (
+                    <MatchCard 
+                      key={match.id} 
+                      match={match} 
+                      isLast={index === favoriteMatchesList.length - 1}
+                      isFavorite={true}
+                      onToggleFavorite={(e) => handleToggleFavorite(e, match.id)}
+                      onClick={() => navigate(`/match/${match.id}`)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(showAllLeagues ? sortedLeagues : sortedLeagues.slice(0, 9)).map((leagueKey) => {
+              const leagueData = groupedByLeague[leagueKey];
+              return (
+                <div key={leagueKey} className="card overflow-hidden">
+                  {/* League Header */}
+                  <div 
+                    className="flex items-center gap-3 px-3 py-2 bg-slate-50 dark:bg-brand-navy-2 border-b border-slate-100 dark:border-brand-slate/50 cursor-pointer select-none hover:bg-slate-100 dark:hover:bg-brand-navy-1 transition-colors"
+                    onClick={() => navigate(`/league/${leagueData.id}`)}
+                  >
+                    <div className="w-5 h-5 rounded-full bg-white dark:bg-brand-navy-1 flex items-center justify-center flex-shrink-0 border border-slate-200 dark:border-brand-slate/50 p-0.5">
+                      <img src={leagueData.logo} alt={leagueData.name} className="w-full h-full object-contain" />
+                    </div>
+                    <h3 className="text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">{leagueKey}</h3>
+                    <div className="ml-auto flex items-center gap-2">
+                      <button 
+                        className="p-1 text-slate-400 hover:text-brand-green transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFavoriteLeagues(prev => 
+                            prev.includes(leagueKey) ? prev.filter(l => l !== leagueKey) : [...prev, leagueKey]
+                          );
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${favoriteLeagues.includes(leagueKey) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-400'}`} viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      </button>
+                      <button 
+                        className="p-1 text-slate-400 hover:text-brand-green transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCollapsedLeagues(prev => 
+                            prev.includes(leagueKey) ? prev.filter(l => l !== leagueKey) : [...prev, leagueKey]
+                          );
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${collapsedLeagues.includes(leagueKey) ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  {/* Matches List */}
+                  {!collapsedLeagues.includes(leagueKey) && (
+                    <div className="flex flex-col">
+                      {leagueData.matches.map((match: Match, index) => (
+                        <MatchCard 
+                          key={match.id} 
+                          match={match} 
+                          isLast={index === leagueData.matches.length - 1}
+                          isFavorite={favoriteMatches.includes(match.id)}
+                          onToggleFavorite={(e) => handleToggleFavorite(e, match.id)}
+                          onClick={() => navigate(`/match/${match.id}`)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Show All / Hide All Button */}
+            {sortedLeagues.length > 9 && (
+              <div className="text-center mt-6">
+                <button 
+                  onClick={() => setShowAllLeagues(!showAllLeagues)}
+                  className="px-6 py-2 bg-white dark:bg-brand-navy-2 border border-slate-200 dark:border-brand-slate rounded-full text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-brand-navy-1 transition-colors flex items-center gap-2 mx-auto"
+                >
+                  <span>{showAllLeagues ? 'Ocultar todas' : 'Mostrar todas'}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${showAllLeagues ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {!showAllLeagues && (
+                  <p className="text-xs text-slate-500 mt-2">{sortedLeagues.length - 9} autres compétitions aujourd'hui</p>
+                )}
+              </div>
             )}
           </div>
-          <div className="space-y-3">
-            {groupedByLeague[league].map((match: typeof MATCHES[0]) => (
-              <MatchCard key={match.id} match={match} />
-            ))}
-          </div>
-        </div>
-      ))}
+        )}
+
+      </div>
+
+      {/* Right Sidebar (Desktop Only) */}
+      <NewsSidebar />
+
     </div>
   );
 };

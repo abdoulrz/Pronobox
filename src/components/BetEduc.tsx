@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import UnifiedPaymentModal from './payment/UnifiedPaymentModal';
 import { markdownToHtml } from '../utils/markdownToHtml';
+import { useAuth } from '../contexts/AuthContext';
 
 interface BetEducProps {
   onClose?: () => void;
@@ -60,6 +61,7 @@ const getUnsplashDirectUrl = (url: string) => {
 };
 
 const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
+  const { user, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'free' | 'premium'>('free');
   const [resources, setResources] = useState<EducResource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -179,10 +181,45 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
     setShowPaymentModal(true);
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = async (method: string) => {
     setShowPaymentModal(false);
-    if (selectedResource) {
-      handleAction(selectedResource);
+    if (!selectedResource) return;
+
+    try {
+      const resourceId = selectedResource.id || selectedResource._id;
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          amount: selectedResource.price || 0,
+          type: 'product',
+          description: `Achat: ${selectedResource.title}`,
+          method: method,
+          itemId: resourceId,
+          itemName: selectedResource.title
+        })
+      });
+
+      if (response.ok) {
+        if (user) {
+          const currentUnlocked = user.unlockedResources || [];
+          if (!currentUnlocked.includes(resourceId)) {
+            await updateUser({
+              unlockedResources: [...currentUnlocked, resourceId]
+            });
+          }
+        }
+        handleAction(selectedResource);
+      } else {
+        const err = await response.json();
+        alert(err.message || "Erreur lors de la validation de la transaction.");
+      }
+    } catch (err) {
+      console.error("Failed to process transaction", err);
+      alert("Erreur lors de l'enregistrement de l'achat.");
     }
   };
 
@@ -245,43 +282,56 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
                 <div className="text-4xl opacity-20">📭</div>
                 <p className="text-sm font-bold text-slate-400 italic">Aucune ressource disponible pour le moment.</p>
               </div>
-            ) : filteredResources.map((resource, index) => (
-              <div
-                key={resource._id || resource.id || index}
-                className="group bg-white dark:bg-brand-navy-2 rounded-2xl border border-slate-200 dark:border-brand-slate/50 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-brand-green/10 dark:hover:shadow-none transition-all duration-300"
-              >
-                <div className="h-32 relative overflow-hidden">
-                  <img
-                    src={getUnsplashDirectUrl(resource.image)}
-                    alt={resource.title}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60"></div>
-                  <div className="absolute top-2 right-2 px-2 py-1 bg-black/30 backdrop-blur-md rounded-lg text-[9px] font-black text-white uppercase tracking-wider">
-                    {getTypeIcon(resource.type)} {resource.type}
+            ) : filteredResources.map((resource, index) => {
+              const resourceId = resource.id || resource._id;
+              const isUnlocked = resource.category !== 'premium' || 
+                                 user?.role === 'admin' || 
+                                 user?.isPro || 
+                                 (user?.unlockedResources && user.unlockedResources.includes(resourceId));
+              return (
+                <div
+                  key={resourceId || index}
+                  className="group bg-white dark:bg-brand-navy-2 rounded-2xl border border-slate-200 dark:border-brand-slate/50 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-brand-green/10 dark:hover:shadow-none transition-all duration-300"
+                >
+                  <div className="h-32 relative overflow-hidden">
+                    <img
+                      src={getUnsplashDirectUrl(resource.image)}
+                      alt={resource.title}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60"></div>
+                    <div className="absolute top-2 right-2 px-2 py-1 bg-black/30 backdrop-blur-md rounded-lg text-[9px] font-black text-white uppercase tracking-wider">
+                      {getTypeIcon(resource.type)} {resource.type}
+                    </div>
                   </div>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-black text-slate-800 dark:text-white text-sm leading-snug mb-1 line-clamp-1 group-hover:text-brand-green transition-colors">{resource.title}</h3>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-4">{resource.description}</p>
-                  
-                  <div className="flex justify-between items-center pt-3 border-t border-slate-50 dark:border-brand-slate/20">
-                    {resource.category === 'premium' ? (
-                      <span className="text-sm font-black text-brand-green">{resource.price}€</span>
-                    ) : (
-                      <span className="text-[9px] font-black text-brand-green uppercase tracking-widest px-2 py-1 bg-brand-green/10 rounded">Offert</span>
-                    )}
+                  <div className="p-4">
+                    <h3 className="font-black text-slate-800 dark:text-white text-sm leading-snug mb-1 line-clamp-1 group-hover:text-brand-green transition-colors">{resource.title}</h3>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-4">{resource.description}</p>
                     
-                    <button
-                      className="px-4 py-1.5 bg-brand-green text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-brand-green/20"
-                      onClick={() => resource.category === 'premium' ? handleBuyResource(resource) : handleAction(resource)}
-                    >
-                      {resource.category === 'premium' ? 'Débloquer' : (resource.contentType === 'text' ? 'Lire' : 'Accéder')}
-                    </button>
+                    <div className="flex justify-between items-center pt-3 border-t border-slate-50 dark:border-brand-slate/20">
+                      {resource.category === 'premium' ? (
+                        <span className="text-sm font-black text-brand-green">
+                          {isUnlocked ? (
+                            <span className="text-[9px] uppercase tracking-widest text-brand-green bg-brand-green/10 px-2 py-1 rounded flex items-center gap-1">
+                              🔓 Débloqué
+                            </span>
+                          ) : `${resource.price}€`}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-black text-brand-green uppercase tracking-widest px-2 py-1 bg-brand-green/10 rounded">Offert</span>
+                      )}
+                      
+                      <button
+                        className="px-4 py-1.5 bg-brand-green text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-brand-green/20"
+                        onClick={() => isUnlocked ? handleAction(resource) : handleBuyResource(resource)}
+                      >
+                        {isUnlocked ? (resource.contentType === 'text' ? 'Lire' : 'Accéder') : 'Débloquer'}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -313,13 +363,13 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
               {viewingText.contentType === 'text' ? (
                 <div
                   className="prono-md text-slate-700 dark:text-slate-300 leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: markdownToHtml(viewingText.content) || '<p class="italic text-slate-400 text-center py-10">Aucun contenu disponible.</p>' }}
+                  dangerouslySetInnerHTML={{ __html: markdownToHtml(viewingText.content || '') || '<p class="italic text-slate-400 text-center py-10">Aucun contenu disponible.</p>' }}
                 />
-              ) : (viewingText.contentType === 'link' || (viewingText.content.startsWith('http') && (viewingText.content.includes('youtube.com') || viewingText.content.includes('youtu.be') || viewingText.content.includes('vimeo.com')))) ? (
+              ) : (viewingText.contentType === 'link' || (viewingText.content && viewingText.content.startsWith('http') && (viewingText.content.includes('youtube.com') || viewingText.content.includes('youtu.be') || viewingText.content.includes('vimeo.com')))) ? (
                 <div className="space-y-6">
                   <div className="w-full h-[450px] rounded-2xl overflow-hidden border border-slate-200 dark:border-brand-slate/30 bg-black relative shadow-lg">
                     <iframe 
-                      src={getEmbedUrl(viewingText.content)} 
+                      src={getEmbedUrl(viewingText.content || '')} 
                       className="w-full h-full" 
                       title={viewingText.title}
                       sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
@@ -348,21 +398,21 @@ const BetEduc: React.FC<BetEducProps> = ({ onClose }) => {
               ) : (
                 <div className="space-y-6">
                   {/* Local file resource */}
-                  {viewingText.content.toLowerCase().endsWith('.pdf') ? (
+                  {(viewingText.content || '').toLowerCase().endsWith('.pdf') ? (
                     <div className="w-full h-[500px] rounded-2xl overflow-hidden border border-slate-200 dark:border-brand-slate/30 bg-slate-900 relative shadow-lg">
                       <embed src={viewingText.content} type="application/pdf" className="w-full h-full" />
                     </div>
-                  ) : viewingText.content.toLowerCase().match(/\.(mp4|webm|ogg)$/) ? (
+                  ) : (viewingText.content || '').toLowerCase().match(/\.(mp4|webm|ogg)$/) ? (
                     <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-brand-slate/30 bg-black relative shadow-lg">
                       <video controls src={viewingText.content} className="w-full h-auto max-h-[450px]" />
                     </div>
-                  ) : viewingText.content.toLowerCase().match(/\.(mp3|wav|ogg)$/) ? (
+                  ) : (viewingText.content || '').toLowerCase().match(/\.(mp3|wav|ogg)$/) ? (
                     <div className="flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-brand-navy-3 rounded-2xl border border-slate-200/50 dark:border-brand-slate/20 shadow-md">
                       <span className="text-5xl mb-4 animate-bounce">🎵</span>
                       <p className="text-sm font-black text-slate-700 dark:text-white mb-4">Lecture audio de la ressource</p>
                       <audio controls src={viewingText.content} className="w-full max-w-md" />
                     </div>
-                  ) : viewingText.content.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/) ? (
+                  ) : (viewingText.content || '').toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/) ? (
                     <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-brand-slate/30 bg-slate-900 relative shadow-lg">
                       <img src={viewingText.content} alt={viewingText.title} className="w-full h-auto object-contain mx-auto" />
                     </div>

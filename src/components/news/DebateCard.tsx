@@ -25,7 +25,7 @@ export const DebateCard: React.FC<DebateCardProps> = ({
 
   return (
     <div
-      className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+      className="card overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
       onClick={() => onSelect(debate.id)}
     >
       <div className="h-40 overflow-hidden relative bg-gray-100 dark:bg-gray-700">

@@ -151,7 +151,8 @@ app.post('/api/auth/register', async (req, res) => {
         role: user.role,
         isPro: user.isPro,
         avatar: user.avatar,
-        walletBalance: user.walletBalance
+        walletBalance: user.walletBalance,
+        unlockedResources: user.unlockedResources || []
       }
     });
   } catch (error) {
@@ -191,7 +192,8 @@ app.post('/api/auth/login', async (req, res) => {
         role: user.role,
         isPro: user.isPro,
         avatar: user.avatar,
-        walletBalance: user.walletBalance
+        walletBalance: user.walletBalance,
+        unlockedResources: user.unlockedResources || []
       }
     });
   } catch (error) {
@@ -390,6 +392,43 @@ app.post('/api/beteduc/:id/comments', authenticateToken, async (req, res) => {
     res.status(201).json(resource);
   } catch (error) {
     console.error('Error adding comment to beteduc:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Post a reply to a comment on a BET-EDUC resource
+app.post('/api/beteduc/:id/comments/:commentId/replies', authenticateToken, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: 'Le texte de la réponse est requis.' });
+    }
+    
+    // Find the user to get their username and avatar
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'Utilisateur non trouvé.' });
+    
+    const resource = await BetEduc.findById(req.params.id);
+    if (!resource) return res.status(404).json({ message: 'Ressource non trouvée.' });
+    
+    const comment = resource.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Commentaire non trouvé.' });
+    
+    if (!comment.replies) {
+      comment.replies = [];
+    }
+    
+    comment.replies.push({
+      username: user.username,
+      avatar: user.avatar || '',
+      text: text.trim(),
+      createdAt: new Date()
+    });
+    
+    await resource.save();
+    res.status(201).json(resource);
+  } catch (error) {
+    console.error('Error adding reply to beteduc comment:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -640,8 +679,22 @@ app.post('/api/transactions', authenticateToken, async (req, res) => {
     const user = await User.findById(req.user.id);
     if (type === 'recharge') {
       user.walletBalance += amount;
-    } else if (type === 'withdrawal' || type === 'subscription' || type === 'pro' || type === 'product') {
+    } else if (type === 'withdrawal' || type === 'subscription' || type === 'pro') {
       user.walletBalance -= amount;
+    } else if (type === 'product') {
+      // Only deduct from wallet balance if paid using wallet
+      if (method === 'wallet') {
+        user.walletBalance -= amount;
+      }
+      // Persistently unlock the resource for the user
+      if (itemId) {
+        if (!user.unlockedResources) {
+          user.unlockedResources = [];
+        }
+        if (!user.unlockedResources.includes(itemId)) {
+          user.unlockedResources.push(itemId);
+        }
+      }
     }
     // Update user Pro status if applicable
     if (type === 'subscription' || type === 'pro') {
@@ -780,6 +833,10 @@ app.post('/api/channels/:id/messages', authenticateToken, async (req, res) => {
 // Debate routes
 app.post('/api/debates', authenticateToken, requireProOrAdmin, async (req, res) => {
   try {
+    const isChannelOwner = await Channel.exists({ owner: req.user.id });
+    if (!isChannelOwner && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Seuls les propriétaires de canaux peuvent créer un débat' });
+    }
     const { title, description, images, category } = req.body;
     const debate = new Debate({
       title,

@@ -57,17 +57,23 @@ This document outlines the path to taking PronosBox from its current state to a 
 
 ## 🛠️ Phase 4: Admin & Stability
 
-- [ ] **Admin Dashboard**:
-    - [ ] User management (Ban/Pro status).
-    - [ ] Transaction validation queue.
-    - [ ] Channel moderation tools.
+- [x] **Admin Dashboard**:
+    - [x] User management (Ban/Pro status / Promotion).
+    - [x] Transaction validation queue & manual withdrawal approvals.
+    - [x] Channel moderation tools.
     - [x] **Pronos Management**: CRUD interfaces for Free and Premium predictions.
     - [x] **BET-EDUC Management**: CRUD interfaces for Free and Premium educational content (E-books, Videos, Articles) with internal async uploads.
     - [x] **Universal Media Player Integration**: Play videos, audios, and read PDFs directly inline with user commenting (Recommendation 4).
+    - [x] **Persistent Premium Unlocking**: Keeps a permanent record of purchased/unlocked resources directly in the MongoDB User schema and React context session to ensure lifetime access.
+- [x] **Structural Refactoring & Cleanup**:
+    - [x] Removed the standalone predictions page ("Pronos") since match analyses are now directly integrated.
+    - [x] Merged the standalone "Débats" page into "Canaux" (/box) as a dynamic side column with smooth detailed overlay and categorized filters.
+    - [x] Enforced strict authorization rule: only users owning at least one channel (or admin) can create a debate, fully secured on both frontend and backend (MongoDB guards).
+    - [x] **Debate Stability & Visuals**: Resolved all server-to-client payload mismatch bugs (likes and comments vanishing, self-notification filters, and Mongoose population child rendering crash guards) and integrated beautiful circular avatars for debates in the channels sidebar.
 - [ ] **Performance**:
     - [ ] Implement image lazy loading.
     - [ ] Optimize MongoDB queries for the "Box" feed (Pagination).
-    - [ ] **Admin Dashboard Optimization**: Implement code splitting for management tabs.
+    - [x] **Admin Dashboard Consolidation**: Merged all administrative panels (withdrawals, user lists, support chat, finance summary) into a central single-page dashboard with 100% type safety and Zero-Defect compiler checks.
 - [ ] **Deployment**:
     - [ ] Finalize Contabo VPS setup (Nginx, PM2, MongoDB).
     - [ ] Set up SSL (Certbot).

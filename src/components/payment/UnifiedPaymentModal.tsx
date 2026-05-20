@@ -6,7 +6,7 @@ import { PaymentDetails, PaymentMethod } from '../../types/payment';
 interface UnifiedPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (method: PaymentMethod) => void;
   paymentDetails: PaymentDetails;
 }
 const UnifiedPaymentModal: React.FC<UnifiedPaymentModalProps> = ({
@@ -48,13 +48,13 @@ const UnifiedPaymentModal: React.FC<UnifiedPaymentModalProps> = ({
       // Simuler le paiement par portefeuille pour la démo
       setTimeout(() => {
         setIsProcessing(false);
-        onSuccess();
+        onSuccess('wallet');
       }, 1000);
     } else {
       // Simuler le paiement par carte pour la démo
       setTimeout(() => {
         setIsProcessing(false);
-        onSuccess();
+        onSuccess('card');
       }, 1500);
     }
   };
@@ -62,7 +62,7 @@ const UnifiedPaymentModal: React.FC<UnifiedPaymentModalProps> = ({
     setIsProcessing(false);
     setShowCinetPay(false);
     setShowNowPayment(false);
-    onSuccess();
+    onSuccess(paymentMethod);
   };
   const handlePaymentCancel = () => {
     setIsProcessing(false);
@@ -97,7 +97,7 @@ const UnifiedPaymentModal: React.FC<UnifiedPaymentModalProps> = ({
   }
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full">
+      <div className="glass-modal rounded-lg max-w-md w-full">
         <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
             {paymentDetails.type === 'recharge' ?

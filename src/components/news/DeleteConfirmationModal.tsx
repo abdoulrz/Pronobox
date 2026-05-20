@@ -18,8 +18,8 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-      <div className="bg-white dark:bg-brand-navy-2 rounded-2xl max-w-sm w-full shadow-2xl animate-scale-in border border-slate-200 dark:border-brand-slate overflow-hidden">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+      <div className="glass-modal rounded-2xl max-w-sm w-full shadow-2xl animate-scale-in border border-slate-200 dark:border-brand-slate overflow-hidden">
         <div className="p-4 border-b border-slate-200 dark:border-brand-slate flex justify-between items-center bg-red-600 text-white">
           <h3 className="text-lg font-bold">{title}</h3>
           <button

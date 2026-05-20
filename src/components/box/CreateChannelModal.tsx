@@ -48,8 +48,8 @@ export const CreateChannelModal: React.FC<CreateChannelModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="glass-modal rounded-lg shadow-lg w-full max-w-md mx-4 overflow-hidden">
         <div className="relative px-4 py-3 bg-green-600 text-white">
           <h3 className="text-lg font-medium">Créer un nouveau canal</h3>
           <button

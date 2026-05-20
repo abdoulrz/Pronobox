@@ -4,6 +4,69 @@ Toutes les modifications notables de ce projet seront documentées dans ce fichi
 
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.20.0] - 2026-05-18 ([Debate Stability, Safe Population & Sidebar Visuals])
+
+### Added
+- **Circular Debate Avatars inside Sidebar**:
+  - Integrated circular images on the left of each debate inside the channels sidebar, aligning perfectly with the Channel List design.
+  - Implemented automatic resolution of the debate's own first uploaded image with a curated sports photography fallback from Unsplash.
+
+### Fixed
+- **State and Action Synchronization**:
+  - Resolved server-to-client payload mismatch in `Box.tsx` when adding comments, ensuring the local state handles message-only payloads under live MongoDB mode without wiping out the debate's likes or likedBy arrays.
+  - Fixed self-notification filters and the `"undefined"` debate title notification bug.
+- **Population Child Rendering Crash Safeguards**:
+  - Safeguarded `messages.user` and `messages.replies.user` parsing in `DebateDetailView.tsx` to handle both populated user objects (live mode) and raw strings (fallback mode), eliminating React child rendering crashes.
+
+## [2.19.0] - 2026-05-18 ([Debates Sidebar Integration, Redundancy Cleaning & Strict Creation Guards])
+
+### Added
+- **Integrated Debates Sidebar inside Canaux (Box)**:
+  - Transformed the `Box.tsx` layout into a modern grid, adding the forum debates directly in a desktop sidebar column for improved user interaction.
+  - Formulated a gorgeous details view modal with smooth backdrop blurring (`backdrop-blur-sm`) to allow reading, liking, and commenting on debates without leaving the page.
+- **Strict Debate Creation Guard**:
+  - Implemented client checks and masked the "+ Nouveau" debate creation button for users who do not own any channels (excluding global admins).
+  - Secured the backend API `/api/debates` via database verification (`Channel.exists`) returning a `403 Forbidden` status on unauthorized posts.
+
+### Changed
+- **Redundancy Cleaning & Navigation Restructuring**:
+  - Deleted the redundant standalone predictions page (`Predictions.tsx`) and separate debates page (`News.tsx`).
+  - Adjusted the mobile bottom navigation menu from `grid-cols-6` to a clean `grid-cols-4` for perfect aesthetic alignment.
+  - Setup transparent Route redirects in `App.tsx` mapping `/predictions` and `/news` requests to `/` and `/box` for SEO preservation.
+
+## [2.18.0] - 2026-05-18 ([Centralized Admin Control & Zero-Defect Compile Safety])
+
+### Added
+- **Integrated Administration Hub**:
+  - Centralized all backoffice processes (Users, Transactions, Withdrawals, Support Chat, Global Financial Balance) into a single, fully responsive centralized `AdminDashboard.tsx`.
+  - Created a robust user moderation queue permitting search, role assignment, and direct status toggles.
+  - Formulated dedicated tabs for pending withdrawal validation and detailed transaction history audit.
+  - Linked WebSocket support queue for live real-time conversations with standard/pro users.
+- **Redundancy Pruning**:
+  - Eliminated parallel administrative panels inside standard user settings, migrating them to the master dashboard.
+  - Reduced `SettingsAdminUser.tsx` footprint by over 1,700 redundant lines, streamlining UX to personal settings and the high-level financial summary.
+
+### Fixed
+- **Strict Compile Safety**:
+  - Refactored all implicit type declarations (`any` callbacks, reducer parameters) to strict structures.
+  - Pruned unused locals (`useRef`, state hooks, mock handlers) from `AdminDashboard.tsx` and settings, successfully achieving zero compile-time warnings and passing full code verification (`npx tsc --noEmit`).
+
+## [2.17.0] - 2026-05-17 ([Persistent Premium Unlocking & Defensive Security])
+
+### Added
+- **Persistent Resource Unlocking Architecture**:
+  - Implemented `unlockedResources` database array referencing `BetEduc` models directly inside the `User` schema.
+  - Configured `POST /api/transactions` to automatically push the resource `itemId` to the user's document upon successful checkout.
+  - Extended `/api/auth/register` and `/api/auth/login` to serialize and return the unlocked list to the client.
+  - Linked session updates via `updateUser` hook inside `AuthContext.tsx` to ensure real-time access updates.
+  - Built real-time lock validation logic inside `BetEduc.tsx` bypassing modal prompts for admins, pros, and holders of the persistent resource.
+- **Defensive Reader Security & Crash-Proofing**:
+  - Infused comprehensive safety checks (`content || ''`) across all embedded widgets (YouTube iframe, PDF embed, Video, and Audio), completely protecting the client interface from breaking if empty/unconfigured contents are loaded.
+
+### Changed
+- **Wallet Deduction Logic**:
+  - Re-routed the backend transaction process to only deduct purchase amounts from the wallet balance when the transaction method is explicitly `'wallet'`, skipping reductions for external Card, Mobile, or Crypto checkouts.
+
 ## [2.16.0] - 2026-05-17 ([Universal Content Reader, Comments Integration & Instant Asynchronous Uploads])
 
 ### Added

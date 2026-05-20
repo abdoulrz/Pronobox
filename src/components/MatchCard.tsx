@@ -1,7 +1,8 @@
 import React from 'react';
 
-interface Match {
+export interface Match {
   id: number;
+  leagueId: number;
   league: string;
   homeTeam: string;
   awayTeam: string;
@@ -15,100 +16,104 @@ interface Match {
   awayOdds: number;
   homeTeamLogo: string;
   awayTeamLogo: string;
+  leagueCountry: string;
+  leagueLogo: string;
 }
 
 interface MatchCardProps {
   match: Match;
+  isLast?: boolean;
+  isFavorite?: boolean;
+  onToggleFavorite?: (e: React.MouseEvent) => void;
+  onClick?: () => void;
 }
 
-const MatchCard: React.FC<MatchCardProps> = ({ match }) => {
+const MatchCard: React.FC<MatchCardProps> = ({ 
+  match, 
+  isLast = false, 
+  isFavorite = false, 
+  onToggleFavorite,
+  onClick 
+}) => {
   const formatTime = (dateString: string) =>
     new Date(dateString).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Live':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-brand-red/15 text-brand-red border border-brand-red/30 animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-red inline-block" />
-            Live
-          </span>
-        );
-      case 'FT':
-        return (
-          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-            Terminé
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700">
-            {formatTime(match.date)}
-          </span>
-        );
-    }
-  };
-
   return (
-    <div className="bg-white dark:bg-brand-navy-3 rounded-xl border border-slate-200 dark:border-brand-slate shadow-sm hover:shadow-md dark:hover:border-brand-green/30 transition-all duration-200">
-
-      {/* Header: league + status + stadium */}
-      <div className="flex justify-between items-center px-4 py-2.5 border-b border-slate-100 dark:border-brand-slate/50">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 dark:text-brand-text-2 uppercase tracking-wide">
-            {match.league}
-          </span>
-          {getStatusBadge(match.status)}
-        </div>
-        <span className="text-xs text-slate-400 dark:text-brand-text-3">{match.stadium}</span>
+    <div 
+      onClick={onClick}
+      className={`flex items-center justify-between py-2.5 px-4 transition-colors cursor-pointer group hover:bg-slate-50 dark:hover:bg-brand-navy-2 ${!isLast ? 'border-b border-slate-100 dark:border-brand-slate/50' : ''}`}
+    >
+      
+      {/* Status (Far Left) */}
+      <div className="w-8 flex-shrink-0 flex items-center justify-start">
+        {match.status === 'Live' ? (
+          <span className="text-brand-red font-bold text-[10px] animate-pulse">Live</span>
+        ) : match.status === 'FT' ? (
+          <span className="text-slate-400 dark:text-brand-text-3 font-medium text-[10px]">FT</span>
+        ) : null}
       </div>
 
-      {/* Teams + Score */}
-      <div className="flex items-center justify-between px-4 py-4">
-        {/* Home */}
-        <div className="flex items-center gap-3 flex-1">
-          <div className="w-9 h-9 rounded-full overflow-hidden border border-slate-200 dark:border-brand-slate bg-slate-50 dark:bg-brand-navy-2 flex-shrink-0">
-            <img src={match.homeTeamLogo} alt={match.homeTeam} className="w-full h-full object-cover" />
-          </div>
-          <span className="font-semibold text-slate-800 dark:text-brand-text-1 text-sm">{match.homeTeam}</span>
+      {/* Face to Face Layout */}
+      <div className="flex-1 flex items-center justify-center gap-3">
+        {/* Home Team */}
+        <div className="flex-1 flex justify-end items-center gap-3">
+          <span className={`text-[13px] truncate ${match.homeScore !== null && match.homeScore > (match.awayScore || 0) ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-700 dark:text-slate-300'}`}>
+            {match.homeTeam}
+          </span>
+          <img src={match.homeTeamLogo} alt={match.homeTeam} className="w-5 h-5 object-contain flex-shrink-0" />
         </div>
 
-        {/* Score / VS */}
-        <div className="flex-shrink-0 px-4">
-          {match.homeScore !== null && match.awayScore !== null ? (
-            <div className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">
-              {match.homeScore} <span className="text-slate-400 dark:text-brand-text-3 mx-0.5">-</span> {match.awayScore}
-            </div>
+        {/* Center: Score or Time */}
+        <div className="w-16 flex-shrink-0 flex justify-center items-center">
+          {match.status === 'Scheduled' ? (
+            <span className="text-slate-500 dark:text-brand-text-2 font-medium text-[13px] bg-slate-100 dark:bg-brand-navy-1 px-2 py-0.5 rounded">
+              {formatTime(match.date)}
+            </span>
           ) : (
-            <div className="text-sm font-bold text-slate-400 dark:text-brand-text-3 px-2">VS</div>
+            <div className="flex items-center gap-1.5 font-bold text-[14px]">
+              <span className={match.status === 'Live' ? 'text-brand-red' : 'text-slate-900 dark:text-white'}>
+                {match.homeScore}
+              </span>
+              <span className={match.status === 'Live' ? 'text-brand-red' : 'text-slate-400 dark:text-brand-slate'}>-</span>
+              <span className={match.status === 'Live' ? 'text-brand-red' : 'text-slate-900 dark:text-white'}>
+                {match.awayScore}
+              </span>
+            </div>
           )}
         </div>
 
-        {/* Away */}
-        <div className="flex items-center gap-3 flex-1 justify-end">
-          <span className="font-semibold text-slate-800 dark:text-brand-text-1 text-sm">{match.awayTeam}</span>
-          <div className="w-9 h-9 rounded-full overflow-hidden border border-slate-200 dark:border-brand-slate bg-slate-50 dark:bg-brand-navy-2 flex-shrink-0">
-            <img src={match.awayTeamLogo} alt={match.awayTeam} className="w-full h-full object-cover" />
-          </div>
+        {/* Away Team */}
+        <div className="flex-1 flex justify-start items-center gap-3">
+          <img src={match.awayTeamLogo} alt={match.awayTeam} className="w-5 h-5 object-contain flex-shrink-0" />
+          <span className={`text-[13px] truncate ${match.awayScore !== null && match.awayScore > (match.homeScore || 0) ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-700 dark:text-slate-300'}`}>
+            {match.awayTeam}
+          </span>
         </div>
       </div>
 
-      {/* Odds */}
-      <div className="grid grid-cols-3 gap-2 px-4 pb-3">
-        {[
-          { label: '1', value: match.homeOdds },
-          { label: 'X', value: match.drawOdds },
-          { label: '2', value: match.awayOdds },
-        ].map(({ label, value }) => (
-          <div
-            key={label}
-            className="bg-slate-50 dark:bg-brand-navy-2 border border-slate-200 dark:border-brand-slate/60 rounded-lg p-2 text-center hover:border-brand-green/40 hover:bg-brand-green/5 transition-colors cursor-pointer"
-          >
-            <div className="text-[10px] font-semibold text-slate-400 dark:text-brand-text-3 uppercase mb-1">{label}</div>
-            <div className="text-sm font-bold text-slate-700 dark:text-brand-text-1">{value}</div>
-          </div>
-        ))}
+      {/* Right Column: Interactive Star / TV icon mock */}
+      <div className="w-12 flex-shrink-0 flex justify-end items-center gap-2">
+         {match.status === 'Scheduled' && (
+           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-300 dark:text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+           </svg>
+         )}
+         <button 
+           onClick={onToggleFavorite}
+           className="p-1 rounded-full hover:bg-slate-200 dark:hover:bg-brand-navy-1 transition-colors"
+           title={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+         >
+           <svg 
+             xmlns="http://www.w3.org/2000/svg" 
+             className={`h-4 w-4 transition-colors ${isFavorite ? 'text-brand-green fill-brand-green' : 'text-slate-300 dark:text-brand-text-3 hover:text-brand-green'}`} 
+             viewBox="0 0 24 24" 
+             stroke="currentColor"
+           >
+             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isFavorite ? 1 : 1.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+           </svg>
+         </button>
       </div>
+
     </div>
   );
 };

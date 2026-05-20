@@ -58,6 +58,10 @@ const UserSchema = new mongoose.Schema({
   channelsJoined: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Channel'
+  }],
+  unlockedResources: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'BetEduc'
   }]
 }, {
   timestamps: true
