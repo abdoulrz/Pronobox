@@ -587,58 +587,39 @@ const SettingsSimpleUser: React.FC = () => {
           }
         </div>
       </div>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
-        {/* Liste des sections */}
-        <div className="space-y-3 p-4">
-          {/* Section Profil */}
-          <div
-            className={`p-3 border ${activeSection === 'profile' ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'} rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-all`}
-            onClick={() => handleSectionClick('profile')}>
+      {/* Navigation Tabs */}
+      <div className="flex overflow-x-auto gap-2 p-2 mb-6 bg-white/10 dark:bg-gray-800/20 backdrop-blur-md rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] border border-white/20 dark:border-gray-700/30 hide-scrollbar sticky top-0 z-10">
+        {[
+          { id: 'profile', label: 'Profil', icon: '👤' },
+          { id: 'security', label: 'Sécurité', icon: '🔒' },
+          { id: 'notifications', label: 'Notifications', icon: '🔔' },
+          { id: 'wallet', label: 'Portefeuille', icon: '💳' },
+          { id: 'support', label: 'Aide & Support', icon: '🎧' },
+          { id: 'faq', label: 'FAQ', icon: '❓' },
+          { id: 'about', label: 'À propos', icon: 'ℹ️' },
+        ].map((item) => {
+          const isActive = activeSection === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id)}
+              className={`
+                flex items-center gap-2 px-5 py-3 text-sm font-medium whitespace-nowrap rounded-xl transition-all duration-300 ease-out
+                ${isActive 
+                  ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-700 dark:text-green-300 shadow-inner border border-green-500/30' 
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-white/40 dark:hover:bg-gray-700/40 hover:text-gray-900 dark:hover:text-white border border-transparent'}
+              `}
+            >
+              <span className="text-lg">{item.icon}</span>
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor">
-
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-
-                </svg>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Profil
-                  </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Modifier vos informations personnelles
-                  </p>
-                </div>
-              </div>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className={`h-5 w-5 text-gray-400 transition-transform ${activeSection === 'profile' ? 'transform rotate-180' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor">
-
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7" />
-
-              </svg>
-            </div>
-          </div>
-          {/* Contenu de la section Profil */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 overflow-hidden">
           {activeSection === 'profile' &&
-          <div className="ml-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm animate-fade-in">
               <h3 className="text-lg font-medium mb-4 dark:text-white">
                 Profil
               </h3>
@@ -736,55 +717,8 @@ const SettingsSimpleUser: React.FC = () => {
               </form>
             </div>
           }
-          {/* Section Sécurité */}
-          <div
-            className={`p-3 border ${activeSection === 'security' ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'} rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-all`}
-            onClick={() => handleSectionClick('security')}>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor">
-
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-
-                </svg>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Sécurité
-                  </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Mot de passe et authentification
-                  </p>
-                </div>
-              </div>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className={`h-5 w-5 text-gray-400 transition-transform ${activeSection === 'security' ? 'transform rotate-180' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor">
-
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7" />
-
-              </svg>
-            </div>
-          </div>
-          {/* Contenu de la section Sécurité */}
           {activeSection === 'security' &&
-          <div className="ml-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm animate-fade-in">
               <h3 className="text-lg font-medium mb-4 dark:text-white">
                 Sécurité
               </h3>
@@ -934,55 +868,8 @@ const SettingsSimpleUser: React.FC = () => {
               </div>
             </div>
           }
-          {/* Section Notifications */}
-          <div
-            className={`p-3 border ${activeSection === 'notifications' ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'} rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-all`}
-            onClick={() => handleSectionClick('notifications')}>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor">
-
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-
-                </svg>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Notifications
-                  </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Gérer vos préférences de notifications
-                  </p>
-                </div>
-              </div>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className={`h-5 w-5 text-gray-400 transition-transform ${activeSection === 'notifications' ? 'transform rotate-180' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor">
-
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7" />
-
-              </svg>
-            </div>
-          </div>
-          {/* Contenu de la section Notifications */}
           {activeSection === 'notifications' &&
-          <div className="ml-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm animate-fade-in">
               <h3 className="text-lg font-medium mb-4 dark:text-white">
                 Notifications
               </h3>
@@ -1075,55 +962,8 @@ const SettingsSimpleUser: React.FC = () => {
               </div>
             </div>
           }
-          {/* Section Portefeuille */}
-          <div
-            className={`p-3 border ${activeSection === 'wallet' ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'} rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-all`}
-            onClick={() => handleSectionClick('wallet')}>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor">
-
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-
-                </svg>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Portefeuille
-                  </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Gérer vos finances et transactions
-                  </p>
-                </div>
-              </div>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className={`h-5 w-5 text-gray-400 transition-transform ${activeSection === 'wallet' ? 'transform rotate-180' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor">
-
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7" />
-
-              </svg>
-            </div>
-          </div>
-          {/* Contenu de la section Portefeuille */}
           {activeSection === 'wallet' &&
-          <div className="ml-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm animate-fade-in">
               <h3 className="text-lg font-medium mb-4 dark:text-white">
                 Portefeuille
               </h3>
@@ -1253,54 +1093,8 @@ const SettingsSimpleUser: React.FC = () => {
               </div>
             </div>
           }
-          {/* Section Aide & Support */}
-          <div
-            className={`p-3 border ${activeSection === 'support' ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'} rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-all`}
-            onClick={() => handleSectionClick('support')}>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor">
-
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-
-                </svg>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Aide & Support
-                  </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Besoin d'aide ? Contactez-nous
-                  </p>
-                </div>
-              </div>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className={`h-5 w-5 text-gray-400 transition-transform ${activeSection === 'support' ? 'transform rotate-180' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor">
-
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7" />
-
-              </svg>
-            </div>
-          </div>
           {activeSection === 'support' &&
-          <div className="ml-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm animate-fade-in">
               <div className="space-y-4">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   Notre équipe est disponible pour répondre à vos questions concernant les paiements, l'accès Pro ou tout problème technique.
@@ -1340,54 +1134,8 @@ const SettingsSimpleUser: React.FC = () => {
             </div>
           }
 
-          {/* Section FAQ */}
-          <div
-            className={`p-3 border ${activeSection === 'faq' ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'} rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-all`}
-            onClick={() => handleSectionClick('faq')}>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor">
-
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-
-                </svg>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Questions fréquentes (FAQ)
-                  </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Tout savoir sur PronosBox
-                  </p>
-                </div>
-              </div>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className={`h-5 w-5 text-gray-400 transition-transform ${activeSection === 'faq' ? 'transform rotate-180' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor">
-
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7" />
-
-              </svg>
-            </div>
-          </div>
           {activeSection === 'faq' &&
-          <div className="ml-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm animate-fade-in">
               <div className="space-y-4">
                 <div className="border-b border-gray-100 dark:border-gray-700 pb-2">
                   <h5 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Comment devenir membre Pro ?</h5>
@@ -1411,54 +1159,8 @@ const SettingsSimpleUser: React.FC = () => {
             </div>
           }
 
-          {/* Section À propos */}
-          <div
-            className={`p-3 border ${activeSection === 'about' ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'} rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-all`}
-            onClick={() => handleSectionClick('about')}>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor">
-
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-
-                </svg>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    À propos
-                  </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Version et informations légales
-                  </p>
-                </div>
-              </div>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className={`h-5 w-5 text-gray-400 transition-transform ${activeSection === 'about' ? 'transform rotate-180' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor">
-
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7" />
-
-              </svg>
-            </div>
-          </div>
           {activeSection === 'about' &&
-          <div className="ml-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm animate-fade-in">
               <div className="space-y-2">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   PronosBox est une plateforme dédiée à l'analyse sportive et au partage de pronostics entre passionnés.
@@ -1470,7 +1172,6 @@ const SettingsSimpleUser: React.FC = () => {
               </div>
             </div>
           }
-        </div>
       </div>
       {/* Modal pour recharger le compte */}
       {showRechargeModal &&

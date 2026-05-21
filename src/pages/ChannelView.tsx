@@ -36,6 +36,7 @@ const ChannelView = () => {
   const [stagedImage, setStagedImage] = useState<string | null>(null);
   const [stagedAudio, setStagedAudio] = useState<string | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -155,9 +156,6 @@ const ChannelView = () => {
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
 
-  // handleSendWithAttachments is now absorbed into handleSendMessage via MessageInput
-  // but we keep the wrapper if needed or just use handleSendMessage directly.
-
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -266,6 +264,7 @@ const ChannelView = () => {
               }}
               onReply={() => setReplyToMessage(msg)}
               onScrollToMessage={handleScrollToMessage}
+              onImageClick={(url) => setFullscreenImage(url)}
             />
           </div>
         ))}
@@ -402,18 +401,48 @@ const ChannelView = () => {
       )}
 
       {showReactionPicker && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowReactionPicker(false)}>
-          <div onClick={e => e.stopPropagation()}>
-            <EmojiPicker
-              onEmojiClick={(emojiData: EmojiClickData) => {
-                if (selectedMessageId) {
-                  addReaction(selectedMessageId, emojiData.emoji);
-                }
-              }}
-              searchDisabled
-              skinTonesDisabled
-            />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowReactionPicker(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-4 shadow-xl flex gap-4 animate-scale-up" onClick={e => e.stopPropagation()}>
+            {['👍', '❤️', '🔥', '😂', '😮', '😢'].map(emoji => (
+              <button
+                key={emoji}
+                className="text-3xl hover:scale-125 transition-transform"
+                onClick={() => {
+                  if (selectedMessageId) addReaction(selectedMessageId, emoji);
+                  setShowReactionPicker(false);
+                }}
+              >
+                {emoji}
+              </button>
+            ))}
           </div>
+        </div>
+      )}
+
+      {/* Fullscreen Image Overlay */}
+      {fullscreenImage && (
+        <div 
+          className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center animate-fade-in"
+          onClick={() => setFullscreenImage(null)}
+        >
+          <button 
+            className="absolute top-6 right-6 text-white hover:text-gray-300 transition-colors z-[101] bg-black/50 p-2 rounded-full"
+            onClick={(e) => {
+              e.stopPropagation();
+              setFullscreenImage(null);
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          
+          <img 
+            src={fullscreenImage} 
+            alt="Zoomed media" 
+            className="max-w-[95vw] max-h-[90vh] object-contain cursor-zoom-out select-none"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
