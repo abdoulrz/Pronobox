@@ -2,6 +2,12 @@
 
 This document outlines the path to taking PronosBox from its current state to a professional, production-ready platform.
 
+> [!TIP]
+> **🚀 Quick Deployment Reference**
+> Any time you make changes locally and push them to GitHub, log into your VPS (`ssh root@213.199.50.202`) and run:
+> `/var/www/pronosbox/deploy.sh`
+> This automatically rebuilds the frontend and restarts the backend!
+
 ---
 
 ## ✅ Phase 1: Core Foundation (Completed)
@@ -77,6 +83,7 @@ This document outlines the path to taking PronosBox from its current state to a 
 - [ ] **Deployment**:
     - [ ] Finalize Contabo VPS setup (Nginx, PM2, MongoDB).
     - [ ] Set up SSL (Certbot).
+    - [ ] Secure and exclude `.env` file from public repository tracking before final production launch.
 
 ---
 
@@ -86,6 +93,8 @@ This document outlines the path to taking PronosBox from its current state to a 
     - [ ] Connect **FedaPay** / **NowPayments.io** to the Wallet system.
     - [ ] Finalize "Buy Pro" flow with success/error states and automatic status update.
     - [ ] Implement Pro user commission logic (10% platform fee).
+- [ ] **Social Authentication**:
+    - [ ] Implement Google OAuth / Single Sign-On (SSO) login.
 
 ---
 
