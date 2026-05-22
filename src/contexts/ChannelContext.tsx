@@ -1,4 +1,3 @@
-
 import React, {
   useCallback,
   useEffect,
@@ -9,13 +8,12 @@ import React, {
 } from 'react';
 import { NavigateFunction } from 'react-router-dom';
 import { ChannelData, Channel, ChannelDetails } from '../types/channel';
-import { useAuth } from './AuthContext';
 
 export interface ChannelContextValue {
   channelData: ChannelData | null;
   navigateToChannel: (channelId: string, navigate: NavigateFunction, activeTab?: string) => void;
-  addChannel: (channel: Channel) => string;
-  saveChannelsToStorage: (data: ChannelData) => void;
+  addChannel: (payload: { name: string; description: string; premium: boolean; subscriptionPrice?: number; avatar?: string }) => Promise<string>;
+  refreshChannels: () => void;
 }
 
 const ChannelDataContext = createContext<ChannelContextValue | null>(null);
@@ -28,127 +26,99 @@ export const useChannelData = () => {
   return context;
 };
 
+// Map a raw MongoDB channel doc to our internal Channel type
+const mapApiChannel = (c: any): Channel => ({
+  id: c._id,
+  name: c.name,
+  description: c.description,
+  premium: c.premium,
+  joined: false,
+  lastMessage: '',
+  avatar: c.avatar || '',
+  price: c.subscriptionPrice || 0,
+  pinned: false,
+  members: c.members?.length || 0,
+  messages: c.messages || [],
+  category: c.premium ? 'premium' : 'free',
+  owner: c.owner
+    ? { id: c.owner._id || c.owner, username: c.owner.username || '', avatar: c.owner.avatar || '' }
+    : { id: '', username: '', avatar: '' }
+});
+
+const mapApiChannelDetails = (c: any): ChannelDetails => ({
+  id: c._id,
+  name: c.name,
+  image: c.avatar || '',
+  description: c.description,
+  fullDescription: c.description,
+  members: c.members?.length || 0,
+  views: c.statistics?.totalViews || 0,
+  posts: [],
+  created: c.createdAt || '',
+  owner: c.owner
+    ? { id: c.owner._id || c.owner, name: c.owner.username || '', avatar: c.owner.avatar || '' }
+    : { id: '', name: '', avatar: '' }
+});
+
 export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
   const [channelData, setChannelData] = useState<ChannelData | null>(null);
 
-  const saveChannelsToStorage = useCallback((data: ChannelData) => {
-    localStorage.setItem('pronosbox_channels', JSON.stringify(data));
-    setChannelData(data);
+  const fetchChannels = useCallback(async () => {
+    try {
+      const res = await fetch('/api/channels');
+      const data = await res.json();
+      if (!Array.isArray(data)) {
+        setChannelData({ channels: [], channelDetails: {} });
+        return;
+      }
+
+      const channels: Channel[] = data.map(mapApiChannel);
+      const channelDetails: Record<string, ChannelDetails> = {};
+      data.forEach((c: any) => {
+        channelDetails[c._id] = mapApiChannelDetails(c);
+      });
+
+      setChannelData({ channels, channelDetails });
+    } catch (error) {
+      console.error('Erreur lors du chargement des canaux:', error);
+      setChannelData({ channels: [], channelDetails: {} });
+    }
   }, []);
 
-  const initializeDefaultChannels = useCallback(() => {
-    const defaultData: ChannelData = {
-      channels: [
-        {
-          id: 'channel-1',
-          name: 'Communauté Ligue 1',
-          members: 5430,
-          views: 32000,
-          image: 'https://images.unsplash.com/photo-1522778034537-20a2486be803?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-          description: 'Canal dédié aux discussions et pronostics sur la Ligue 1',
-          posts: [
-            { id: 'post-1', title: 'Analyse PSG vs OM', content: '...' },
-            { id: 'post-2', title: 'Prédictions weekend', content: '...' }
-          ]
-        },
-        {
-          id: 'channel-2',
-          name: 'PronosBox Officiel',
-          members: 15000,
-          views: 120000,
-          image: 'https://images.unsplash.com/photo-1560272564-c83b66b1ad12?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-          description: "Canal officiel de l'équipe PronosBox",
-          posts: [
-            { id: 'post-3', title: 'Mises à jour de la semaine', content: '...' },
-            { id: 'post-4', title: 'Nouveautés à venir', content: '...' }
-          ]
-        }
-      ],
-      channelDetails: {
-        'channel-1': {
-          id: 'channel-1',
-          name: 'Communauté Ligue 1',
-          image: 'https://images.unsplash.com/photo-1522778034537-20a2486be803?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-          description: 'Canal dédié aux discussions et pronostics sur la Ligue 1',
-          fullDescription: 'Le canal de référence pour tous les passionnés de la Ligue 1. Analyses approfondies, statistiques détaillées et pronostics de qualité.',
-          members: 5430,
-          views: 32000,
-          posts: [
-            { id: 'post-1', title: 'Analyse PSG vs OM', content: '...' },
-            { id: 'post-2', title: 'Prédictions weekend', content: '...' }
-          ],
-          created: '2022-09-15',
-          owner: {
-            id: 'user-123',
-            name: 'FootballExpert',
-            avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
-          }
-        },
-        'channel-2': {
-          id: 'channel-2',
-          name: 'PronosBox Officiel',
-          image: 'https://images.unsplash.com/photo-1560272564-c83b66b1ad12?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-          description: "Canal officiel de l'équipe PronosBox",
-          fullDescription: "Le canal officiel de l'équipe PronosBox. Suivez toutes les actualités, mises à jour et conseils directement de notre équipe.",
-          members: 15000,
-          views: 120000,
-          posts: [
-            { id: 'post-3', title: 'Mises à jour de la semaine', content: '...' },
-            { id: 'post-4', title: 'Nouveautés à venir', content: '...' }
-          ],
-          created: '2022-01-10',
-          owner: {
-            id: 'user-admin',
-            name: 'PronosBox Team',
-            avatar: 'https://images.unsplash.com/photo-1560272564-c83b66b1ad12?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
-          }
-        }
-      }
-    };
-    saveChannelsToStorage(defaultData);
-  }, [saveChannelsToStorage]);
-
   useEffect(() => {
-    const storedChannels = localStorage.getItem('pronosbox_channels');
-    if (storedChannels) {
-      try {
-        const parsedData = JSON.parse(storedChannels);
-        setChannelData(parsedData);
-      } catch (error) {
-        console.error('Erreur lors du chargement des canaux:', error);
-        initializeDefaultChannels();
+    fetchChannels();
+  }, [fetchChannels]);
+
+  const addChannel = useCallback(async (payload: { name: string; description: string; premium: boolean; subscriptionPrice?: number; avatar?: string }): Promise<string> => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/channels', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: payload.name,
+          description: payload.description,
+          premium: payload.premium,
+          allowComments: true,
+          subscriptionPrice: payload.subscriptionPrice || 0,
+          ...(payload.avatar ? { avatar: payload.avatar } : {})
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Failed to create channel');
       }
-    } else {
-      initializeDefaultChannels();
+      const created = await res.json();
+      await fetchChannels();
+      return created._id;
+    } catch (error) {
+      console.error('Erreur création canal:', error);
+      return '';
     }
-  }, [initializeDefaultChannels]);
-
-  const addChannel = useCallback((newChannel: Channel) => {
-    if (!channelData) return '';
-    
-    const newDetails: ChannelDetails = {
-      ...newChannel,
-      fullDescription: newChannel.description,
-      created: new Date().toISOString(),
-      owner: {
-        id: user?.id || 'user-id',
-        name: user?.username || 'Utilisateur',
-        avatar: user?.avatar || 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
-      }
-    };
-
-    const updatedData: ChannelData = {
-      ...channelData,
-      channels: [...channelData.channels, newChannel],
-      channelDetails: {
-        ...channelData.channelDetails,
-        [newChannel.id]: newDetails
-      }
-    };
-    saveChannelsToStorage(updatedData);
-    return newChannel.id;
-  }, [channelData, saveChannelsToStorage, user]);
+  }, [fetchChannels]);
 
   const navigateToChannel = useCallback(
     (channelId: string, navigate: NavigateFunction, activeTab = 'all') => {
@@ -181,7 +151,7 @@ export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ childre
         channelData,
         navigateToChannel,
         addChannel,
-        saveChannelsToStorage
+        refreshChannels: fetchChannels
       }}>
       {children}
     </ChannelDataContext.Provider>

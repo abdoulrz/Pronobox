@@ -7,23 +7,19 @@ const PronoSchema = new mongoose.Schema({
   homeLogo: { type: String },
   awayLogo: { type: String },
   
-  // Free Prediction Info
-  freePrediction: {
-    choice: { type: String, enum: ['home', 'draw', 'away'], required: true },
-    odds: {
-      home: { type: Number, default: 0 },
-      draw: { type: Number, default: 0 },
-      away: { type: Number, default: 0 },
-    },
-    bookmaker: { type: String, default: 'bet365' }
-  },
+  league: { type: String, default: '' },
+  matchDate: { type: Date },
 
-  // Perspective Info
-  keyInfos: [{ type: String }],
-
+  // Free Section
+  freeExpectedResult: { type: String, default: '' },
+  freeConfidence: { type: Number, default: 0 },
+  freeObservation: { type: String, default: '' },
+  
   // Premium Section
-  premiumAnalysis: { type: String, default: '' },
-  iaOpinion: { type: String, default: '' },
+  premiumExpectedResult: { type: String, default: '' },
+  premiumOdds: { type: Number, default: 0 },
+  premiumConfidence: { type: Number, default: 0 },
+  premiumObservation: { type: String, default: '' },
 
   status: { type: String, enum: ['pending', 'won', 'lost'], default: 'pending' }
 }, {

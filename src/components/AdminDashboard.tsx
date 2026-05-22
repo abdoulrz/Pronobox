@@ -171,19 +171,59 @@ const AdminDashboard = () => {
     u.username.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
     (u.email && u.email.toLowerCase().includes(userSearchQuery.toLowerCase()))
   );
-  
-  // State for mock channels
-  const [adminChannels, setAdminChannels] = useState([
-    { id: 1, name: 'PronosBox Officiel', owner: 'Admin', type: 'Officiel', members: '15.4k', initials: 'PO', color: 'green' },
-    { id: 2, name: 'Pronos Premium', owner: 'Jean Dupont', type: 'Premium', members: '5.2k', initials: 'PP', color: 'yellow' },
-    { id: 3, name: 'Foot Expert', owner: 'Marie Lambert', type: 'Gratuit', members: '1.8k', initials: 'FE', color: 'blue' }
-  ]);
 
-  const handleDeleteChannel = (id: number) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce canal ?')) {
-      setAdminChannels(adminChannels.filter(c => c.id !== id));
-    }
+  // Real channel state fetched from API
+  const [adminChannels, setAdminChannels] = useState<any[]>([]);
+  const [showChannelForm, setShowChannelForm] = useState(false);
+  const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
+  const [channelForm, setChannelForm] = useState({ name: '', description: '', premium: false, subscriptionPrice: 0, avatar: '' });
+
+  const fetchAdminChannels = async () => {
+    try {
+      const res = await fetch('/api/channels');
+      const data = await res.json();
+      setAdminChannels(Array.isArray(data) ? data : []);
+    } catch (err) { console.error(err); }
   };
+
+  useEffect(() => { fetchAdminChannels(); }, []);
+
+  const handleDeleteChannel = async (id: string) => {
+    if (!window.confirm('Supprimer ce canal ?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`/api/channels/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      fetchAdminChannels();
+    } catch (err) { console.error(err); }
+  };
+
+  const handleChannelFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      const url = editingChannelId ? `/api/channels/${editingChannelId}` : '/api/channels';
+      const method = editingChannelId ? 'PUT' : 'POST';
+      await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ ...channelForm, allowComments: true })
+      });
+      setShowChannelForm(false);
+      setEditingChannelId(null);
+      setChannelForm({ name: '', description: '', premium: false, subscriptionPrice: 0, avatar: '' });
+      fetchAdminChannels();
+    } catch (err) { console.error(err); }
+  };
+
+  const handleEditChannel = (c: any) => {
+    setChannelForm({ name: c.name, description: c.description, premium: c.premium, subscriptionPrice: c.subscriptionPrice || 0, avatar: c.avatar || '' });
+    setEditingChannelId(c._id);
+    setShowChannelForm(true);
+  };
+
 
   // Mock data for statistics
   const siteStatistics = {
@@ -581,8 +621,65 @@ const AdminDashboard = () => {
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Gestion des canaux</h3>
-                <button className="btn-primary px-4 py-2 text-xs font-bold shadow-lg shadow-brand-green/20">Nouveau canal</button>
+                <button
+                  onClick={() => { setShowChannelForm(!showChannelForm); setEditingChannelId(null); setChannelForm({ name: '', description: '', premium: false, subscriptionPrice: 0, avatar: '' }); }}
+                  className="btn-primary px-4 py-2 text-xs font-bold shadow-lg shadow-brand-green/20"
+                >
+                  {showChannelForm ? 'Annuler' : '+ Nouveau canal'}
+                </button>
               </div>
+
+              {showChannelForm && (
+                <form onSubmit={handleChannelFormSubmit} className="bg-slate-50 dark:bg-brand-navy-3 rounded-2xl border border-slate-100 dark:border-brand-slate/50 p-6 space-y-4">
+                  <h4 className="text-sm font-black uppercase tracking-widest text-brand-green">{editingChannelId ? 'Modifier le canal' : 'Nouveau canal'}</h4>
+
+                  {/* Image upload */}
+                  <div className="flex items-center gap-5">
+                    <label className="cursor-pointer group" title="Choisir une image">
+                      <div className="w-16 h-16 rounded-full border-2 border-dashed border-slate-300 dark:border-brand-slate/70 group-hover:border-brand-green overflow-hidden flex items-center justify-center bg-white dark:bg-brand-navy-2 transition-all">
+                        {channelForm.avatar ? (
+                          <img src={channelForm.avatar} alt="Preview" className="w-full h-full object-cover" />
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        )}
+                      </div>
+                      <input type="file" accept="image/*" className="hidden" onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = ev => setChannelForm({...channelForm, avatar: ev.target?.result as string});
+                        reader.readAsDataURL(file);
+                      }} />
+                    </label>
+                    <div className="text-sm">
+                      <p className="font-semibold text-slate-700 dark:text-slate-300">Image du canal</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Cliquez pour importer (JPG, PNG)</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Nom du canal</label>
+                      <input required type="text" placeholder="Ex: PronosBox Officiel" value={channelForm.name} onChange={e => setChannelForm({...channelForm, name: e.target.value})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-200 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Prix abonnement (€)</label>
+                      <input type="number" step="0.01" value={channelForm.subscriptionPrice} onChange={e => setChannelForm({...channelForm, subscriptionPrice: parseFloat(e.target.value)||0})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-200 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Description</label>
+                    <textarea required rows={2} placeholder="Description du canal..." value={channelForm.description} onChange={e => setChannelForm({...channelForm, description: e.target.value})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-200 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all"></textarea>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" id="channel-premium" checked={channelForm.premium} onChange={e => setChannelForm({...channelForm, premium: e.target.checked})} className="w-4 h-4 accent-amber-500 cursor-pointer" />
+                    <label htmlFor="channel-premium" className="text-sm font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">Canal Premium (accès payant)</label>
+                  </div>
+                  <button type="submit" className="w-full btn-primary py-3 font-black uppercase tracking-widest rounded-xl">
+                    {editingChannelId ? 'Mettre à jour' : 'Créer le canal'}
+                  </button>
+                </form>
+              )}
+
               <div className="border border-slate-200 dark:border-brand-slate rounded-xl overflow-x-auto shadow-sm">
                 <table className="min-w-full divide-y divide-slate-200 dark:divide-brand-slate/30">
                   <thead className="bg-slate-50 dark:bg-brand-navy-3">
@@ -595,30 +692,42 @@ const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-brand-navy-2 divide-y divide-slate-100 dark:divide-brand-slate/30">
-                    {adminChannels.map(c => (
-                      <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-brand-navy-3/30 transition-colors">
+                    {adminChannels.map((c: any) => (
+                      <tr key={c._id} className="hover:bg-slate-50 dark:hover:bg-brand-navy-3/30 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className={`w-9 h-9 rounded-full bg-${c.color}-100 dark:bg-${c.color}-900/30 flex items-center justify-center text-${c.color}-600 dark:text-${c.color}-400 mr-3 border border-slate-200 dark:border-brand-slate shadow-inner`}>
-                              <span className="text-xs font-black">{c.initials}</span>
-                            </div>
+                          <div className="flex items-center gap-3">
+                            {c.avatar ? (
+                              <img src={c.avatar} alt={c.name} className="w-9 h-9 rounded-full object-cover border border-slate-200 dark:border-brand-slate" />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-brand-green/10 flex items-center justify-center border border-slate-200 dark:border-brand-slate">
+                                <span className="text-xs font-black text-brand-green">{c.name?.slice(0,2).toUpperCase()}</span>
+                              </div>
+                            )}
                             <p className="text-sm font-bold text-slate-800 dark:text-white">{c.name}</p>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400 font-medium">{c.owner}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400 font-medium">{c.owner?.username || 'Admin'}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${c.type === 'Officiel' ? 'bg-purple-500/10 text-purple-500' : 'bg-brand-green/10 text-brand-green'}`}>{c.type}</span>
+                          <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${c.premium ? 'bg-amber-500/10 text-amber-500' : 'bg-brand-green/10 text-brand-green'}`}>
+                            {c.premium ? 'Premium' : 'Gratuit'}
+                          </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400 font-medium">{c.members}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400 font-medium">{c.members?.length || 0}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           <div className="flex justify-end gap-2">
-                            <button onClick={() => handleDeleteChannel(c.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors" title="Supprimer">
+                            <button onClick={() => handleEditChannel(c)} className="p-1.5 rounded-lg text-yellow-500 hover:bg-yellow-500/10 transition-colors" title="Modifier">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
+                            </button>
+                            <button onClick={() => handleDeleteChannel(c._id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors" title="Supprimer">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
                           </div>
                         </td>
                       </tr>
                     ))}
+                    {adminChannels.length === 0 && (
+                      <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">Aucun canal créé</td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1317,13 +1426,17 @@ const PronosManagement = () => {
     matchId: '',
     homeTeamName: '',
     awayTeamName: '',
-    freeChoice: 'home',
-    freeOddsHome: 0,
-    freeOddsDraw: 0,
-    freeOddsAway: 0,
-    keyInfos: '',
-    premiumAnalysis: '',
-    iaOpinion: ''
+    homeLogo: '',
+    awayLogo: '',
+    league: '',
+    matchDate: '',
+    freeExpectedResult: '',
+    freeConfidence: 0,
+    freeObservation: '',
+    premiumExpectedResult: '',
+    premiumOdds: 0,
+    premiumConfidence: 0,
+    premiumObservation: ''
   });
 
   // Search Engine State
@@ -1373,17 +1486,17 @@ const PronosManagement = () => {
         matchId: parseInt(formData.matchId),
         homeTeamName: formData.homeTeamName,
         awayTeamName: formData.awayTeamName,
-        freePrediction: {
-          choice: formData.freeChoice,
-          odds: {
-            home: formData.freeOddsHome,
-            draw: formData.freeOddsDraw,
-            away: formData.freeOddsAway
-          }
-        },
-        keyInfos: formData.keyInfos.split('\n').filter(k => k.trim() !== ''),
-        premiumAnalysis: formData.premiumAnalysis,
-        iaOpinion: formData.iaOpinion
+        homeLogo: formData.homeLogo,
+        awayLogo: formData.awayLogo,
+        league: formData.league,
+        matchDate: formData.matchDate,
+        freeExpectedResult: formData.freeExpectedResult,
+        freeConfidence: formData.freeConfidence,
+        freeObservation: formData.freeObservation,
+        premiumExpectedResult: formData.premiumExpectedResult,
+        premiumOdds: formData.premiumOdds,
+        premiumConfidence: formData.premiumConfidence,
+        premiumObservation: formData.premiumObservation
       };
 
       const url = editingId ? `/api/pronos/${editingId}` : '/api/pronos';
@@ -1402,9 +1515,9 @@ const PronosManagement = () => {
         setIsAdding(false);
         setEditingId(null);
         setFormData({
-          matchId: '', homeTeamName: '', awayTeamName: '', freeChoice: 'home',
-          freeOddsHome: 0, freeOddsDraw: 0, freeOddsAway: 0,
-          keyInfos: '', premiumAnalysis: '', iaOpinion: ''
+          matchId: '', homeTeamName: '', awayTeamName: '', homeLogo: '', awayLogo: '', league: '', matchDate: '',
+          freeExpectedResult: '', freeConfidence: 0, freeObservation: '',
+          premiumExpectedResult: '', premiumOdds: 0, premiumConfidence: 0, premiumObservation: ''
         });
         fetchPronos();
       }
@@ -1415,18 +1528,22 @@ const PronosManagement = () => {
 
   const handleEdit = (prono: any) => {
     setFormData({
-      matchId: prono.matchId.toString(),
-      homeTeamName: prono.homeTeamName,
-      awayTeamName: prono.awayTeamName,
-      freeChoice: prono.freePrediction.choice,
-      freeOddsHome: prono.freePrediction.odds.home,
-      freeOddsDraw: prono.freePrediction.odds.draw,
-      freeOddsAway: prono.freePrediction.odds.away,
-      keyInfos: prono.keyInfos.join('\n'),
-      premiumAnalysis: prono.premiumAnalysis,
-      iaOpinion: prono.iaOpinion
+      matchId: prono.matchId?.toString() || '',
+      homeTeamName: prono.homeTeamName || '',
+      awayTeamName: prono.awayTeamName || '',
+      homeLogo: prono.homeLogo || '',
+      awayLogo: prono.awayLogo || '',
+      league: prono.league || '',
+      matchDate: prono.matchDate ? new Date(prono.matchDate).toISOString() : '',
+      freeExpectedResult: prono.freeExpectedResult || '',
+      freeConfidence: prono.freeConfidence || 0,
+      freeObservation: prono.freeObservation || '',
+      premiumExpectedResult: prono.premiumExpectedResult || '',
+      premiumOdds: prono.premiumOdds || 0,
+      premiumConfidence: prono.premiumConfidence || 0,
+      premiumObservation: prono.premiumObservation || ''
     });
-    setEditingId(prono.id);
+    setEditingId(prono._id || prono.id);
     setIsAdding(true);
   };
 
@@ -1504,7 +1621,11 @@ const PronosManagement = () => {
                         ...formData,
                         matchId: match.fixture.id.toString(),
                         homeTeamName: match.teams.home.name,
-                        awayTeamName: match.teams.away.name
+                        awayTeamName: match.teams.away.name,
+                        homeLogo: match.teams.home.logo,
+                        awayLogo: match.teams.away.logo,
+                        league: match.league.name,
+                        matchDate: match.fixture.date
                       });
                       setSearchResults([]);
                       setSearchTerm('');
@@ -1550,70 +1671,52 @@ const PronosManagement = () => {
           <div className="p-4 bg-slate-50 dark:bg-brand-navy-3 rounded-2xl border border-slate-100 dark:border-brand-slate/50">
             <h4 className="text-xs font-black uppercase tracking-widest text-brand-green mb-4 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-brand-green"></span>
-              Pronostic Gratuit
+              Section GRATUIT
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div className="space-y-1.5">
-                <label htmlFor="prono-freeChoice" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Choix (1X2)</label>
-                <div className="relative">
-                  <select id="prono-freeChoice" value={formData.freeChoice} onChange={e => setFormData({...formData, freeChoice: e.target.value})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all cursor-pointer appearance-none">
-                    <option value="home">Équipe 1 (1)</option>
-                    <option value="draw">Nul (X)</option>
-                    <option value="away">Équipe 2 (2)</option>
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                  </div>
-                </div>
+                <label htmlFor="prono-freeExpectedResult" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Résultat Attendu</label>
+                <input id="prono-freeExpectedResult" type="text" placeholder="Ex: Victoire Real Madrid ou Nul" value={formData.freeExpectedResult} onChange={e => setFormData({...formData, freeExpectedResult: e.target.value})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all" />
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="prono-freeOddsHome" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Cote 1</label>
-                <input id="prono-freeOddsHome" type="number" step="0.01" required value={formData.freeOddsHome} onChange={e => setFormData({...formData, freeOddsHome: parseFloat(e.target.value)})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all" />
+                <label htmlFor="prono-freeConfidence" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Confiance (%)</label>
+                <input id="prono-freeConfidence" type="number" min="0" max="100" value={formData.freeConfidence} onChange={e => setFormData({...formData, freeConfidence: parseInt(e.target.value) || 0})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all" />
               </div>
-              <div className="space-y-1.5">
-                <label htmlFor="prono-freeOddsDraw" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Cote X</label>
-                <input id="prono-freeOddsDraw" type="number" step="0.01" required value={formData.freeOddsDraw} onChange={e => setFormData({...formData, freeOddsDraw: parseFloat(e.target.value)})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all" />
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor="prono-freeOddsAway" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Cote 2</label>
-                <input id="prono-freeOddsAway" type="number" step="0.01" required value={formData.freeOddsAway} onChange={e => setFormData({...formData, freeOddsAway: parseFloat(e.target.value)})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all" />
-              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="prono-freeObservation" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Courte Observation</label>
+              <textarea id="prono-freeObservation" rows={2} placeholder="Courte description pour le public gratuit..." value={formData.freeObservation} onChange={e => setFormData({...formData, freeObservation: e.target.value})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all"></textarea>
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-brand-green ml-1 mb-1">Perspectives du match (1 par ligne)</h4>
-            <MarkdownEditor
-              id="prono-keyInfos"
-              label="Perspectives du match"
-              placeholder="- **H2H** avantage Valencia&#10;- Valence *invaincu* à domicile depuis 5 matchs&#10;- ==Point crucial==: forme récente excellente"
-              rows={4}
-              value={formData.keyInfos}
-              onChange={val => setFormData({...formData, keyInfos: val})}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-1.5">
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-brand-green ml-1 mb-1">Analyse Premium</h4>
-              <MarkdownEditor
-                id="prono-premiumAnalysis"
-                label="Analyse Premium"
-                placeholder="**Analyse** réservée aux membres Pro...&#10;- Point clé 1&#10;- Point clé 2"
-                rows={5}
-                value={formData.premiumAnalysis}
-                onChange={val => setFormData({...formData, premiumAnalysis: val})}
-              />
+          <div className="p-4 bg-amber-500/5 dark:bg-amber-500/10 rounded-2xl border border-amber-500/20">
+            <h4 className="text-xs font-black uppercase tracking-widest text-amber-500 mb-4 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zm7-10a1 1 0 01.707.293l0 .001c.023.023.054.045.085.068.106.079.256.173.435.267.356.188.852.41 1.411.602 1.119.383 2.508.683 4.02.683a1 1 0 010 2c-1.282 0-2.483-.243-3.46-.566-.487-.16-.91-.341-1.25-.526a4.896 4.896 0 01-.482-.295c-.066-.046-.118-.088-.152-.116l-.014-.01a1 1 0 01-1.298-1.416l-.001-.001c-.023-.023-.054-.045-.085-.068-.106-.079-.256-.173-.435-.267-.356-.188-.852-.41-1.411-.602C10.51 3.559 9.121 3.259 7.61 3.259a1 1 0 010-2c1.282 0 2.483.243 3.46.566.487.16.91.341 1.25.526.178.098.342.198.482.295.066.046.118.088.152.116l.014.01A1 1 0 0112 2zM7.61 17.259c1.51 0 2.899-.3 4.019-.683.56-.192 1.055-.414 1.411-.602.179-.094.329-.188.435-.267.031-.023.062-.045.085-.068l.001-.001a1 1 0 011.416 1.416l-.01.014c-.028.034-.07.086-.116.152-.097.14-.197.304-.295.482-.185.34-.366.763-.526 1.25-.323.977-.566 2.178-.566 3.46a1 1 0 01-2 0c0-1.512-.3-2.901-.683-4.02-.192-.56-.414-1.055-.602-1.411a7.712 7.712 0 00-.267-.435c-.023-.031-.045-.062-.068-.085l-.001-.001a1 1 0 01-1.416-1.416l.01-.014c.034-.028.086-.07.152-.116.14-.097.304-.197.482-.295.34-.185.763-.366 1.25-.526.977-.323 2.178-.566 3.46-.566a1 1 0 010 2z" clipRule="evenodd" /></svg>
+              Section PREMIUM
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="space-y-1.5">
+                <label htmlFor="prono-premiumExpectedResult" className="block text-[10px] font-black uppercase text-amber-500/80 tracking-widest ml-1">Résultat Attendu</label>
+                <input id="prono-premiumExpectedResult" type="text" placeholder="Ex: Alcaraz en 4 sets" value={formData.premiumExpectedResult} onChange={e => setFormData({...formData, premiumExpectedResult: e.target.value})} className="w-full bg-white dark:bg-brand-navy-2 border border-amber-500/20 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500/30 outline-none transition-all" />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="prono-premiumOdds" className="block text-[10px] font-black uppercase text-amber-500/80 tracking-widest ml-1">Cote</label>
+                <input id="prono-premiumOdds" type="number" step="0.01" value={formData.premiumOdds} onChange={e => setFormData({...formData, premiumOdds: parseFloat(e.target.value) || 0})} className="w-full bg-white dark:bg-brand-navy-2 border border-amber-500/20 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500/30 outline-none transition-all" />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="prono-premiumConfidence" className="block text-[10px] font-black uppercase text-amber-500/80 tracking-widest ml-1">Confiance (%)</label>
+                <input id="prono-premiumConfidence" type="number" min="0" max="100" value={formData.premiumConfidence} onChange={e => setFormData({...formData, premiumConfidence: parseInt(e.target.value) || 0})} className="w-full bg-white dark:bg-brand-navy-2 border border-amber-500/20 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-amber-500/30 outline-none transition-all" />
+              </div>
             </div>
             <div className="space-y-1.5">
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-brand-green ml-1 mb-1">L'Avis de l'IA</h4>
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-500/80 ml-1 mb-1">Observation Détaillée</h4>
               <MarkdownEditor
-                id="prono-iaOpinion"
-                label="Avis IA"
-                placeholder="==Recommandation principale==&#10;Résumé *concis* de l'IA..."
+                id="prono-premiumObservation"
+                label="Observation Détaillée"
+                placeholder="**Analyse** réservée aux membres Pro...&#10;- Argument 1&#10;- Argument 2"
                 rows={5}
-                value={formData.iaOpinion}
-                onChange={val => setFormData({...formData, iaOpinion: val})}
+                value={formData.premiumObservation}
+                onChange={val => setFormData({...formData, premiumObservation: val})}
               />
             </div>
           </div>
@@ -1643,9 +1746,18 @@ const PronosManagement = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 py-1 rounded-lg bg-brand-green/10 text-brand-green text-[10px] font-black uppercase">
-                    {p.freePrediction.choice === 'home' ? '1' : p.freePrediction.choice === 'draw' ? 'X' : '2'} @ {p.freePrediction.odds[p.freePrediction.choice as keyof typeof p.freePrediction.odds].toFixed(2)}
-                  </span>
+                  <div className="flex flex-col gap-1">
+                    {p.freeExpectedResult && (
+                      <span className="px-2 py-0.5 rounded text-brand-green bg-brand-green/10 text-[10px] font-black uppercase inline-block w-max">
+                        Gratuit: {p.freeExpectedResult} ({p.freeConfidence}%)
+                      </span>
+                    )}
+                    {p.premiumExpectedResult && (
+                      <span className="px-2 py-0.5 rounded text-amber-500 bg-amber-500/10 text-[10px] font-black uppercase inline-block w-max">
+                        Premium: {p.premiumExpectedResult} ({p.premiumConfidence}%)
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                   <div className="flex justify-end gap-2">

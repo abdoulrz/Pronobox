@@ -31,12 +31,28 @@ const ChannelView = () => {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
   const [showChannelInfo, setShowChannelInfo] = useState(false);
+  const [showSharePanel, setShowSharePanel] = useState(false);
 
   // Staged attachments (WhatsApp/Telegram style: preview before sending)
   const [stagedImage, setStagedImage] = useState<string | null>(null);
   const [stagedAudio, setStagedAudio] = useState<string | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+
+  const handleShare = (platform: string) => {
+    const url = `${window.location.origin}/channel/${id}`;
+    if (platform === 'copy') {
+      navigator.clipboard.writeText(url).then(() => alert('Lien copié !'));
+    } else if (platform === 'whatsapp') {
+      window.open(`https://wa.me/?text=${encodeURIComponent(url)}`);
+    } else if (platform === 'telegram') {
+      window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}`);
+    } else if (platform === 'twitter') {
+      window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}`);
+    } else if (platform === 'facebook') {
+      window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -238,10 +254,6 @@ const ChannelView = () => {
         channel={channel}
         onBack={() => navigate('/box', { state: { activeTab: location.state?.activeTab || 'all' } })}
         userFunctions={userFunctions}
-        notificationsEnabled={notificationsEnabled}
-        onToggleNotifications={() => setNotificationsEnabled(!notificationsEnabled)}
-        onShare={(platform) => console.log(`Share on ${platform}`)}
-        onLeave={() => navigate('/box')}
         onOpenSettings={() => setShowChannelInfo(true)}
         onOpenMonetization={() => setShowChannelInfo(true)}
         currentUserId={user.id}
@@ -363,12 +375,49 @@ const ChannelView = () => {
 
             {/* Actions */}
             <div className="p-4 space-y-2">
+              {/* Share */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowSharePanel(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-sm font-medium transition-colors"
+                >
+                  <span className="flex items-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                    </svg>
+                    Partager le canal
+                  </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${showSharePanel ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                {showSharePanel && (
+                  <div className="mt-1 ml-4 grid grid-cols-2 gap-2 px-2 pb-2">
+                    {[
+                      { key: 'copy', label: 'Copier le lien', icon: '🔗' },
+                      { key: 'whatsapp', label: 'WhatsApp', icon: '💬' },
+                      { key: 'telegram', label: 'Telegram', icon: '✈️' },
+                      { key: 'twitter', label: 'Twitter/X', icon: '🐦' },
+                      { key: 'facebook', label: 'Facebook', icon: '👍' },
+                    ].map(p => (
+                      <button
+                        key={p.key}
+                        onClick={() => { handleShare(p.key); setShowSharePanel(false); }}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-700 dark:text-gray-300 bg-slate-100 dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors font-medium"
+                      >
+                        <span>{p.icon}</span>{p.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <button
                 onClick={() => {
                   setShowChannelInfo(false);
                   navigate('/box');
                 }}
-                className="w-full flex items-center px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium"
+                className="w-full flex items-center px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -402,19 +451,13 @@ const ChannelView = () => {
 
       {showReactionPicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowReactionPicker(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-3xl p-4 shadow-xl flex gap-4 animate-scale-up" onClick={e => e.stopPropagation()}>
-            {['👍', '❤️', '🔥', '😂', '😮', '😢'].map(emoji => (
-              <button
-                key={emoji}
-                className="text-3xl hover:scale-125 transition-transform"
-                onClick={() => {
-                  if (selectedMessageId) addReaction(selectedMessageId, emoji);
-                  setShowReactionPicker(false);
-                }}
-              >
-                {emoji}
-              </button>
-            ))}
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl flex gap-4 animate-scale-up" onClick={e => e.stopPropagation()}>
+            <EmojiPicker
+              onEmojiClick={(emojiData: EmojiClickData) => {
+                if (selectedMessageId) addReaction(selectedMessageId, emojiData.emoji);
+                setShowReactionPicker(false);
+              }}
+            />
           </div>
         </div>
       )}

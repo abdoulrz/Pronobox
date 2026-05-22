@@ -773,6 +773,26 @@ app.get('/api/channels/:id', async (req, res) => {
   }
 });
 
+app.put('/api/channels/:id', authenticateToken, requireProOrAdmin, async (req, res) => {
+  try {
+    const channel = await Channel.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!channel) return res.status(404).json({ message: 'Channel not found' });
+    res.json(channel);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+app.delete('/api/channels/:id', authenticateToken, requireProOrAdmin, async (req, res) => {
+  try {
+    const channel = await Channel.findByIdAndDelete(req.params.id);
+    if (!channel) return res.status(404).json({ message: 'Channel not found' });
+    res.json({ message: 'Channel deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 app.post('/api/channels/:id/join', authenticateToken, async (req, res) => {
   try {
     const channel = await Channel.findById(req.params.id);

@@ -14,6 +14,7 @@ import Transactions from './pages/Transactions';
 import Profile from './pages/Profile';
 import Auth from './pages/Auth';
 import CompareAccounts from './pages/CompareAccounts';
+import Pronos from './pages/Pronos';
 import Channels from './pages/Channels';
 import ChannelView from './pages/ChannelView';
 import AdminDashboard from './components/AdminDashboard';
@@ -136,6 +137,16 @@ export function App() {
                       <ProtectedRoute>
                           <Layout>
                             <CompareAccounts />
+                          </Layout>
+                        </ProtectedRoute>
+                      } />
+
+                    <Route
+                      path="/pronos"
+                      element={
+                      <ProtectedRoute>
+                          <Layout>
+                            <Pronos />
                           </Layout>
                         </ProtectedRoute>
                       } />

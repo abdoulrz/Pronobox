@@ -170,9 +170,7 @@ const SettingsAdminUser: React.FC = () => {
     }
   }, [connected, subscribe]);
 
-  const handleSectionClick = (section: string) => {
-    setActiveSection(activeSection === section ? '' : section);
-  };
+
   const [emailNotifications, setEmailNotifications] = useState(user?.notifications?.email ?? false);
   const [pushNotifications, setPushNotifications] = useState(user?.notifications?.push ?? true);
   const [matchNotifications, setMatchNotifications] = useState(user?.notifications?.matches ?? true);

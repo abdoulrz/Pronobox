@@ -35,9 +35,7 @@ const SettingsSimpleUser: React.FC = () => {
   // Pas d'onglet ouvert par défaut
   const [activeSection, setActiveSection] = useState('profile');
 
-  const handleSectionClick = (section: string) => {
-    setActiveSection(activeSection === section ? '' : section);
-  };
+
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);

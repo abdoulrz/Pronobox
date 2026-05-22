@@ -3,10 +3,10 @@ export interface Channel {
   id: string;
   name: string;
   members: number;
-  views: number;
-  image: string;
+  views?: number;
+  image?: string;
   description: string;
-  posts: ChannelPost[];
+  posts?: ChannelPost[];
   revenue?: number;
   subscriptions?: number;
   growth?: number;
@@ -15,6 +15,16 @@ export interface Channel {
   performance?: ChannelPerformance;
   topContent?: { id: string; title: string; views: number }[];
   recentActivities?: { type: string; date: string; user?: string; amount?: number; title?: string; content?: string }[];
+  // Real-time channel fields
+  premium?: boolean;
+  avatar?: string;
+  joined?: boolean;
+  lastMessage?: string;
+  price?: number;
+  pinned?: boolean;
+  messages?: any[];
+  category?: string;
+  owner?: { id: string; username?: string; name?: string; avatar: string };
 }
 
 export interface ChannelPost {

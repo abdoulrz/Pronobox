@@ -8,6 +8,7 @@ import { ChannelListItem } from '../components/box/ChannelListItem';
 import { ChannelTabs } from '../components/box/ChannelTabs';
 import { CreateChannelModal, NewChannelData } from '../components/box/CreateChannelModal';
 import { SubscribeChannelModal } from '../components/box/SubscribeChannelModal';
+import { useChannelData } from '../contexts/ChannelContext';
 
 // Debates (Débats) imports
 import { useNotifications } from '../contexts/NotificationContext';
@@ -32,7 +33,9 @@ const Box = () => {
   const { processPayment } = usePayment();
   const navigate = useNavigate();
   const { addNotification } = useNotifications();
+  const { channelData, addChannel } = useChannelData();
   
+  const [mainView, setMainView] = useState<'canaux' | 'debats'>('canaux');
   const [showProModal, setShowProModal] = useState(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [showCreateChannelModal, setShowCreateChannelModal] = useState(false);
@@ -43,36 +46,13 @@ const Box = () => {
   const [channelCreationStep, setChannelCreationStep] = useState(1);
 
   // Channels state
-  const [channels, setChannels] = useState<Channel[]>([
-    {
-      id: 1,
-      name: 'PronosBox Officiel',
-      members: 15420,
-      description: 'Canal officiel de PronosBox',
-      premium: false,
-      joined: true,
-      lastMessage: 'Bienvenue sur le canal officiel de PronosBox!',
-      avatar: 'https://images.unsplash.com/photo-1560272564-c83b66b1ad12?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-      price: 0,
-      pinned: true,
-      messages: [],
-      category: 'official'
-    },
-    {
-      id: 2,
-      name: 'Pronos Premium',
-      members: 5230,
-      description: 'Accès exclusif aux meilleurs pronos',
-      premium: true,
-      joined: false,
-      lastMessage: 'Nouveau prono: PSG vs Marseille',
-      avatar: 'https://images.unsplash.com/photo-1590552515252-3a5a1bce7bed?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-      price: 9.99,
-      pinned: false,
-      messages: [],
-      category: 'premium'
+  const [channels, setChannels] = useState<Channel[]>([]);
+
+  useEffect(() => {
+    if (channelData?.channels) {
+      setChannels(channelData.channels as unknown as Channel[]);
     }
-  ]);
+  }, [channelData]);
 
   const [channelFeatures, setChannelFeatures] = useState<Record<string | number, unknown>>({
     1: { voiceMessages: true, comments: true, paidCoupons: false },
@@ -85,6 +65,7 @@ const Box = () => {
     type: 'free',
     price: '4.99',
     isPrivate: false,
+    avatar: '',
     features: {
       voiceMessages: true,
       comments: true,
@@ -192,27 +173,21 @@ const Box = () => {
     });
   };
 
-  const handleCreateChannelSubmit = (e: React.FormEvent) => {
+  const handleCreateChannelSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newId = channels.length + 1;
-    const newChannelObj: Channel = {
-      id: newId,
-      name: newChannel.name,
-      description: newChannel.description,
-      premium: newChannel.type === 'premium',
-      joined: true,
-      lastMessage: 'Canal créé',
-      avatar: 'https://via.placeholder.com/150',
-      price: parseFloat(newChannel.price),
-      pinned: false,
-      members: 1,
-      messages: [],
-      category: 'user',
-      owner: { id: user?.id || '', username: user?.username || '', avatar: user?.avatar || '' }
-    };
-    setChannels([...channels, newChannelObj]);
-    setChannelFeatures({ ...channelFeatures, [newId]: newChannel.features });
-    setShowCreateChannelModal(false);
+    try {
+      await addChannel({
+        name: newChannel.name,
+        description: newChannel.description,
+        premium: newChannel.type === 'premium',
+        subscriptionPrice: parseFloat(newChannel.price) || 0,
+        avatar: newChannel.avatar || undefined
+      });
+    } catch (err) {
+      console.error('Erreur création canal:', err);
+    } finally {
+      setShowCreateChannelModal(false);
+    }
   };
 
   const filteredChannels = channels.filter((channel) => {
@@ -552,52 +527,75 @@ const Box = () => {
   const categories = ['all', ...new Set(debates.map((d: Debate) => d.category))];
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Content: Channels */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex justify-between items-center mb-2">
-            <h2 className="text-xl font-bold dark:text-white">Canaux</h2>
-            <button
-              onClick={() => isPro ? setShowCreateChannelModal(true) : setShowProModal(true)}
-              className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 flex items-center"
-            >
-              <span className="mr-1">+</span> Créer un canal
-            </button>
-          </div>
+    <div className="container mx-auto px-4 py-6 max-w-5xl">
+      {/* Top Toggle for Canaux vs Débats */}
+      <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-full sm:max-w-md mx-auto mb-6">
+        <button
+          onClick={() => setMainView('canaux')}
+          className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${
+            mainView === 'canaux'
+              ? 'bg-white dark:bg-slate-700 text-brand-green shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          Canaux
+        </button>
+        <button
+          onClick={() => setMainView('debats')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${
+            mainView === 'debats'
+              ? 'bg-white dark:bg-slate-700 text-brand-green shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          Débats
+        </button>
+      </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden mb-6">
-            <ChannelTabs activeTab={activeTab} setActiveTab={setActiveTab} isPro={isPro} />
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredChannels.map((channel) => (
-                <ChannelListItem
-                  key={channel.id}
-                  channel={channel}
-                  currentUserId={user?.id || ''}
-                  isPro={isPro}
-                  onOpen={handleOpenChannel}
-                  onTogglePin={handleTogglePin}
-                  onJoin={handleJoinChannel}
-                  isProcessingJoin={isProcessingJoin}
-                  isEditing={editingChannel === channel.id}
-                  onToggleEdit={(id) => setEditingChannel(editingChannel === id ? null : id)}
-                  channelFeatures={channelFeatures}
-                  onFeatureToggle={handleFeatureToggle}
-                />
-              ))}
+      <div className="w-full">
+        {mainView === 'canaux' ? (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-xl font-bold dark:text-white">Canaux</h2>
+              <button
+                onClick={() => isPro ? setShowCreateChannelModal(true) : setShowProModal(true)}
+                className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 flex items-center"
+              >
+                <span className="mr-1">+</span> Créer un canal
+              </button>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden mb-6">
+              <ChannelTabs activeTab={activeTab} setActiveTab={setActiveTab} isPro={isPro} />
+              <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                {filteredChannels.map((channel) => (
+                  <ChannelListItem
+                    key={channel.id}
+                    channel={channel}
+                    currentUserId={user?.id || ''}
+                    isPro={isPro}
+                    onOpen={handleOpenChannel}
+                    onTogglePin={handleTogglePin}
+                    onJoin={handleJoinChannel}
+                    isProcessingJoin={isProcessingJoin}
+                    isEditing={editingChannel === channel.id}
+                    onToggleEdit={(id) => setEditingChannel(editingChannel === id ? null : id)}
+                    channelFeatures={channelFeatures}
+                    onFeatureToggle={handleFeatureToggle}
+                  />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Sidebar: Debates (Débats) */}
-        <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
-                </svg>
-                Débats récents
+        ) : (
+          <div className="w-full">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              <div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+                  </svg>
+                  Débats récents
               </h3>
               {/* Le bouton Nouveau est complètement MASQUÉ si l'utilisateur n'est pas propriétaire de canal */}
               {isChannelOwner && (
@@ -672,6 +670,7 @@ const Box = () => {
             )}
           </div>
         </div>
+        )}
       </div>
 
       <SubscribeChannelModal

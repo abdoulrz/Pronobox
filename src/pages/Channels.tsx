@@ -278,70 +278,36 @@ const Channels = () => {
     }
   };
   // Fonction pour créer un nouveau canal avec persistance
-  const handleCreateChannel = () => {
+  const handleCreateChannel = async () => {
     if (!newChannelName.trim()) {
       alert('Veuillez entrer un nom pour le canal');
       return;
     }
     setIsCreatingChannel(true);
-    // Créer un nouvel ID unique pour le canal
-    const newChannelId = `channel-${Date.now()}`;
-    // Générer 10 utilisateurs simulés pour le nouveau canal
-    const mockUsers = generateMockUsers(10, true);
-    // Créer le nouvel objet canal
-    const newChannel = {
-      id: newChannelId,
-      name: newChannelName.trim(),
-      description: newChannelDescription.trim(),
-      premium: newChannelIsPremium,
-      members: 11,
-      views: 0,
-      image:
-      'https://images.unsplash.com/photo-1575361204480-aadea25e6e68?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-      posts: [
-      {
-        id: `post-${Date.now()}`,
-        title: `Bienvenue sur ${newChannelName.trim()}!`,
-        content: newChannelDescription.trim() || 'Canal créé avec PronosBox.',
-        createdAt: new Date().toISOString()
-      }],
-
-      created: new Date().toISOString(),
-      owner: {
-        id: user?.id || 'user-id',
-        name: user?.username || 'Utilisateur',
-        avatar:
-        user?.avatar ||
-        'https://images.unsplash.com/photo-1599566150163-29194dcaad36?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
-      },
-      // Ajouter les utilisateurs simulés au canal
-      users: mockUsers
-    };
-    // Ajouter le canal via le contexte pour assurer la persistance
-    const createdChannelId = addChannel(newChannel);
-    // Ajouter également le canal aux fonctionnalités activées
-    setChannelFeatures((prev) => ({
-      ...prev,
-      [newChannelId]: {
-        voiceMessages: isProUser || isAdminUser,
-        comments: true,
-        paidCoupons: false
-      }
-    }));
-    // Réinitialiser le formulaire
-    setNewChannelName('');
-    setNewChannelDescription('');
-    setNewChannelIsPremium(false);
-    setShowCreateChannelModal(false);
-    setIsCreatingChannel(false);
-    // Notification de succès
-    alert('Canal créé avec succès avec 10 abonnés simulés!');
-    // Rediriger vers le nouveau canal après sa création
-    setTimeout(() => {
-      if (createdChannelId) {
-        navigateToChannel(createdChannelId, navigate);
-      }
-    }, 500);
+    try {
+      const createdChannelId = await addChannel({
+        name: newChannelName.trim(),
+        description: newChannelDescription.trim(),
+        premium: newChannelIsPremium,
+        subscriptionPrice: 0
+      });
+      // Réinitialiser le formulaire
+      setNewChannelName('');
+      setNewChannelDescription('');
+      setNewChannelIsPremium(false);
+      setShowCreateChannelModal(false);
+      // Rediriger vers le nouveau canal après sa création
+      setTimeout(() => {
+        if (createdChannelId) {
+          navigateToChannel(createdChannelId, navigate);
+        }
+      }, 500);
+    } catch (err) {
+      console.error('Erreur lors de la création du canal:', err);
+      alert('Erreur lors de la création du canal. Veuillez réessayer.');
+    } finally {
+      setIsCreatingChannel(false);
+    }
   };
   // Sauvegarder les canaux épinglés dans localStorage
   useEffect(() => {
