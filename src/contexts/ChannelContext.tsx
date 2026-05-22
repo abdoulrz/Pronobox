@@ -28,7 +28,7 @@ export const useChannelData = () => {
 
 // Map a raw MongoDB channel doc to our internal Channel type
 const mapApiChannel = (c: any): Channel => ({
-  id: c._id,
+  id: c.id || c._id,
   name: c.name,
   description: c.description,
   premium: c.premium,
@@ -41,12 +41,12 @@ const mapApiChannel = (c: any): Channel => ({
   messages: c.messages || [],
   category: c.premium ? 'premium' : 'free',
   owner: c.owner
-    ? { id: c.owner._id || c.owner, username: c.owner.username || '', avatar: c.owner.avatar || '' }
+    ? { id: c.owner.id || c.owner._id || c.owner, username: c.owner.username || '', avatar: c.owner.avatar || '' }
     : { id: '', username: '', avatar: '' }
 });
 
 const mapApiChannelDetails = (c: any): ChannelDetails => ({
-  id: c._id,
+  id: c.id || c._id,
   name: c.name,
   image: c.avatar || '',
   description: c.description,
@@ -56,7 +56,7 @@ const mapApiChannelDetails = (c: any): ChannelDetails => ({
   posts: [],
   created: c.createdAt || '',
   owner: c.owner
-    ? { id: c.owner._id || c.owner, name: c.owner.username || '', avatar: c.owner.avatar || '' }
+    ? { id: c.owner.id || c.owner._id || c.owner, name: c.owner.username || '', avatar: c.owner.avatar || '' }
     : { id: '', name: '', avatar: '' }
 });
 
@@ -75,7 +75,8 @@ export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ childre
       const channels: Channel[] = data.map(mapApiChannel);
       const channelDetails: Record<string, ChannelDetails> = {};
       data.forEach((c: any) => {
-        channelDetails[c._id] = mapApiChannelDetails(c);
+        const id = c.id || c._id;
+        if (id) channelDetails[id] = mapApiChannelDetails(c);
       });
 
       setChannelData({ channels, channelDetails });
@@ -113,7 +114,7 @@ export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
       const created = await res.json();
       await fetchChannels();
-      return created._id;
+      return created.id || created._id || '';
     } catch (error) {
       console.error('Erreur création canal:', error);
       return '';

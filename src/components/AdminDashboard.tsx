@@ -220,7 +220,7 @@ const AdminDashboard = () => {
 
   const handleEditChannel = (c: any) => {
     setChannelForm({ name: c.name, description: c.description, premium: c.premium, subscriptionPrice: c.subscriptionPrice || 0, avatar: c.avatar || '' });
-    setEditingChannelId(c._id);
+    setEditingChannelId(c.id || c._id);
     setShowChannelForm(true);
   };
 
@@ -693,7 +693,7 @@ const AdminDashboard = () => {
                   </thead>
                   <tbody className="bg-white dark:bg-brand-navy-2 divide-y divide-slate-100 dark:divide-brand-slate/30">
                     {adminChannels.map((c: any) => (
-                      <tr key={c._id} className="hover:bg-slate-50 dark:hover:bg-brand-navy-3/30 transition-colors">
+                      <tr key={c.id || c._id} className="hover:bg-slate-50 dark:hover:bg-brand-navy-3/30 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
                             {c.avatar ? (
@@ -718,7 +718,7 @@ const AdminDashboard = () => {
                             <button onClick={() => handleEditChannel(c)} className="p-1.5 rounded-lg text-yellow-500 hover:bg-yellow-500/10 transition-colors" title="Modifier">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
                             </button>
-                            <button onClick={() => handleDeleteChannel(c._id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors" title="Supprimer">
+                            <button onClick={() => handleDeleteChannel(c.id || c._id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors" title="Supprimer">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
                           </div>

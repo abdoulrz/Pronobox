@@ -77,7 +77,7 @@ export function App() {
                         </ProtectedRoute>
                       } />
 
-                    <Route path="/predictions" element={<Navigate to="/" replace />} />
+                    <Route path="/predictions" element={<Navigate to="/pronos" replace />} />
 
                     <Route
                       path="/box"

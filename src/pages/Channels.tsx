@@ -83,6 +83,7 @@ const Channels = () => {
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDescription, setNewChannelDescription] = useState('');
   const [newChannelIsPremium, setNewChannelIsPremium] = useState(false);
+  const [newChannelAvatar, setNewChannelAvatar] = useState('');
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   // à‰tat pour afficher la liste des utilisateurs d'un canal
   const [showChannelUsers, setShowChannelUsers] = useState(false);
@@ -285,21 +286,22 @@ const Channels = () => {
     }
     setIsCreatingChannel(true);
     try {
-      const createdChannelId = await addChannel({
-        name: newChannelName.trim(),
-        description: newChannelDescription.trim(),
+      const newChannelId = await addChannel({
+        name: newChannelName,
+        description: newChannelDescription,
         premium: newChannelIsPremium,
-        subscriptionPrice: 0
+        avatar: newChannelAvatar || 'https://via.placeholder.com/150'
       });
       // Réinitialiser le formulaire
       setNewChannelName('');
       setNewChannelDescription('');
       setNewChannelIsPremium(false);
+      setNewChannelAvatar('');
       setShowCreateChannelModal(false);
       // Rediriger vers le nouveau canal après sa création
       setTimeout(() => {
-        if (createdChannelId) {
-          navigateToChannel(createdChannelId, navigate);
+        if (newChannelId) {
+          navigateToChannel(newChannelId, navigate);
         }
       }, 500);
     } catch (err) {
@@ -962,6 +964,31 @@ const Channels = () => {
                 placeholder="Décrivez votre canal en quelques mots..."
                 rows={3} />
 
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Image du canal
+                </label>
+                <div className="flex items-center space-x-4">
+                  {newChannelAvatar && (
+                    <img src={newChannelAvatar} alt="Aperçu" className="w-12 h-12 rounded-full object-cover border border-gray-300 dark:border-gray-600" />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setNewChannelAvatar(reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900/30 dark:file:text-green-400"
+                  />
+                </div>
               </div>
               <div className="flex items-center">
                 <input

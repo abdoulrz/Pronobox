@@ -7,7 +7,37 @@ const MessageSchema = new mongoose.Schema({
   },
   text: {
     type: String,
-    required: true
+    required: false
+  },
+  imageUrl: {
+    type: String,
+    required: false
+  },
+  audioUrl: {
+    type: String,
+    required: false
+  },
+  isImage: {
+    type: Boolean,
+    default: false
+  },
+  isVoiceMessage: {
+    type: Boolean,
+    default: false
+  },
+  likes: {
+    type: Number,
+    default: 0
+  },
+  reactions: [{
+    emoji: String,
+    count: Number,
+    users: [String]
+  }],
+  replyTo: {
+    id: String,
+    text: String,
+    username: String
   },
   time: {
     type: Date,

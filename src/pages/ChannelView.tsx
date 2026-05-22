@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useChannelData } from '../contexts/ChannelContext';
 import { Message, Channel } from '../types/chat';
 import { useUserFeatures } from '../hooks/useUserFeatures';
 import { ChannelHeader } from '../components/channel/ChannelHeader';
@@ -14,7 +13,6 @@ const ChannelView = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { channelData } = useChannelData();
   const userFunctions = useUserFeatures(user);
 
   const [channel, setChannel] = useState<Channel | null>(null);
@@ -55,63 +53,79 @@ const ChannelView = () => {
   };
 
   useEffect(() => {
-    if (!id) return;
-
-    // Try to get channel data from multiple sources
-    const stateData = location.state?.channelData || location.state?.preloadedData;
-
-    if (stateData) {
-      // Data passed via navigation state — convert to Channel format
-      const channelObj: Channel = {
-        id: stateData.id,
-        name: stateData.name,
-        description: stateData.description || '',
-        avatar: stateData.avatar || stateData.image || 'https://via.placeholder.com/150',
-        category: stateData.category || 'general',
-        members: stateData.members || 0,
-        messages: stateData.messages || [],
-        joined: stateData.joined !== undefined ? stateData.joined : true,
-        owner: stateData.owner,
-        premium: stateData.premium || false,
-        price: stateData.price || 0,
-      };
-      setChannel(channelObj);
+    if (!id || id === 'undefined') {
       setLoading(false);
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    } else if (channelData) {
-      // Fallback: load from ChannelContext
-      const details = channelData.channelDetails[id];
-      const basicChannel = channelData.channels.find(c => c.id === id);
+      return;
+    }
+    setLoading(true);
 
-      if (details || basicChannel) {
-        const source = details || basicChannel;
+    // Always fetch from the API to get fresh data including saved messages
+    fetch(`/api/channels/${id}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Canal introuvable');
+        return res.json();
+      })
+      .then(data => {
         const channelObj: Channel = {
-          id: source.id,
-          name: source.name,
-          description: source.description || '',
-          avatar: source.image || 'https://via.placeholder.com/150',
-          category: 'general',
-          members: source.members || 0,
-          messages: [],
+          id: data._id || data.id,
+          name: data.name,
+          description: data.description || '',
+          avatar: data.avatar || 'https://via.placeholder.com/150',
+          category: data.premium ? 'premium' : 'free',
+          members: Array.isArray(data.members) ? data.members.length : (data.members || 0),
+          messages: (data.messages || []).map((m: any) => ({
+            id: m._id || m.id || Date.now(),
+            user: {
+              id: m.user?._id || m.user?.id || m.user || '',
+              username: m.user?.username || 'Utilisateur',
+              avatar: m.user?.avatar || 'https://via.placeholder.com/150',
+              role: m.user?.role || 'user',
+              isPro: m.user?.isPro || false
+            },
+            text: m.text || '',
+            imageUrl: m.imageUrl,
+            audioUrl: m.audioUrl,
+            isImage: m.isImage || false,
+            isVoiceMessage: m.isVoiceMessage || false,
+            replyTo: m.replyTo,
+            timestamp: new Date(m.time || m.createdAt || Date.now()),
+            likes: m.likes || 0,
+            reactions: m.reactions || []
+          })),
           joined: true,
-          owner: details?.owner ? {
-            id: details.owner.id,
-            username: details.owner.name,
-            avatar: details.owner.avatar
+          owner: data.owner ? {
+            id: data.owner._id || data.owner.id || data.owner,
+            username: data.owner.username || '',
+            avatar: data.owner.avatar || ''
           } : undefined,
-          premium: false,
-          price: 0,
+          premium: data.premium || false,
+          price: data.subscriptionPrice || 0
         };
         setChannel(channelObj);
-        setLoading(false);
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-      } else {
-        setLoading(false);
-      }
-    } else {
-      setLoading(false);
-    }
-  }, [id, location.state, channelData]);
+      })
+      .catch(err => {
+        console.error('Erreur chargement canal:', err);
+        // Fallback: try context data without messages
+        const stateData = location.state?.channelData || location.state?.preloadedData;
+        if (stateData) {
+          setChannel({
+            id: stateData.id,
+            name: stateData.name,
+            description: stateData.description || '',
+            avatar: stateData.avatar || stateData.image || 'https://via.placeholder.com/150',
+            category: stateData.category || 'general',
+            members: stateData.members || 0,
+            messages: [],
+            joined: true,
+            owner: stateData.owner,
+            premium: stateData.premium || false,
+            price: stateData.price || 0
+          });
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [id]);
 
   if (!user) {
     return (
@@ -144,9 +158,11 @@ const ChannelView = () => {
     );
   }
 
-  const handleSendMessage = (text: string, image?: string | null, audio?: string | null, replyTo?: Message | null) => {
-    const newMessage: Message = {
-      id: Date.now(),
+  const handleSendMessage = async (text: string, image?: string | null, audio?: string | null, replyTo?: Message | null) => {
+    // Optimistic UI update
+    const tempId = Date.now();
+    const optimisticMessage: Message = {
+      id: tempId,
       user: {
         id: user.id,
         username: user.username || 'Utilisateur',
@@ -154,7 +170,7 @@ const ChannelView = () => {
         role: user.role,
         isPro: user.isPro
       },
-      text: text,
+      text: text || (image ? '[Image]' : audio ? '[Audio]' : ''),
       imageUrl: image || undefined,
       audioUrl: audio || undefined,
       isImage: !!image,
@@ -168,8 +184,49 @@ const ChannelView = () => {
         username: replyTo.user.username
       } : undefined
     };
-    setChannel({ ...channel, messages: [...channel.messages, newMessage] });
+    setChannel(prev => prev ? { ...prev, messages: [...prev.messages, optimisticMessage] } : prev);
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+
+    // Persist to backend
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/channels/${id}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          text: optimisticMessage.text,
+          imageUrl: optimisticMessage.imageUrl,
+          audioUrl: optimisticMessage.audioUrl,
+          isImage: optimisticMessage.isImage,
+          isVoiceMessage: optimisticMessage.isVoiceMessage,
+          replyTo: optimisticMessage.replyTo
+        })
+      });
+      if (res.ok) {
+        const savedMsg = await res.json();
+        // Replace the optimistic message with the server-confirmed one
+        setChannel(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            messages: prev.messages.map(m =>
+              m.id === tempId
+                ? {
+                    ...m,
+                    id: savedMsg._id || savedMsg.id || tempId
+                  }
+                : m
+            )
+          };
+        });
+      }
+    } catch (err) {
+      console.error('Erreur envoi message:', err);
+      // Keep optimistic message in UI even if save failed (graceful degradation)
+    }
   };
 
   const startRecording = async () => {
@@ -200,8 +257,12 @@ const ChannelView = () => {
 
     mediaRecorderRef.current.onstop = () => {
       const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-      const audioUrl = URL.createObjectURL(audioBlob);
-      setStagedAudio(audioUrl);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64Audio = event.target?.result as string;
+        setStagedAudio(base64Audio);
+      };
+      reader.readAsDataURL(audioBlob);
       
       // Stop all tracks to release microphone
       mediaRecorderRef.current?.stream.getTracks().forEach(track => track.stop());

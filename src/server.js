@@ -719,26 +719,30 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
 });
 
 // Channel routes
-app.post('/api/channels', authenticateToken, requireProOrAdmin, async (req, res) => {
+app.post('/api/channels', authenticateToken, async (req, res) => {
   try {
-    const { name, description, premium, allowComments, subscriptionPrice } = req.body;
+    const { name, description, premium, allowComments, subscriptionPrice, avatar } = req.body;
     const channel = new Channel({
       name,
       description,
-      premium,
-      adminOnly: premium ? true : !allowComments,
-      allowComments: premium ? false : allowComments,
+      premium: premium || false,
+      adminOnly: false,
+      allowComments: allowComments !== false,
       owner: req.user.id,
       members: [req.user.id],
-      subscriptionPrice: premium ? subscriptionPrice : 0,
-      shareLink: `https://pronosbox.com/canal/${Math.floor(Math.random() * 1000) + 100}`
+      subscriptionPrice: premium ? (subscriptionPrice || 0) : 0,
+      shareLink: `https://pronosbox.com/canal/${Math.floor(Math.random() * 1000) + 100}`,
+      ...(avatar ? { avatar } : {})
     });
     await channel.save();
     // Add channel to user's joined channels
     await User.findByIdAndUpdate(req.user.id, {
       $push: { channelsJoined: channel._id }
     });
-    res.status(201).json(channel);
+    const populated = await Channel.findById(channel._id)
+      .populate('owner', 'username avatar')
+      .populate('members', 'username avatar');
+    res.status(201).json(populated);
   } catch (error) {
     console.error('Create channel error:', error);
     res.status(500).json({ message: error.message });
@@ -819,7 +823,8 @@ app.post('/api/channels/:id/join', authenticateToken, async (req, res) => {
 
 app.post('/api/channels/:id/messages', authenticateToken, async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text, imageUrl, audioUrl, isImage, isVoiceMessage, replyTo } = req.body;
+    console.log('Received message:', { text, isImage, hasImageUrl: !!imageUrl, imageUrlLength: imageUrl?.length });
     const channel = await Channel.findById(req.params.id);
     if (!channel) {
       return res.status(404).json({ message: 'Channel not found' });
@@ -833,7 +838,14 @@ app.post('/api/channels/:id/messages', authenticateToken, async (req, res) => {
     // Add message
     channel.messages.push({
       user: req.user.id,
-      text
+      text,
+      imageUrl,
+      audioUrl,
+      isImage,
+      isVoiceMessage,
+      replyTo,
+      likes: 0,
+      reactions: []
     });
     // Update statistics
     channel.statistics.messagesSent += 1;
