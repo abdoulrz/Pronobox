@@ -25,19 +25,17 @@ const Header: React.FC<HeaderProps> = ({ onBetEducClick }) => {
 
   return (
     <header
-      className="glass-panel sticky top-0 z-40 px-4 py-2.5"
+      className="bg-emerald-600/95 dark:bg-emerald-800/95 backdrop-blur-xl border-b border-white/10 sticky top-0 z-40 px-4 py-3 sm:py-4 shadow-[0_4px_30px_rgba(0,0,0,0.15)] transition-all duration-300"
     >
       <div className="flex justify-between items-center max-w-screen-2xl mx-auto">
 
         {/* ── Brand ─────────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2.5">
-          {/* Logo pill */}
-          <div className="header-logo-badge w-8 h-8 rounded-lg flex items-center justify-center text-white font-extrabold text-sm">
-            P
-          </div>
-          <span className="font-bold text-base tracking-wide text-slate-900 dark:text-white">
-            PRONOSBOX
-          </span>
+        <div className="flex items-center gap-2">
+          <img 
+            src="/logo-pronosbox.png" 
+            alt="PRONOSBOX" 
+            className="h-8 sm:h-10 md:h-12 object-contain" 
+          />
           {isFallbackMode && (
             <span className="text-[10px] font-semibold bg-brand-gold/20 text-brand-gold border border-brand-gold/30 px-1.5 py-0.5 rounded-full">
               Offline
@@ -46,11 +44,11 @@ const Header: React.FC<HeaderProps> = ({ onBetEducClick }) => {
         </div>
 
         {/* ── Action Bar ─────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
 
           {/* BET-EDUC Button */}
           <button
-            className="btn-beted flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg"
+            className="btn-beted flex items-center gap-1 text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1.5 rounded-lg"
             onClick={() => {
               if (onBetEducClick) onBetEducClick();
               else navigate('/beteduc');
@@ -59,13 +57,13 @@ const Header: React.FC<HeaderProps> = ({ onBetEducClick }) => {
             <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
-            <span className="hidden xs:inline">BET-EDUC</span>
+            <span className="hidden sm:inline">BET-EDUC</span>
           </button>
 
           {/* Search */}
           {isAuthenticated && (
             <button
-              className="p-2 rounded-lg text-slate-700 dark:text-brand-text-2 hover:text-brand-green hover:bg-brand-green/10 transition-all duration-200"
+              className="p-1.5 sm:p-2 rounded-lg text-white/90 hover:text-white hover:bg-white/20 transition-all duration-200"
               onClick={() => setShowSearchModal(!showSearchModal)}
               title="Rechercher"
             >
@@ -80,7 +78,7 @@ const Header: React.FC<HeaderProps> = ({ onBetEducClick }) => {
 
           {/* Theme Toggle */}
           <button
-            className="p-2 rounded-lg text-slate-700 dark:text-brand-text-2 hover:text-brand-green hover:bg-brand-green/10 transition-all duration-200"
+            className="p-1.5 sm:p-2 rounded-lg text-white/90 hover:text-white hover:bg-white/20 transition-all duration-200"
             onClick={toggleTheme}
             title={theme === 'light' ? 'Mode sombre' : 'Mode clair'}
           >
@@ -115,7 +113,7 @@ const Header: React.FC<HeaderProps> = ({ onBetEducClick }) => {
                   }`} />
                 </div>
                 {user.role === 'admin' ? (
-                  <span className="hidden sm:inline-flex inline-flex items-center text-xs font-bold bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full ml-2">Admin</span>
+                  <span className="hidden sm:inline-flex items-center text-xs font-bold bg-white/20 text-white border border-white/30 px-2 py-0.5 rounded-full ml-2 shadow-sm backdrop-blur-md">Admin</span>
                 ) : user.isPro ? (
                   <span className="hidden sm:inline-flex badge-pro">Pro</span>
                 ) : null}

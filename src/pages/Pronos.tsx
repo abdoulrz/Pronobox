@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const Pronos = () => {
   const [activeTab, setActiveTab] = useState<'gratuit' | 'premium'>('gratuit');
   const [pronos, setPronos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  
+  const isAuthorizedPremium = user?.role === 'admin' || user?.isPro;
 
   useEffect(() => {
     const fetchPronos = async () => {
@@ -146,12 +152,23 @@ const Pronos = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 relative">
+                {!isAuthorizedPremium && (
+                  <div className="absolute inset-0 z-10 backdrop-blur-md bg-white/40 dark:bg-slate-900/50 rounded-xl flex flex-col items-center justify-center p-4 text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-amber-500 mb-2 drop-shadow-md" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <h4 className="font-bold text-slate-900 dark:text-white mb-2">Contenu Premium</h4>
+                    <button onClick={() => navigate('/compare-accounts')} className="bg-gradient-to-r from-amber-500 to-amber-600 text-white px-6 py-2 rounded-lg font-bold shadow-md hover:shadow-lg transition-all active:scale-95">
+                      Débloquer le pronostic
+                    </button>
+                  </div>
+                )}
+                <div className={`bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50 ${!isAuthorizedPremium ? 'opacity-20 blur-sm select-none' : ''}`}>
                   <p className="text-sm text-slate-500 mb-1">Résultat attendu</p>
                   <p className="text-lg font-bold text-slate-900 dark:text-white">{prono.premiumExpectedResult}</p>
                 </div>
-                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50 flex justify-between items-center">
+                <div className={`bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50 flex justify-between items-center ${!isAuthorizedPremium ? 'opacity-20 blur-sm select-none' : ''}`}>
                   <div>
                     <p className="text-sm text-slate-500 mb-1">Cote & Confiance</p>
                     <p className="text-lg font-bold text-amber-500">@ {prono.premiumOdds ? prono.premiumOdds.toFixed(2) : '-'}</p>
@@ -163,7 +180,7 @@ const Pronos = () => {
               </div>
 
               {prono.premiumObservation && (
-                <div className="bg-amber-500/5 rounded-xl p-4 border border-amber-500/10">
+                <div className={`bg-amber-500/5 rounded-xl p-4 border border-amber-500/10 ${!isAuthorizedPremium ? 'opacity-20 blur-sm select-none' : ''}`}>
                   <h4 className="font-bold text-slate-900 dark:text-white mb-2">Observation Détaillée</h4>
                   <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">
                     {prono.premiumObservation}

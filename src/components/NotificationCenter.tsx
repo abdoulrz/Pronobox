@@ -41,11 +41,16 @@ const NotificationCenter: React.FC = () => {
     ) &&
     notification.debateId)
     {
-      navigate(`/news`, {
+      navigate(`/box`, {
         state: {
-          activeDebateId: notification.debateId
+          activeDebateId: notification.debateId,
+          activeTab: 'news' // or whichever tab shows debates in Box.tsx
         }
       });
+    } else if (notification.matchId) {
+      navigate(`/match/${notification.matchId}`);
+    } else if (notification.channelId) {
+      navigate(`/channel/${notification.channelId}`);
     }
     setShowNotifications(false);
   };
@@ -76,13 +81,13 @@ const NotificationCenter: React.FC = () => {
   return (
     <div className="relative">
       <button
-        className="notification-button p-1 rounded-full hover:bg-white/10 focus:outline-none relative"
+        className="notification-button p-2 rounded-lg text-white/90 hover:text-white hover:bg-white/20 transition-all duration-200 focus:outline-none relative"
         onClick={() => setShowNotifications(!showNotifications)}
         title="Notifications">
 
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          className="h-4 w-4"
+          className="h-5 w-5"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor">

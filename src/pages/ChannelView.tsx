@@ -35,6 +35,18 @@ const ChannelView = () => {
   const [stagedImage, setStagedImage] = useState<string | null>(null);
   const [stagedAudio, setStagedAudio] = useState<string | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
+
+  // Edit states
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  
+  useEffect(() => {
+    if (channel) {
+      setEditName(channel.name);
+      setEditDesc(channel.description || '');
+    }
+  }, [channel]);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
 
   const handleShare = (platform: string) => {
@@ -321,26 +333,58 @@ const ChannelView = () => {
       />
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {channel.messages.map((msg) => (
-          <div key={msg.id} id={`message-${msg.id}`}>
-            <MessageCard
-              message={msg}
-              currentUserId={user.id}
-              onReaction={(emoji) => addReaction(msg.id, emoji)}
-              onLongPress={() => {
-                setSelectedMessageId(msg.id);
-                setShowDeleteModal(true);
-              }}
-              onShowReactionPicker={() => {
-                setSelectedMessageId(msg.id);
-                setShowReactionPicker(true);
-              }}
-              onReply={() => setReplyToMessage(msg)}
-              onScrollToMessage={handleScrollToMessage}
-              onImageClick={(url) => setFullscreenImage(url)}
-            />
+        {channel.messages.map((msg, index) => {
+          const messageDate = new Date(msg.timestamp);
+          const prevMsg = channel.messages[index - 1];
+          const prevDate = prevMsg ? new Date(prevMsg.timestamp) : null;
+          
+          let showDateSeparator = false;
+          let dateLabel = "";
+          
+          if (!prevDate || messageDate.toDateString() !== prevDate.toDateString()) {
+            showDateSeparator = true;
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            if (messageDate.toDateString() === today.toDateString()) {
+              dateLabel = "Aujourd'hui";
+            } else if (messageDate.toDateString() === yesterday.toDateString()) {
+              dateLabel = "Hier";
+            } else {
+              dateLabel = messageDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+            }
+          }
+
+          return (
+          <div key={msg.id} className="space-y-4">
+            {showDateSeparator && (
+              <div className="flex justify-center my-4">
+                <span className="px-3 py-1 bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs font-medium rounded-full shadow-sm">
+                  {dateLabel}
+                </span>
+              </div>
+            )}
+            <div id={`message-${msg.id}`}>
+              <MessageCard
+                message={msg}
+                currentUserId={user.id}
+                onReaction={(emoji) => addReaction(msg.id, emoji)}
+                onLongPress={() => {
+                  setSelectedMessageId(msg.id);
+                  setShowDeleteModal(true);
+                }}
+                onShowReactionPicker={() => {
+                  setSelectedMessageId(msg.id);
+                  setShowReactionPicker(true);
+                }}
+                onReply={() => setReplyToMessage(msg)}
+                onScrollToMessage={handleScrollToMessage}
+                onImageClick={(url) => setFullscreenImage(url)}
+              />
+            </div>
           </div>
-        ))}
+        )})}
         <div ref={messagesEndRef} />
       </div>
 
@@ -378,12 +422,22 @@ const ChannelView = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
-                <div className="flex items-end space-x-3">
-                  <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white">
+                <div className="flex items-end space-x-3 w-full">
+                  <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white flex-shrink-0">
                     <img src={channel.avatar} alt={channel.name} className="w-full h-full object-cover" />
                   </div>
-                  <div className="text-white pb-1">
-                    <h3 className="font-bold text-lg">{channel.name}</h3>
+                  <div className="text-white pb-1 w-full">
+                    {isEditingInfo ? (
+                      <input 
+                        type="text" 
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="font-bold text-lg bg-white/20 text-white rounded px-2 py-1 w-full outline-none placeholder-white/70"
+                        placeholder="Nom du canal"
+                      />
+                    ) : (
+                      <h3 className="font-bold text-lg">{channel.name}</h3>
+                    )}
                     <p className="text-sm text-green-100">{channel.members.toLocaleString()} membres</p>
                   </div>
                 </div>
@@ -392,8 +446,29 @@ const ChannelView = () => {
 
             {/* Channel Description */}
             <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-              <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Description</h4>
-              <p className="text-sm text-gray-800 dark:text-gray-200">{channel.description || 'Aucune description'}</p>
+              <div className="flex justify-between items-center mb-1">
+                <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Description</h4>
+                {(userFunctions.canManageAllChannels || channel.owner?.id === user.id) && !isEditingInfo && (
+                  <button onClick={() => setIsEditingInfo(true)} className="text-xs text-blue-500 hover:text-blue-600">Modifier</button>
+                )}
+                {isEditingInfo && (
+                  <div className="flex gap-2">
+                    <button onClick={() => setIsEditingInfo(false)} className="text-xs text-gray-500 hover:text-gray-600">Annuler</button>
+                    <button onClick={() => { setIsEditingInfo(false); /* Simulate save */ channel.name = editName; channel.description = editDesc; }} className="text-xs text-green-600 font-bold hover:text-green-700">Enregistrer</button>
+                  </div>
+                )}
+              </div>
+              {isEditingInfo ? (
+                <textarea 
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  className="w-full text-sm text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 border border-gray-200 dark:border-gray-600 outline-none focus:ring-1 focus:ring-green-500"
+                  rows={3}
+                  placeholder="Description du canal"
+                />
+              ) : (
+                <p className="text-sm text-gray-800 dark:text-gray-200">{channel.description || 'Aucune description'}</p>
+              )}
             </div>
 
             {/* Channel Owner */}
@@ -406,6 +481,14 @@ const ChannelView = () => {
                   </div>
                   <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{channel.owner.username}</span>
                 </div>
+              </div>
+            )}
+            
+            {/* Subscribers List (Simulation for owner/admin) */}
+            {(userFunctions.canManageAllChannels || channel.owner?.id === user.id) && (
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Abonnés ({channel.members})</h4>
+                <p className="text-xs text-gray-500 italic">Liste des abonnés gérée depuis le panel administrateur</p>
               </div>
             )}
 

@@ -43,6 +43,11 @@ const Channels = () => {
   const { channelData, navigateToChannel, addChannel } = useChannelData();
 
   const [activeTab, setActiveTab] = useState('all');
+  // État pour les canaux rejoints
+  const [joinedChannels, setJoinedChannels] = useState<string[]>(() => {
+    const saved = localStorage.getItem('joinedChannels');
+    return saved ? JSON.parse(saved) : [];
+  });
   // à‰tat pour suivre les fonctionnalités activées pour chaque canal
   const [channelFeatures, setChannelFeatures] = useState<Record<string | number, ChannelFeatures>>({
     'channel-1': {
@@ -189,7 +194,7 @@ const Channels = () => {
     members: channel.members || 0,
     description: channel.description,
     premium: false, // Default value as it's not in the base Channel
-    joined: index < 3,
+    joined: joinedChannels.includes(String(channel.id)),
     lastMessage:
     channel.posts && channel.posts.length > 0 ?
     channel.posts[0].title :
@@ -276,6 +281,28 @@ const Channels = () => {
     } else {
       setShowChannelUsers(true);
       setSelectedChannelId(channelId);
+    }
+  };
+
+  const handleJoinChannel = async (channelId: string | number) => {
+    const idStr = String(channelId);
+    // Optimistic UI update
+    setJoinedChannels(prev => {
+      const updated = [...prev, idStr];
+      localStorage.setItem('joinedChannels', JSON.stringify(updated));
+      return updated;
+    });
+
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`/api/channels/${channelId}/join`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+    } catch (err) {
+      console.error('Erreur lors de la jonction au canal:', err);
     }
   };
   // Fonction pour créer un nouveau canal avec persistance
@@ -753,10 +780,10 @@ const Channels = () => {
                           </span> :
 
                       <button
-                        className="px-3 py-1 rounded-full bg-green-600 text-white text-xs font-medium"
+                        className="px-3 py-1 rounded-full bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition-colors"
                         onClick={(e) => {
                           e.stopPropagation(); // Empêcher la navigation vers le canal
-                          // Logique pour rejoindre le canal
+                          handleJoinChannel(channel.id);
                         }}>
 
                             Rejoindre

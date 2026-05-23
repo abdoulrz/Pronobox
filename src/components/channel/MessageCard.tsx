@@ -160,10 +160,10 @@ export const MessageCard: React.FC<MessageCardProps> = ({
 
         <div className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'}`}>
           <div
-            className={`px-3 py-2 rounded-2xl shadow-sm ${
+            className={`px-3 py-2 rounded-2xl transition-all duration-200 ${
               isOwnMessage 
-                ? 'bg-green-600 text-white rounded-br-none' 
-                : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none border border-gray-100 dark:border-gray-600'
+                ? 'bg-emerald-600/80 dark:bg-emerald-500/80 backdrop-blur-md text-white rounded-br-none border border-emerald-500/30 shadow-[0_4px_15px_rgba(16,185,129,0.15)]' 
+                : 'bg-white/70 dark:bg-gray-800/70 backdrop-blur-md text-gray-800 dark:text-gray-200 rounded-bl-none border border-gray-200/50 dark:border-gray-700/50 shadow-[0_4px_15px_rgba(0,0,0,0.05)]'
             }`}
             onMouseDown={startLongPress}
             onMouseUp={cancelLongPress}
@@ -226,11 +226,11 @@ export const MessageCard: React.FC<MessageCardProps> = ({
 
               {/* Audio Content */}
               {(message.isVoiceMessage || message.audioUrl) && (
-                <div className={`flex flex-col p-2 rounded-xl ${isOwnMessage ? 'bg-green-700/50' : 'bg-gray-100 dark:bg-gray-800'}`}>
+                <div className={`flex flex-col p-2 rounded-xl ${isOwnMessage ? 'bg-black/10 dark:bg-black/20' : 'bg-gray-100/50 dark:bg-gray-700/50'}`}>
                   <div className="flex items-center space-x-2">
                     <button 
                       onClick={togglePlay}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 ${isOwnMessage ? 'bg-white text-green-600' : 'bg-green-600 text-white shadow-sm'}`}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-sm ${isOwnMessage ? 'bg-white text-emerald-600 hover:bg-emerald-50' : 'bg-emerald-600 text-white hover:bg-emerald-500'}`}
                     >
                       {isPlaying ? (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">

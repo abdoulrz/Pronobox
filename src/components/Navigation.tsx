@@ -69,7 +69,7 @@ const Navigation = () => {
       </nav>
 
       {/* ── Desktop Side Navigation ─────────────────────────────────────── */}
-      <nav className="glass-sidebar hidden md:flex flex-col items-center py-4 gap-1 fixed left-0 top-[52px] bottom-0 w-16 z-20">
+      <nav className="glass-sidebar hidden md:flex flex-col items-center py-4 gap-1 fixed left-0 top-[80px] bottom-0 w-16 z-20">
         {navItems.map((item) => (
           <Link
             key={item.path}
