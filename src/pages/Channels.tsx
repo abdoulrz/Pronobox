@@ -188,7 +188,7 @@ const Channels = () => {
   }
   // Convertir les canaux du contexte au format attendu par le composant
   const channels: UIChannel[] =
-  channelData?.channels.map((channel, index: number) => ({
+  channelData?.channels.map((channel) => ({
     id: channel.id,
     name: channel.name,
     members: channel.members || 0,

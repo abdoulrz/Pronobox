@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import UpgradeProModal from '../components/UpgradeProModal';
 import { usePayment } from '../hooks/usePayment';
 import { Channel } from '../types/chat';
@@ -23,7 +23,6 @@ import {
   deleteDebate, 
   addDebateMessage, 
   likeDebate,
-  getChannels,
   joinChannel,
   Debate,
   Reply
@@ -33,8 +32,9 @@ const Box = () => {
   const { user, isPro } = useAuth();
   const { processPayment } = usePayment();
   const navigate = useNavigate();
+  const location = useLocation();
   const { addNotification } = useNotifications();
-  const { channelData, addChannel } = useChannelData();
+  const { channelData, addChannel, setChannelJoined } = useChannelData();
   
   const [mainView, setMainView] = useState<'canaux' | 'debats'>('canaux');
   const [showProModal, setShowProModal] = useState(false);
@@ -42,7 +42,7 @@ const Box = () => {
   const [showCreateChannelModal, setShowCreateChannelModal] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [activeTab, setActiveTab] = useState('all');
-  const [isProcessingJoin, setIsProcessingJoin] = useState(false);
+  const [processingChannelId, setProcessingChannelId] = useState<number | string | null>(null);
   const [editingChannel, setEditingChannel] = useState<number | string | null>(null);
   const [channelCreationStep, setChannelCreationStep] = useState(1);
 
@@ -76,7 +76,6 @@ const Box = () => {
 
   // Debates state
   const [debates, setDebates] = useState<Debate[]>([]);
-  const [allChannels, setAllChannels] = useState<Channel[]>([]);
   const [activeDebate, setActiveDebate] = useState<number | string | null>(null);
   const [debateInput, setDebateInput] = useState('');
   const [showCreateDebateModal, setShowCreateDebateModal] = useState(false);
@@ -101,45 +100,36 @@ const Box = () => {
 
   const isAdmin = user?.role === 'admin';
 
-  // Load debates and all channels on mount
+  // Handle navigation state from notification clicks
+  useEffect(() => {
+    const state = location.state as any;
+    if (!state) return;
+    if (state.activeDebateId) {
+      setMainView('debats');
+      setActiveDebate(state.activeDebateId);
+    } else if (state.mainView === 'debats') {
+      setMainView('debats');
+    }
+    // Clear state so it doesn't retrigger on re-render
+    window.history.replaceState({}, '');
+  }, [location.state]);
+
+  // Load debates on mount
   useEffect(() => {
     getDebates()
       .then((data: Debate[]) => setDebates(data))
       .catch((err: Error) => console.error('Failed to load debates', err));
-
-    getChannels()
-      .then((data: Channel[]) => {
-        const enhancedChannels = data.map((channel) => {
-          const lastMsg = channel.messages && channel.messages.length > 0
-            ? channel.messages[channel.messages.length - 1]
-            : null;
-          let msgText = '';
-          if (lastMsg) {
-            if (lastMsg.isImage) msgText = '📷 Image';
-            else if (lastMsg.isAudio) msgText = '🎵 Audio';
-            else msgText = lastMsg.text || 'Message';
-          }
-          const membersCount = Array.isArray(channel.members) ? channel.members.length : (channel.members || 0);
-          return { 
-            ...channel, 
-            members: membersCount,
-            lastMessage: msgText,
-            joined: (channel.members || []).some((m: any) => String(m._id || m.id || m) === String(user?.id))
-          };
-        });
-        setAllChannels(enhancedChannels);
-      })
-      .catch((err: Error) => console.error('Failed to load channels', err));
   }, []);
 
   // Determine if the user is a channel owner or admin
-  const isChannelOwner = allChannels.some(
+  const isChannelOwner = channels.some(
     (c) => String(c.owner?.id || c.owner) === String(user?.id)
   ) || user?.role === 'admin';
 
   const handleOpenChannel = (channelId: string | number) => {
     const channel = channels.find((c) => c.id === channelId);
     if (!channel) return;
+    // Always open the channel - if not joined, join first then open
     if (channel.joined || isPro || isAdmin) {
       navigate(`/channel/${channelId}`, { state: { activeTab, channelData: { ...channel, joined: true } } });
     } else {
@@ -148,45 +138,37 @@ const Box = () => {
   };
 
   const handleJoinChannel = async (channel: Channel) => {
-    if (isProcessingJoin) return;
-    // Admin and Pro users bypass premium paywall
+    if (processingChannelId) return;
+    // Premium paywall check for non-pro, non-admin users
     if (channel.premium && !channel.joined && !isPro && !isAdmin) {
       setSelectedChannel(channel);
       setShowSubscribeModal(true);
       return;
     }
 
-    setIsProcessingJoin(true);
-    try {
-      await joinChannel(channel.id);
-      
-      const newChannels = channels.map(c => 
-        c.id === channel.id ? { ...c, joined: true, members: (c.members || 0) + 1 } : c
-      );
-      setChannels(newChannels);
-      setAllChannels(allChannels.map(c => 
-        c.id === channel.id ? { ...c, joined: true, members: (c.members || 0) + 1 } : c
-      ));
+    setProcessingChannelId(channel.id);
 
-      navigate(`/channel/${channel.id}`, { state: { activeTab, channelData: { ...channel, joined: true, members: (channel.members || 0) + 1 } } });
-    } catch (err) {
-      console.error('Failed to join channel:', err);
-    } finally {
-      setIsProcessingJoin(false);
-    }
+    // Update state and open channel immediately — do NOT wait for the API
+    setChannelJoined(channel.id, true);
+    navigate(`/channel/${channel.id}`, { state: { activeTab, channelData: { ...channel, joined: true } } });
+
+    // Persist in background — UI is already updated regardless of outcome
+    joinChannel(channel.id)
+      .catch((err) => console.error('Failed to persist channel join:', err))
+      .finally(() => setProcessingChannelId(null));
   };
 
   const handleSubscribe = async () => {
     if (!selectedChannel) return;
-    setIsProcessingJoin(true);
+    setProcessingChannelId(selectedChannel.id);
     try {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       await processPayment({ amount: selectedChannel.price || 0, method: 'card', plan: 'subscription' });
-      setChannels(channels.map(c => c.id === selectedChannel.id ? { ...c, joined: true } : c));
+      setChannelJoined(selectedChannel.id, true);
       setShowSubscribeModal(false);
       navigate(`/channel/${selectedChannel.id}`, { state: { activeTab, channelData: selectedChannel } });
     } finally {
-      setIsProcessingJoin(false);
+      setProcessingChannelId(null);
     }
   };
 
@@ -608,7 +590,7 @@ const Box = () => {
                     onOpen={handleOpenChannel}
                     onTogglePin={handleTogglePin}
                     onJoin={handleJoinChannel}
-                    isProcessingJoin={isProcessingJoin}
+                    isProcessingJoin={processingChannelId === channel.id}
                     isEditing={editingChannel === channel.id}
                     onToggleEdit={(id) => setEditingChannel(editingChannel === id ? null : id)}
                     channelFeatures={channelFeatures}
@@ -709,7 +691,7 @@ const Box = () => {
         onClose={() => setShowSubscribeModal(false)}
         channel={selectedChannel}
         onSubscribe={handleSubscribe}
-        isProcessing={isProcessingJoin}
+        isProcessing={processingChannelId === selectedChannel?.id}
       />
 
       <CreateChannelModal

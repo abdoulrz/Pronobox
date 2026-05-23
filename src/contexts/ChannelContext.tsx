@@ -9,12 +9,14 @@ import React, {
 import { NavigateFunction } from 'react-router-dom';
 import { ChannelData, Channel, ChannelDetails } from '../types/channel';
 import { useAuth } from './AuthContext';
+import { getChannels } from '../services/api';
 
 export interface ChannelContextValue {
   channelData: ChannelData | null;
   navigateToChannel: (channelId: string, navigate: NavigateFunction, activeTab?: string) => void;
   addChannel: (payload: { name: string; description: string; premium: boolean; subscriptionPrice?: number; avatar?: string }) => Promise<string>;
   refreshChannels: () => void;
+  setChannelJoined: (channelId: string | number, joined: boolean) => void;
 }
 
 const ChannelDataContext = createContext<ChannelContextValue | null>(null);
@@ -77,14 +79,44 @@ export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const fetchChannels = useCallback(async () => {
     try {
-      const res = await fetch('/api/channels');
-      const data = await res.json();
+      const data = await getChannels();
       if (!Array.isArray(data)) {
         setChannelData({ channels: [], channelDetails: {} });
         return;
       }
 
-      const channels: Channel[] = data.map((c: any) => mapApiChannel(c, user?.id));
+      // Read locally-persisted minimal membership data {id, memberIds[]}
+      let localMembership: Record<string, string[]> = {};
+      try {
+        localMembership = JSON.parse(localStorage.getItem('pronobox_membership') || '{}');
+      } catch { localMembership = {}; }
+
+      const channels: Channel[] = data.map((c: any) => {
+        const mapped = mapApiChannel(c, user?.id);
+        // If the server says not joined, check our local membership cache
+        if (!mapped.joined && user?.id) {
+          const localMembers = localMembership[String(mapped.id)] || [];
+          if (localMembers.includes(String(user.id))) {
+            return { ...mapped, joined: true };
+          }
+        }
+        return mapped;
+      });
+
+      // Update minimal membership cache: only store {channelId -> memberIds[]}
+      // This is tiny (just IDs) and will never exceed localStorage quota
+      data.forEach((c: any) => {
+        const channelId = String(c.id || c._id);
+        const serverMemberIds = (c.members || []).map((m: any) => String(m._id || m.id || m));
+        // Merge: keep any locally-joined IDs that the server doesn't know about yet
+        const localIds = localMembership[channelId] || [];
+        const merged = Array.from(new Set([...serverMemberIds, ...localIds]));
+        localMembership[channelId] = merged;
+      });
+      try {
+        localStorage.setItem('pronobox_membership', JSON.stringify(localMembership));
+      } catch { /* quota exceeded — silently skip, in-memory state is still correct */ }
+
       const channelDetails: Record<string, ChannelDetails> = {};
       data.forEach((c: any) => {
         const id = c.id || c._id;
@@ -96,7 +128,8 @@ export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ childre
       console.error('Erreur lors du chargement des canaux:', error);
       setChannelData({ channels: [], channelDetails: {} });
     }
-  }, []);
+  }, [user?.id]);
+
 
   useEffect(() => {
     fetchChannels();
@@ -133,6 +166,26 @@ export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [fetchChannels]);
 
+  // Directly mutate the joined state for a single channel in memory
+  // This is the reliable way to update UI without a full refetch
+  const setChannelJoined = useCallback((channelId: string | number, joined: boolean) => {
+    setChannelData(prev => {
+      if (!prev) return prev;
+      const updatedChannels = prev.channels.map(c => {
+        if (String(c.id) === String(channelId)) {
+          const currentMembers = typeof c.members === 'number' ? c.members : 0;
+          return {
+            ...c,
+            joined,
+            members: joined ? currentMembers + 1 : Math.max(0, currentMembers - 1)
+          };
+        }
+        return c;
+      });
+      return { ...prev, channels: updatedChannels };
+    });
+  }, []);
+
   const navigateToChannel = useCallback(
     (channelId: string, navigate: NavigateFunction, activeTab = 'all') => {
       if (!channelData) return;
@@ -164,7 +217,8 @@ export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ childre
         channelData,
         navigateToChannel,
         addChannel,
-        refreshChannels: fetchChannels
+        refreshChannels: fetchChannels,
+        setChannelJoined
       }}>
       {children}
     </ChannelDataContext.Provider>

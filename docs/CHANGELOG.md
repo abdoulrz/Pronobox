@@ -4,6 +4,29 @@ Toutes les modifications notables de ce projet seront documentées dans ce fichi
 
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.22.0] - 2026-05-23 ([Design Polishing & Channel Editing Fixes])
+
+### Added
+- **Channel Message Timestamps**:
+  - Implemented dynamic date separators (Aujourd'hui, Hier, Date complète) in `ChannelView.tsx` to group messages logically by day.
+- **Header Visual & Logo Extraction**:
+  - Replaced the textual header logo with a stylized image logo, programmatically cropped and extracted to a transparent PNG for perfect responsive integration.
+  - Revamped header styling with an adapted emerald-green gradient and glassmorphic Admin badge.
+- **Channel Owner Editing**:
+  - Added the ability for channel owners to directly edit the channel's name and description from within the information panel.
+
+### Fixed
+- **Notification Redirection**:
+  - Corrected notification routing logic in `NotificationCenter.tsx` to directly navigate users to specific debates or channels based on the notification payload.
+- **Black Screen Bug**:
+  - Fixed a null pointer exception in `ChannelView.tsx` where state variables were initialized before channel data finished fetching.
+- **Theme "Limbo" State**:
+  - Resolved a visual bug where `bg-slate-100 dark:bg-brand-navy` on layout elements was overriding `body` backgrounds by migrating `Layout.tsx` to use transparent backgrounds.
+- **Message Background Contrast**:
+  - Enhanced the `MessageCard.tsx` background with a subtle glassmorphism effect instead of strong green to alleviate visual strain and improve contrast.
+- **State Mutation Safety**:
+  - Fixed a critical React state mutation bug when updating a channel's name and description locally.
+
 ## [2.21.0] - 2026-05-23 ([Channel Media Persistence & Admin CRUD Safety])
 
 ### Added

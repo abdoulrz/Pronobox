@@ -3,10 +3,13 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Message, Channel } from '../types/chat';
 import { useUserFeatures } from '../hooks/useUserFeatures';
+import { useChannelData } from '../contexts/ChannelContext';
 import { ChannelHeader } from '../components/channel/ChannelHeader';
 import { MessageCard } from '../components/channel/MessageCard';
 import { MessageInput } from '../components/channel/MessageInput';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
+import { leaveChannel, deleteChannel, updateChannel } from '../services/api';
+import ChannelLeaveConfirmation from '../components/ChannelLeaveConfirmation';
 
 const ChannelView = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,10 +27,15 @@ const ChannelView = () => {
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    return localStorage.getItem(`channel_notifications_${id}`) === 'true';
+  });
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
+  const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
+  const [showDeleteChannelConfirm, setShowDeleteChannelConfirm] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
   const [showChannelInfo, setShowChannelInfo] = useState(false);
   const [showSharePanel, setShowSharePanel] = useState(false);
 
@@ -63,6 +71,44 @@ const ChannelView = () => {
       window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`);
     }
   };
+
+  const { setChannelJoined } = useChannelData();
+
+  const handleLeaveChannel = async () => {
+    if (isLeaving) return;
+    setIsLeaving(true);
+    // Immediately update the in-memory context state — no network round-trip needed
+    if (channel) setChannelJoined(channel.id, false);
+    try {
+      if (channel) await leaveChannel(channel.id);
+    } catch (err) {
+      console.error('Failed to persist leave channel:', err);
+      // Even if backend fails, the local state is already updated
+    } finally {
+      setIsLeaving(false);
+    }
+    setShowChannelInfo(false);
+    setShowLeaveConfirmation(false);
+    navigate('/box');
+  };
+
+  const handleDeleteChannel = async () => {
+    if (isLeaving) return;
+    setIsLeaving(true);
+    // Remove from context immediately
+    if (channel) setChannelJoined(channel.id, false);
+    try {
+      if (channel) await deleteChannel(channel.id);
+    } catch (err) {
+      console.error('Failed to persist delete channel:', err);
+    } finally {
+      setIsLeaving(false);
+    }
+    setShowChannelInfo(false);
+    setShowDeleteChannelConfirm(false);
+    navigate('/box');
+  };
+
 
   useEffect(() => {
     if (!id || id === 'undefined') {
@@ -454,7 +500,20 @@ const ChannelView = () => {
                 {isEditingInfo && (
                   <div className="flex gap-2">
                     <button onClick={() => setIsEditingInfo(false)} className="text-xs text-gray-500 hover:text-gray-600">Annuler</button>
-                    <button onClick={() => { setIsEditingInfo(false); /* Simulate save */ channel.name = editName; channel.description = editDesc; }} className="text-xs text-green-600 font-bold hover:text-green-700">Enregistrer</button>
+                    <button 
+                      onClick={async () => { 
+                        setIsEditingInfo(false); 
+                        setChannel(prev => prev ? { ...prev, name: editName, description: editDesc } : prev); 
+                        try {
+                          await updateChannel(channel.id, { name: editName, description: editDesc });
+                        } catch (err) {
+                          console.error('Erreur lors de la mise à jour des paramètres', err);
+                        }
+                      }} 
+                      className="text-xs text-green-600 font-bold hover:text-green-700"
+                    >
+                      Enregistrer
+                    </button>
                   </div>
                 )}
               </div>
@@ -501,7 +560,11 @@ const ChannelView = () => {
                     <span className="text-sm text-gray-700 dark:text-gray-300">Notifications</span>
                     <button
                       title={notificationsEnabled ? 'Désactiver les notifications' : 'Activer les notifications'}
-                      onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+                      onClick={() => {
+                        const newVal = !notificationsEnabled;
+                        setNotificationsEnabled(newVal);
+                        localStorage.setItem(`channel_notifications_${id}`, newVal.toString());
+                      }}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${notificationsEnabled ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-600'}`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notificationsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -556,17 +619,75 @@ const ChannelView = () => {
                 )}
               </div>
 
-              <button
-                onClick={() => {
-                  setShowChannelInfo(false);
-                  navigate('/box');
-                }}
-                className="w-full flex items-center px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium transition-colors"
+              {channel.owner?.id === user?.id ? (
+                <button
+                  onClick={() => setShowDeleteChannelConfirm(true)}
+                  disabled={isLeaving}
+                  className="w-full flex items-center px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {isLeaving ? (
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  )}
+                  Supprimer le canal
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowLeaveConfirmation(true)}
+                  disabled={isLeaving}
+                  className="w-full flex items-center px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {isLeaving ? (
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  )}
+                  Quitter le canal
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ChannelLeaveConfirmation
+        isOpen={showLeaveConfirmation}
+        onClose={() => setShowLeaveConfirmation(false)}
+        onConfirm={handleLeaveChannel}
+        channelName={channel.name}
+      />
+
+      {showDeleteChannelConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full">
+            <h3 className="text-lg font-bold mb-2 text-gray-900 dark:text-white">Supprimer le canal</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">
+              Êtes-vous sûr de vouloir supprimer définitivement ce canal ? Cette action est irréversible et supprimera tous les messages et données associés.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button 
+                onClick={() => setShowDeleteChannelConfirm(false)} 
+                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium text-sm transition-colors"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                Quitter le canal
+                Annuler
+              </button>
+              <button 
+                onClick={handleDeleteChannel} 
+                disabled={isLeaving}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium text-sm flex items-center transition-colors disabled:opacity-50"
+              >
+                {isLeaving ? 'Suppression...' : 'Oui, supprimer'}
               </button>
             </div>
           </div>

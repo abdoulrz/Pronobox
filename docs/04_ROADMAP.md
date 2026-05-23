@@ -39,8 +39,8 @@ This document outlines the path to taking PronosBox from its current state to a 
     - [x] Online Status indicators.
     - [x] Real-time DM updates via WebSocket.
     - [x] Emoji Pickers.
-- [ ] **Mobile Optimization**:
-    - [ ] Refine the Bottom Navigation Bar for better ergonomics.
+- [x] **Mobile Optimization**:
+    - [x] Refine the Bottom Navigation Bar for better ergonomics.
     - [ ] Improve horizontal scrolling for Match lists.
 
 ---

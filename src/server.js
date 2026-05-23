@@ -803,16 +803,12 @@ app.post('/api/channels/:id/join', authenticateToken, async (req, res) => {
     if (!channel) {
       return res.status(404).json({ message: 'Channel not found' });
     }
-    // Check if user is already a member
-    if (channel.members.includes(req.user.id)) {
-      return res.status(400).json({ message: 'Already a member' });
-    }
-    // Add user to channel members
-    channel.members.push(req.user.id);
-    await channel.save();
-    // Add channel to user's joined channels
+    // Use $addToSet so MongoDB handles the duplicate-check atomically via ObjectId comparison
+    await Channel.findByIdAndUpdate(req.params.id, {
+      $addToSet: { members: req.user.id }
+    });
     await User.findByIdAndUpdate(req.user.id, {
-      $push: { channelsJoined: channel._id }
+      $addToSet: { channelsJoined: channel._id }
     });
     res.json({ message: 'Joined channel successfully' });
   } catch (error) {
@@ -820,6 +816,30 @@ app.post('/api/channels/:id/join', authenticateToken, async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+app.post('/api/channels/:id/leave', authenticateToken, async (req, res) => {
+  try {
+    const channel = await Channel.findById(req.params.id);
+    if (!channel) {
+      return res.status(404).json({ message: 'Channel not found' });
+    }
+    // Owners cannot leave their own channel — they must delete it
+    if (channel.owner && channel.owner.toString() === req.user.id) {
+      return res.status(403).json({ message: 'Le propriétaire ne peut pas quitter son propre canal. Supprimez-le à la place.' });
+    }
+    await Channel.findByIdAndUpdate(req.params.id, {
+      $pull: { members: req.user.id }
+    });
+    await User.findByIdAndUpdate(req.user.id, {
+      $pull: { channelsJoined: channel._id }
+    });
+    res.json({ message: 'Left channel successfully' });
+  } catch (error) {
+    console.error('Leave channel error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 
 app.post('/api/channels/:id/messages', authenticateToken, async (req, res) => {
   try {

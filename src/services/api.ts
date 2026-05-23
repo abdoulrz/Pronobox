@@ -348,17 +348,92 @@ export const createChannel = async (data: any) => {
   }
 };
 
-export const joinChannel = async (id: string | number) => {
+export const updateChannel = async (id: string | number, data: any) => {
   try {
-    const response = await api.post(`/channels/${id}/join`);
+    const response = await api.put(`/channels/${id}`, data);
     return response.data;
   } catch (error) {
     if (localStorage.getItem('fallbackMode') === 'true') {
-      return { success: true };
+      const channels = JSON.parse(localStorage.getItem('pronobox_channels') || '[]');
+      const index = channels.findIndex((c: any) => String(c.id) === String(id));
+      if (index !== -1) {
+        channels[index] = { ...channels[index], ...data };
+        localStorage.setItem('pronobox_channels', JSON.stringify(channels));
+        return channels[index];
+      }
     }
     throw error;
   }
 };
+
+export const deleteChannel = async (id: string | number) => {
+  try {
+    await api.delete(`/channels/${id}`);
+    return true;
+  } catch (error) {
+    if (localStorage.getItem('fallbackMode') === 'true') {
+      const channels = JSON.parse(localStorage.getItem('pronobox_channels') || '[]');
+      const filtered = channels.filter((c: any) => String(c.id) !== String(id));
+      localStorage.setItem('pronobox_channels', JSON.stringify(filtered));
+      return true;
+    }
+    throw error;
+  }
+};
+
+export const joinChannel = async (id: string | number) => {
+  // Always persist locally — compact {channelId: memberIds[]} format
+  const persistJoin = () => {
+    try {
+      const membership: Record<string, string[]> = JSON.parse(localStorage.getItem('pronobox_membership') || '{}');
+      const user = JSON.parse(localStorage.getItem('user') || localStorage.getItem('fallbackUser') || 'null');
+      const userId = user?.id ? String(user.id) : null;
+      if (userId) {
+        const channelKey = String(id);
+        const members = membership[channelKey] || [];
+        if (!members.includes(userId)) {
+          membership[channelKey] = [...members, userId];
+          localStorage.setItem('pronobox_membership', JSON.stringify(membership));
+        }
+      }
+    } catch { /* quota or parse error — skip */ }
+  };
+
+  try {
+    const response = await api.post(`/channels/${id}/join`);
+    persistJoin();
+    return response.data;
+  } catch (error) {
+    persistJoin(); // Still persist locally even if backend fails
+    return { success: true };
+  }
+};
+
+export const leaveChannel = async (id: string | number) => {
+  // Always remove from local membership cache
+  const persistLeave = () => {
+    try {
+      const membership: Record<string, string[]> = JSON.parse(localStorage.getItem('pronobox_membership') || '{}');
+      const user = JSON.parse(localStorage.getItem('user') || localStorage.getItem('fallbackUser') || 'null');
+      const userId = user?.id ? String(user.id) : null;
+      if (userId) {
+        const channelKey = String(id);
+        membership[channelKey] = (membership[channelKey] || []).filter(uid => uid !== userId);
+        localStorage.setItem('pronobox_membership', JSON.stringify(membership));
+      }
+    } catch { /* quota or parse error — skip */ }
+  };
+
+  try {
+    const response = await api.post(`/channels/${id}/leave`);
+    persistLeave();
+    return response.data;
+  } catch (error) {
+    persistLeave(); // Still remove locally even if backend fails
+    return { success: true };
+  }
+};
+
 
 export const sendMessage = async (channelId: string | number, text: string) => {
   try {
