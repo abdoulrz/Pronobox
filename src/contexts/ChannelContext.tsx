@@ -27,23 +27,33 @@ export const useChannelData = () => {
 };
 
 // Map a raw MongoDB channel doc to our internal Channel type
-const mapApiChannel = (c: any): Channel => ({
-  id: c.id || c._id,
-  name: c.name,
-  description: c.description,
-  premium: c.premium,
-  joined: false,
-  lastMessage: '',
-  avatar: c.avatar || '',
-  price: c.subscriptionPrice || 0,
-  pinned: false,
-  members: c.members?.length || 0,
-  messages: c.messages || [],
-  category: c.premium ? 'premium' : 'free',
-  owner: c.owner
-    ? { id: c.owner.id || c.owner._id || c.owner, username: c.owner.username || '', avatar: c.owner.avatar || '' }
-    : { id: '', username: '', avatar: '' }
-});
+const mapApiChannel = (c: any): Channel => {
+  const lastMsg = c.messages && c.messages.length > 0 ? c.messages[c.messages.length - 1] : null;
+  let msgText = '';
+  if (lastMsg) {
+    if (lastMsg.isImage) msgText = '📷 Image';
+    else if (lastMsg.isAudio) msgText = '🎵 Audio';
+    else msgText = lastMsg.text || 'Message';
+  }
+
+  return {
+    id: c.id || c._id,
+    name: c.name,
+    description: c.description,
+    premium: c.premium,
+    joined: false,
+    lastMessage: msgText,
+    avatar: c.avatar || '',
+    price: c.subscriptionPrice || 0,
+    pinned: false,
+    members: c.members?.length || 0,
+    messages: c.messages || [],
+    category: c.premium ? 'premium' : 'free',
+    owner: c.owner
+      ? { id: c.owner.id || c.owner._id || c.owner, username: c.owner.username || '', avatar: c.owner.avatar || '' }
+      : { id: '', username: '', avatar: '' }
+  };
+};
 
 const mapApiChannelDetails = (c: any): ChannelDetails => ({
   id: c.id || c._id,

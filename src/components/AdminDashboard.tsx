@@ -1727,7 +1727,7 @@ const PronosManagement = () => {
         </form>
       )}
 
-      <div className="bg-white dark:bg-brand-navy-2 rounded-xl border border-slate-200 dark:border-brand-slate overflow-hidden shadow-sm">
+      <div className="bg-white dark:bg-brand-navy-2 rounded-xl border border-slate-200 dark:border-brand-slate overflow-x-auto shadow-sm">
         <table className="min-w-full divide-y divide-slate-200 dark:divide-brand-slate/30">
           <thead className="bg-slate-50 dark:bg-brand-navy-3">
             <tr>

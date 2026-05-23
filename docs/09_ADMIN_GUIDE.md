@@ -92,10 +92,11 @@ Le panneau d'administration centralisé regroupe toutes les commandes critiques 
 
 2. **Gestion Unifiée des Utilisateurs & Canaux** :
    - Recherche en direct par pseudonyme ou adresse e-mail.
-   - **Actions Directes** :
+   - **Actions Directes (Utilisateurs)** :
      - **Bannissement** : Restreint instantanément les droits de publication et d'interaction sociale.
      - **Promotion Pro** : Attribue manuellement le statut Premium pour le test ou le support VIP.
-   - **Modération des Canaux** : Permet la suppression immédiate de tout canal enfreignant les règles communautaires.
+   - **Modération & CRUD des Canaux** : 
+     - Interface de gestion centralisée ("foolproof") permettant la création, modification (nom, description, avatar, prix) et la suppression immédiate de tout canal enfreignant les règles communautaires, avec synchronisation parfaite des identifiants base de données.
 
 3. **Traitement des Transactions & Demandes de Retrait** :
    - **Validation Manuelle des Retraits** : Les parieurs peuvent soumettre des demandes de retrait depuis leur portefeuille personnel. Ces requêtes arrivent instantanément dans la file d'attente d'administration. L'administrateur valide ou rejette la demande d'un simple clic (les fonds sont ajustés en conséquence).

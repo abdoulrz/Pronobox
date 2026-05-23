@@ -107,7 +107,21 @@ const Box = () => {
       .catch((err: Error) => console.error('Failed to load debates', err));
 
     getChannels()
-      .then((data: Channel[]) => setAllChannels(data))
+      .then((data: Channel[]) => {
+        const enhancedChannels = data.map((channel) => {
+          const lastMsg = channel.messages && channel.messages.length > 0
+            ? channel.messages[channel.messages.length - 1]
+            : null;
+          let msgText = '';
+          if (lastMsg) {
+            if (lastMsg.isImage) msgText = '📷 Image';
+            else if (lastMsg.isAudio) msgText = '🎵 Audio';
+            else msgText = lastMsg.text || 'Message';
+          }
+          return { ...channel, lastMessage: msgText };
+        });
+        setAllChannels(enhancedChannels);
+      })
       .catch((err: Error) => console.error('Failed to load channels', err));
   }, []);
 

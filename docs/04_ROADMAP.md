@@ -71,6 +71,7 @@ This document outlines the path to taking PronosBox from its current state to a 
     - [x] **BET-EDUC Management**: CRUD interfaces for Free and Premium educational content (E-books, Videos, Articles) with internal async uploads.
     - [x] **Universal Media Player Integration**: Play videos, audios, and read PDFs directly inline with user commenting (Recommendation 4).
     - [x] **Persistent Premium Unlocking**: Keeps a permanent record of purchased/unlocked resources directly in the MongoDB User schema and React context session to ensure lifetime access.
+    - [x] **Channel Moderation & Media**: Robust full-CRUD management for Channels (foolproof ID mappings) and resilient Blob-to-Base64 media persistence for images and voice notes.
 - [x] **Structural Refactoring & Cleanup**:
     - [x] Removed the standalone predictions page ("Pronos") since match analyses are now directly integrated.
     - [x] Merged the standalone "Débats" page into "Canaux" (/box) as a dynamic side column with smooth detailed overlay and categorized filters.

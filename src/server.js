@@ -47,8 +47,8 @@ const mongoOptions = {
 mongoose.set('toJSON', {
   virtuals: true,
   transform: (doc, ret) => {
-    ret.id = ret._id;
-    delete ret._id;
+    ret.id = ret._id ? ret._id.toString() : undefined;
+    // Don't delete _id because populated fields might need it
     delete ret.__v;
     return ret;
   }
@@ -740,8 +740,8 @@ app.post('/api/channels', authenticateToken, async (req, res) => {
       $push: { channelsJoined: channel._id }
     });
     const populated = await Channel.findById(channel._id)
-      .populate('owner', 'username avatar')
-      .populate('members', 'username avatar');
+      .populate('owner', '_id username avatar')
+      .populate('members', '_id username avatar');
     res.status(201).json(populated);
   } catch (error) {
     console.error('Create channel error:', error);
@@ -752,8 +752,8 @@ app.post('/api/channels', authenticateToken, async (req, res) => {
 app.get('/api/channels', async (req, res) => {
   try {
     const channels = await Channel.find().
-    populate('owner', 'username avatar').
-    populate('members', 'username avatar');
+    populate('owner', '_id username avatar').
+    populate('members', '_id username avatar');
     res.json(channels);
   } catch (error) {
     console.error('Get channels error:', error);
@@ -764,9 +764,9 @@ app.get('/api/channels', async (req, res) => {
 app.get('/api/channels/:id', async (req, res) => {
   try {
     const channel = await Channel.findById(req.params.id).
-    populate('owner', 'username avatar').
-    populate('members', 'username avatar').
-    populate('messages.user', 'username avatar role');
+    populate('owner', '_id username avatar').
+    populate('members', '_id username avatar').
+    populate('messages.user', '_id username avatar role');
     if (!channel) {
       return res.status(404).json({ message: 'Channel not found' });
     }
@@ -853,7 +853,7 @@ app.post('/api/channels/:id/messages', authenticateToken, async (req, res) => {
     // Get the added message with user details
     const addedMessage = await Channel.findById(req.params.id).
     select('messages').
-    populate('messages.user', 'username avatar role');
+    populate('messages.user', '_id username avatar role');
     const newMessage = addedMessage.messages[addedMessage.messages.length - 1];
     res.status(201).json(newMessage);
   } catch (error) {

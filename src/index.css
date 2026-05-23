@@ -43,6 +43,7 @@
   html {
     font-family: var(--font-ui);
     -webkit-font-smoothing: antialiased;
+    touch-action: manipulation;
   }
 
   body {

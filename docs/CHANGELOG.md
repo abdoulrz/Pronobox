@@ -4,6 +4,21 @@ Toutes les modifications notables de ce projet seront documentées dans ce fichi
 
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.21.0] - 2026-05-23 ([Channel Media Persistence & Admin CRUD Safety])
+
+### Added
+- **Channel Media Persistence**:
+  - Upgraded `MessageSchema` in MongoDB to officially support `imageUrl`, `audioUrl`, `isImage`, and `isVoiceMessage`.
+  - Refactored `ChannelView.tsx` audio recorder to translate local Blob URLs into universal Base64 DataURLs prior to backend transmission.
+  - Implemented real-time payload logging in the backend for POST message requests to monitor media sizes.
+
+### Fixed
+- **Admin Dashboard CRUD Foolproofing**:
+  - Eliminated the severe "undefined ID" bug in `AdminDashboard.tsx` that silently dropped Delete requests and caused duplicated PUT/POST channels.
+  - Standardized all `c._id` references into dual-safe `(c.id || c._id)` checks following the recent JSON transformation rules.
+- **Frontend Message History Rendering**:
+  - Restored media extraction in the primary GET `ChannelView.tsx` fetch call, guaranteeing that images and voice notes survive hard reloads.
+
 ## [2.20.0] - 2026-05-18 ([Debate Stability, Safe Population & Sidebar Visuals])
 
 ### Added
