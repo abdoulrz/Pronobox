@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { NavigateFunction } from 'react-router-dom';
 import { ChannelData, Channel, ChannelDetails } from '../types/channel';
+import { useAuth } from './AuthContext';
 
 export interface ChannelContextValue {
   channelData: ChannelData | null;
@@ -27,7 +28,7 @@ export const useChannelData = () => {
 };
 
 // Map a raw MongoDB channel doc to our internal Channel type
-const mapApiChannel = (c: any): Channel => {
+const mapApiChannel = (c: any, currentUserId?: string): Channel => {
   const lastMsg = c.messages && c.messages.length > 0 ? c.messages[c.messages.length - 1] : null;
   let msgText = '';
   if (lastMsg) {
@@ -41,7 +42,7 @@ const mapApiChannel = (c: any): Channel => {
     name: c.name,
     description: c.description,
     premium: c.premium,
-    joined: false,
+    joined: currentUserId ? (c.members || []).some((m: any) => String(m._id || m.id || m) === String(currentUserId)) : false,
     lastMessage: msgText,
     avatar: c.avatar || '',
     price: c.subscriptionPrice || 0,
@@ -72,6 +73,7 @@ const mapApiChannelDetails = (c: any): ChannelDetails => ({
 
 export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [channelData, setChannelData] = useState<ChannelData | null>(null);
+  const { user } = useAuth();
 
   const fetchChannels = useCallback(async () => {
     try {
@@ -82,7 +84,7 @@ export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ childre
         return;
       }
 
-      const channels: Channel[] = data.map(mapApiChannel);
+      const channels: Channel[] = data.map((c: any) => mapApiChannel(c, user?.id));
       const channelDetails: Record<string, ChannelDetails> = {};
       data.forEach((c: any) => {
         const id = c.id || c._id;
@@ -98,7 +100,7 @@ export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   useEffect(() => {
     fetchChannels();
-  }, [fetchChannels]);
+  }, [fetchChannels, user?.id]);
 
   const addChannel = useCallback(async (payload: { name: string; description: string; premium: boolean; subscriptionPrice?: number; avatar?: string }): Promise<string> => {
     try {

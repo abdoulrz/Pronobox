@@ -24,6 +24,7 @@ import {
   addDebateMessage, 
   likeDebate,
   getChannels,
+  joinChannel,
   Debate,
   Reply
 } from '../services/api';
@@ -118,7 +119,13 @@ const Box = () => {
             else if (lastMsg.isAudio) msgText = '🎵 Audio';
             else msgText = lastMsg.text || 'Message';
           }
-          return { ...channel, lastMessage: msgText };
+          const membersCount = Array.isArray(channel.members) ? channel.members.length : (channel.members || 0);
+          return { 
+            ...channel, 
+            members: membersCount,
+            lastMessage: msgText,
+            joined: (channel.members || []).some((m: any) => String(m._id || m.id || m) === String(user?.id))
+          };
         });
         setAllChannels(enhancedChannels);
       })
@@ -151,9 +158,19 @@ const Box = () => {
 
     setIsProcessingJoin(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      setChannels(channels.map(c => c.id === channel.id ? { ...c, joined: true } : c));
-      navigate(`/channel/${channel.id}`, { state: { activeTab, channelData: { ...channel, joined: true } } });
+      await joinChannel(channel.id);
+      
+      const newChannels = channels.map(c => 
+        c.id === channel.id ? { ...c, joined: true, members: (c.members || 0) + 1 } : c
+      );
+      setChannels(newChannels);
+      setAllChannels(allChannels.map(c => 
+        c.id === channel.id ? { ...c, joined: true, members: (c.members || 0) + 1 } : c
+      ));
+
+      navigate(`/channel/${channel.id}`, { state: { activeTab, channelData: { ...channel, joined: true, members: (channel.members || 0) + 1 } } });
+    } catch (err) {
+      console.error('Failed to join channel:', err);
     } finally {
       setIsProcessingJoin(false);
     }

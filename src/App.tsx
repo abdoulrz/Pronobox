@@ -32,6 +32,8 @@ const AuthChecker: React.FC<{ children: ReactNode }> = ({ children }) => {
   
   useEffect(() => {
     console.log("AuthChecker - État d'authentification:", isAuthenticated);
+    // Always attempt to use the real API on fresh load
+    localStorage.removeItem('fallbackMode');
   }, [isAuthenticated]);
   
   return <>{children}</>;
