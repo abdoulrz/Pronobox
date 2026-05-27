@@ -4,10 +4,12 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { getUsers, updateUserByAdmin, getAdminTransactions, getAdminWithdrawals, getSupportMessages, updateWithdrawalStatus, sendAdminSupportMessage } from '../services/api';
 import { UserData, SupportMessage, Transaction, WithdrawalRequest } from './settings/SettingsAdminUser';
 import { useAuth } from '../contexts/AuthContext';
+import { useChannelData } from '../contexts/ChannelContext';
 import MarkdownEditor from './MarkdownEditor';
 import { markdownToHtml } from '../utils/markdownToHtml';
 const AdminDashboard = () => {
   const { isAdmin } = useAuth();
+  const { refreshChannels } = useChannelData();
   const [activeTab, setActiveTab] = useState('statistics');
 
   const { connected, subscribe } = useWebSocket();
@@ -197,6 +199,7 @@ const AdminDashboard = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       fetchAdminChannels();
+      refreshChannels();
     } catch (err) { console.error(err); }
   };
 
@@ -215,6 +218,7 @@ const AdminDashboard = () => {
       setEditingChannelId(null);
       setChannelForm({ name: '', description: '', premium: false, subscriptionPrice: 0, avatar: '' });
       fetchAdminChannels();
+      refreshChannels();
     } catch (err) { console.error(err); }
   };
 

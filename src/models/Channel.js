@@ -66,6 +66,10 @@ const ChannelSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  allowVoiceMessages: {
+    type: Boolean,
+    default: true
+  },
   owner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

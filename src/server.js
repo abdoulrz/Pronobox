@@ -19,6 +19,24 @@ import Channel from './models/Channel.js';
 import Debate from './models/Debate.js';
 import BetEduc from './models/BetEduc.js';
 import Prono from './models/Prono.js';
+import multer from 'multer';
+
+// Configure multer storage
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '_' + Math.round(Math.random() * 1E9);
+    const cleanFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    cb(null, uniqueSuffix + '_' + cleanFilename);
+  }
+});
+const upload = multer({ storage: storage, limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB limit
 const app = express();
 
 // Middleware
@@ -198,6 +216,32 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.delete('/api/channels/:id/messages/:messageId', authenticateToken, async (req, res) => {
+  try {
+    const channel = await Channel.findById(req.params.id);
+    if (!channel) return res.status(404).json({ message: 'Channel not found' });
+    
+    const messageIndex = channel.messages.findIndex(m => m._id.toString() === req.params.messageId);
+    if (messageIndex === -1) return res.status(404).json({ message: 'Message not found' });
+
+    const message = channel.messages[messageIndex];
+    const isAdmin = req.user.role === 'admin';
+    const isOwner = channel.owner.toString() === req.user.id;
+    const isAuthor = message.user.toString() === req.user.id;
+
+    if (!isAdmin && !isOwner && !isAuthor) {
+      return res.status(403).json({ message: 'Not authorized to delete this message' });
+    }
+
+    channel.messages.splice(messageIndex, 1);
+    await channel.save();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting message:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -489,6 +533,19 @@ app.post('/api/upload-binary', authenticateToken, requireAdmin, express.raw({ ty
   } catch (error) {
     console.error('Binary upload error:', error);
     res.status(500).json({ message: 'Erreur lors du téléversement binaire.' });
+  }
+});
+
+// Fast, non-admin API for uploading files (images, audio) via multipart/form-data
+app.post('/api/upload-media', authenticateToken, upload.single('media'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Aucun fichier fourni.' });
+    }
+    res.status(201).json({ url: `/uploads/${req.file.filename}` });
+  } catch (error) {
+    console.error('Media upload error:', error);
+    res.status(500).json({ message: 'Erreur lors du téléversement du média.' });
   }
 });
 
@@ -855,6 +912,10 @@ app.post('/api/channels/:id/messages', authenticateToken, async (req, res) => {
     if (channel.adminOnly && !isAdmin && !isOwner) {
       return res.status(403).json({ message: 'Only admins can post in this channel' });
     }
+
+    if ((isVoiceMessage || audioUrl) && !channel.allowVoiceMessages && !isAdmin && !isOwner) {
+      return res.status(403).json({ message: 'Les messages vocaux sont désactivés par l\'administrateur dans ce canal' });
+    }
     // Add message
     channel.messages.push({
       user: req.user.id,
@@ -975,6 +1036,57 @@ app.post('/api/debates/:id/like', authenticateToken, async (req, res) => {
     res.json({ likes: debate.likes, likedBy: debate.likedBy });
   } catch (error) {
     console.error('Like debate error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/debates/:id/messages/:messageId/like', authenticateToken, async (req, res) => {
+  try {
+    const debate = await Debate.findById(req.params.id);
+    if (!debate) return res.status(404).json({ message: 'Debate not found' });
+    
+    const message = debate.messages.id(req.params.messageId);
+    if (!message) return res.status(404).json({ message: 'Message not found' });
+
+    const userIndex = message.likedBy.indexOf(req.user.id);
+    if (userIndex === -1) {
+      message.likedBy.push(req.user.id);
+      message.likes += 1;
+    } else {
+      message.likedBy.splice(userIndex, 1);
+      message.likes -= 1;
+    }
+    await debate.save();
+    res.json({ likes: message.likes, likedBy: message.likedBy });
+  } catch (error) {
+    console.error('Like debate message error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/debates/:id/messages/:messageId/replies/:replyId/like', authenticateToken, async (req, res) => {
+  try {
+    const debate = await Debate.findById(req.params.id);
+    if (!debate) return res.status(404).json({ message: 'Debate not found' });
+    
+    const message = debate.messages.id(req.params.messageId);
+    if (!message) return res.status(404).json({ message: 'Message not found' });
+
+    const reply = message.replies.id(req.params.replyId);
+    if (!reply) return res.status(404).json({ message: 'Reply not found' });
+
+    const userIndex = reply.likedBy.indexOf(req.user.id);
+    if (userIndex === -1) {
+      reply.likedBy.push(req.user.id);
+      reply.likes += 1;
+    } else {
+      reply.likedBy.splice(userIndex, 1);
+      reply.likes -= 1;
+    }
+    await debate.save();
+    res.json({ likes: reply.likes, likedBy: reply.likedBy });
+  } catch (error) {
+    console.error('Like debate reply error:', error);
     res.status(500).json({ message: error.message });
   }
 });

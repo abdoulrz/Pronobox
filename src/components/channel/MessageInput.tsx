@@ -3,8 +3,8 @@ import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { UserFeatures, Message } from '../../types/chat';
 
 interface MessageInputProps {
-  onSend: (text: string, image?: string | null, audio?: string | null, replyTo?: Message | null) => void;
-  onImageSelected?: (imageUrl: string) => void;
+  onSend: (text: string, image?: string | null, audio?: string | null, replyTo?: Message | null, imageFile?: File | null, audioBlob?: Blob | null) => void;
+  onImageSelected?: (imageUrl: string, file?: File) => void;
   userFunctions?: UserFeatures;
   stagedImage?: string | null;
   stagedAudio?: string | null;
@@ -54,6 +54,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     e.preventDefault();
     // Send staged content + text together in ONE message
     if (stagedImage || stagedAudio || message.trim()) {
+      // We don't have access to the raw file objects in MessageInput's state right now because they are handled by ChannelView. 
+      // Wait, we can pass them in from props, or just let ChannelView handle them since we call onSend.
       onSend(message.trim(), stagedImage, stagedAudio, replyTo);
       setMessage('');
       if (onClearStaged) onClearStaged();
@@ -67,7 +69,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       const reader = new FileReader();
       reader.onload = (event) => {
         const result = event.target?.result as string;
-        onImageSelected(result); // Stage, don't send
+        onImageSelected(result, file); // Stage, don't send
       };
       reader.readAsDataURL(file);
     }

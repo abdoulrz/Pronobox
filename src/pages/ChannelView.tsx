@@ -8,7 +8,7 @@ import { ChannelHeader } from '../components/channel/ChannelHeader';
 import { MessageCard } from '../components/channel/MessageCard';
 import { MessageInput } from '../components/channel/MessageInput';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
-import { leaveChannel, deleteChannel, updateChannel } from '../services/api';
+import { leaveChannel, deleteChannel, updateChannel, uploadMedia, deleteChannelMessage } from '../services/api';
 import ChannelLeaveConfirmation from '../components/ChannelLeaveConfirmation';
 
 const ChannelView = () => {
@@ -41,7 +41,9 @@ const ChannelView = () => {
 
   // Staged attachments (WhatsApp/Telegram style: preview before sending)
   const [stagedImage, setStagedImage] = useState<string | null>(null);
+  const [stagedImageFile, setStagedImageFile] = useState<File | null>(null);
   const [stagedAudio, setStagedAudio] = useState<string | null>(null);
+  const [stagedAudioBlob, setStagedAudioBlob] = useState<Blob | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
 
   // Edit states
@@ -247,6 +249,19 @@ const ChannelView = () => {
 
     // Persist to backend
     try {
+      let finalImageUrl = image;
+      let finalAudioUrl = audio;
+
+      // Upload files first if they exist
+      if (stagedImageFile) {
+        const res = await uploadMedia(stagedImageFile);
+        finalImageUrl = res.url;
+      }
+      if (stagedAudioBlob) {
+        const res = await uploadMedia(stagedAudioBlob);
+        finalAudioUrl = res.url;
+      }
+
       const token = localStorage.getItem('token');
       const res = await fetch(`/api/channels/${id}/messages`, {
         method: 'POST',
@@ -256,8 +271,8 @@ const ChannelView = () => {
         },
         body: JSON.stringify({
           text: optimisticMessage.text,
-          imageUrl: optimisticMessage.imageUrl,
-          audioUrl: optimisticMessage.audioUrl,
+          imageUrl: finalImageUrl,
+          audioUrl: finalAudioUrl,
           isImage: optimisticMessage.isImage,
           isVoiceMessage: optimisticMessage.isVoiceMessage,
           replyTo: optimisticMessage.replyTo
@@ -319,6 +334,7 @@ const ChannelView = () => {
       reader.onload = (event) => {
         const base64Audio = event.target?.result as string;
         setStagedAudio(base64Audio);
+        setStagedAudioBlob(audioBlob);
       };
       reader.readAsDataURL(audioBlob);
       
@@ -439,8 +455,8 @@ const ChannelView = () => {
         userFunctions={userFunctions}
         stagedImage={stagedImage}
         stagedAudio={stagedAudio}
-        onClearStaged={() => { setStagedImage(null); setStagedAudio(null); }}
-        onImageSelected={(imageUrl) => setStagedImage(imageUrl)}
+        onClearStaged={() => { setStagedImage(null); setStagedImageFile(null); setStagedAudio(null); setStagedAudioBlob(null); }}
+        onImageSelected={(imageUrl, file) => { setStagedImage(imageUrl); if (file) setStagedImageFile(file); }}
         isRecording={isRecording}
         recordingTime={recordingTime}
         onStartRecording={startRecording}
@@ -469,8 +485,28 @@ const ChannelView = () => {
                   </svg>
                 </button>
                 <div className="flex items-end space-x-3 w-full">
-                  <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white flex-shrink-0">
+                  <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white flex-shrink-0 relative group">
                     <img src={channel.avatar} alt={channel.name} className="w-full h-full object-cover" />
+                    {isEditingInfo && (
+                      <label className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <input type="file" className="hidden" accept="image/*" onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            try {
+                              const res = await uploadMedia(file);
+                              setChannel(prev => prev ? { ...prev, avatar: res.url } : prev);
+                              await updateChannel(channel.id, { avatar: res.url });
+                            } catch (err) {
+                              console.error('Erreur upload avatar:', err);
+                            }
+                          }
+                        }} />
+                      </label>
+                    )}
                   </div>
                   <div className="text-white pb-1 w-full">
                     {isEditingInfo ? (
@@ -575,6 +611,24 @@ const ChannelView = () => {
                     <span className={`text-xs px-2 py-1 rounded-full ${channel.premium ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'}`}>
                       {channel.premium ? 'Premium' : 'Gratuit'}
                     </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Autoriser vocaux</span>
+                    <button
+                      title={channel.allowVoiceMessages ? 'Désactiver les vocaux' : 'Activer les vocaux'}
+                      onClick={async () => {
+                        const newVal = !channel.allowVoiceMessages;
+                        try {
+                          await updateChannel(channel.id, { allowVoiceMessages: newVal });
+                          setChannel(prev => prev ? { ...prev, allowVoiceMessages: newVal } : prev);
+                        } catch (err) {
+                          console.error(err);
+                        }
+                      }}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${channel.allowVoiceMessages ? 'bg-green-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${channel.allowVoiceMessages ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -701,8 +755,15 @@ const ChannelView = () => {
             <div className="flex justify-end space-x-3">
               <button onClick={() => setShowDeleteModal(false)} className="px-4 py-2 border rounded-md">Annuler</button>
               <button 
-                onClick={() => {
-                  setChannel({ ...channel, messages: channel.messages.filter(m => m.id !== selectedMessageId) });
+                onClick={async () => {
+                  if (selectedMessageId) {
+                    try {
+                      await deleteChannelMessage(channel.id, selectedMessageId.toString());
+                      setChannel({ ...channel, messages: channel.messages.filter(m => m.id !== selectedMessageId) });
+                    } catch (error) {
+                      console.error('Erreur lors de la suppression du message:', error);
+                    }
+                  }
                   setShowDeleteModal(false);
                 }} 
                 className="px-4 py-2 bg-red-600 text-white rounded-md"

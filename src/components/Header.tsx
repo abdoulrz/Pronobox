@@ -25,7 +25,7 @@ const Header: React.FC<HeaderProps> = ({ onBetEducClick }) => {
 
   return (
     <header
-      className="bg-emerald-600/95 dark:bg-emerald-800/95 backdrop-blur-xl border-b border-white/10 sticky top-0 z-40 px-4 py-3 sm:py-4 shadow-[0_4px_30px_rgba(0,0,0,0.15)] transition-all duration-300"
+      className="bg-green-600/95 dark:bg-green-800/95 backdrop-blur-xl border-b border-white/10 sticky top-0 z-40 px-4 py-4 sm:py-5 shadow-[0_4px_30px_rgba(0,0,0,0.15)] transition-all duration-300"
     >
       <div className="flex justify-between items-center max-w-screen-2xl mx-auto">
 

@@ -52,6 +52,7 @@ const mapApiChannel = (c: any, currentUserId?: string): Channel => {
     members: c.members?.length || 0,
     messages: c.messages || [],
     category: c.premium ? 'premium' : 'free',
+    allowVoiceMessages: c.allowVoiceMessages !== false,
     owner: c.owner
       ? { id: c.owner.id || c.owner._id || c.owner, username: c.owner.username || '', avatar: c.owner.avatar || '' }
       : { id: '', username: '', avatar: '' }
@@ -88,7 +89,8 @@ export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ childre
       // Read locally-persisted minimal membership data {id, memberIds[]}
       let localMembership: Record<string, string[]> = {};
       try {
-        localMembership = JSON.parse(localStorage.getItem('pronobox_membership') || '{}');
+        const parsed = JSON.parse(localStorage.getItem('pronobox_membership') || '{}');
+        localMembership = parsed || {};
       } catch { localMembership = {}; }
 
       const channels: Channel[] = data.map((c: any) => {

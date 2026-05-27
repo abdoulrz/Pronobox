@@ -23,6 +23,8 @@ import {
   deleteDebate, 
   addDebateMessage, 
   likeDebate,
+  likeDebateMessage,
+  likeDebateReply,
   joinChannel,
   Debate,
   Reply
@@ -36,7 +38,14 @@ const Box = () => {
   const { addNotification } = useNotifications();
   const { channelData, addChannel, setChannelJoined } = useChannelData();
   
-  const [mainView, setMainView] = useState<'canaux' | 'debats'>('canaux');
+  const [mainView, setMainView] = useState<'canaux' | 'debats'>(() => {
+    return (localStorage.getItem('pronobox_mainView') as 'canaux' | 'debats') || 'canaux';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pronobox_mainView', mainView);
+  }, [mainView]);
+  
   const [showProModal, setShowProModal] = useState(false);
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [showCreateChannelModal, setShowCreateChannelModal] = useState(false);
@@ -407,100 +416,92 @@ const Box = () => {
     }
   };
 
-  const handleLikeMessage = (debateId: number | string, messageId: number | string) => {
-    const updatedDebates = debates.map((debate) => {
-      if (debate.id === debateId) {
-        return {
-          ...debate,
-          messages: debate.messages.map((message) => {
-            if (message.id === messageId) {
-              const userLiked = message.likedBy && message.likedBy.some((id: string | number) => String(id) === String(currentUser.id));
-              if (!userLiked && message.user !== currentUser.username) {
-                addNotification({
-                  type: 'like',
-                  title: "J'aime sur votre message",
-                  message: `${currentUser.username} a aimé votre message dans le débat "${debate.title}"`,
-                  time: "à l'instant",
-                  read: false,
-                  user: currentUser.username,
-                  avatar: currentUser.avatar,
-                  debateId: debate.id as Debate['id']
-                });
-              }
-              const likedBy = message.likedBy || [];
-              if (userLiked) {
+  const handleLikeMessage = async (debateId: number | string, messageId: number | string) => {
+    try {
+      const response = await likeDebateMessage(String(debateId), String(messageId));
+      const updatedDebates = debates.map((debate) => {
+        if (debate.id === debateId) {
+          return {
+            ...debate,
+            messages: debate.messages.map((message) => {
+              if (message.id === messageId) {
+                const userLiked = message.likedBy && message.likedBy.some((id: string | number) => String(id) === String(currentUser.id));
+                if (!userLiked && message.user !== currentUser.username) {
+                  addNotification({
+                    type: 'like',
+                    title: "J'aime sur votre message",
+                    message: `${currentUser.username} a aimé votre message dans le débat "${debate.title}"`,
+                    time: "à l'instant",
+                    read: false,
+                    user: currentUser.username,
+                    avatar: currentUser.avatar,
+                    debateId: debate.id as Debate['id']
+                  });
+                }
                 return {
                   ...message,
-                  likes: Math.max(0, message.likes - 1),
-                  likedBy: (likedBy as (number | string)[]).filter((id) => String(id) !== String(currentUser.id))
-                };
-              } else {
-                return {
-                  ...message,
-                  likes: message.likes + 1,
-                  likedBy: [...likedBy, currentUser.id]
+                  likes: response.likes,
+                  likedBy: response.likedBy
                 };
               }
-            }
-            return message;
-          })
-        };
-      }
-      return debate;
-    });
-    setDebates(updatedDebates);
+              return message;
+            })
+          };
+        }
+        return debate;
+      });
+      setDebates(updatedDebates);
+    } catch (error) {
+      console.error('Failed to like message:', error);
+    }
   };
 
-  const handleLikeReply = (debateId: number | string, messageId: number | string, replyId: number | string) => {
-    const updatedDebates = debates.map((debate) => {
-      if (debate.id === debateId) {
-        return {
-          ...debate,
-          messages: debate.messages.map((message) => {
-            if (message.id === messageId) {
-              return {
-                ...message,
-                replies: (message.replies || []).map((reply: Reply) => {
-                  if (reply.id === replyId) {
-                    const userLiked = reply.likedBy && reply.likedBy.some((id: string | number) => String(id) === String(currentUser.id));
-                    if (!userLiked && reply.user !== currentUser.username) {
-                      addNotification({
-                        type: 'like',
-                        title: "J'aime sur votre réponse",
-                        message: `${currentUser.username} a aimé votre réponse dans le débat "${debate.title}"`,
-                        time: "à l'instant",
-                        read: false,
-                        user: currentUser.username,
-                        avatar: currentUser.avatar,
-                        debateId: debate.id as Debate['id']
-                      });
-                    }
-                    const likedBy = reply.likedBy || [];
-                    if (userLiked) {
+  const handleLikeReply = async (debateId: number | string, messageId: number | string, replyId: number | string) => {
+    try {
+      const response = await likeDebateReply(String(debateId), String(messageId), String(replyId));
+      const updatedDebates = debates.map((debate) => {
+        if (debate.id === debateId) {
+          return {
+            ...debate,
+            messages: debate.messages.map((message) => {
+              if (message.id === messageId) {
+                return {
+                  ...message,
+                  replies: (message.replies || []).map((reply: Reply) => {
+                    if (reply.id === replyId) {
+                      const userLiked = reply.likedBy && reply.likedBy.some((id: string | number) => String(id) === String(currentUser.id));
+                      if (!userLiked && reply.user !== currentUser.username) {
+                        addNotification({
+                          type: 'like',
+                          title: "J'aime sur votre réponse",
+                          message: `${currentUser.username} a aimé votre réponse dans le débat "${debate.title}"`,
+                          time: "à l'instant",
+                          read: false,
+                          user: currentUser.username,
+                          avatar: currentUser.avatar,
+                          debateId: debate.id as Debate['id']
+                        });
+                      }
                       return {
                         ...reply,
-                        likes: Math.max(0, reply.likes - 1),
-                        likedBy: (likedBy as (number | string)[]).filter((id) => String(id) !== String(currentUser.id))
-                      };
-                    } else {
-                      return {
-                        ...reply,
-                        likes: reply.likes + 1,
-                        likedBy: [...likedBy, currentUser.id]
+                        likes: response.likes,
+                        likedBy: response.likedBy
                       };
                     }
-                  }
-                  return reply;
-                })
-              };
-            }
-            return message;
-          })
-        };
-      }
-      return debate;
-    });
-    setDebates(updatedDebates);
+                    return reply;
+                  })
+                };
+              }
+              return message;
+            })
+          };
+        }
+        return debate;
+      });
+      setDebates(updatedDebates);
+    } catch (error) {
+      console.error('Failed to like reply:', error);
+    }
   };
 
   const handleReplyToMessage = (_debateId: number | string, messageId: number | string, user: string) => {

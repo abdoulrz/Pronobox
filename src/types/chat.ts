@@ -45,6 +45,7 @@ export interface Channel {
   };
   premium?: boolean;
   price?: number;
+  allowVoiceMessages?: boolean;
 }
 
 export interface UserFeatures {

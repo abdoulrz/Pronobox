@@ -434,15 +434,47 @@ export const leaveChannel = async (id: string | number) => {
   }
 };
 
-
-export const sendMessage = async (channelId: string | number, text: string) => {
+export const uploadMedia = async (file: File | Blob) => {
   try {
-    const response = await api.post(`/channels/${channelId}/messages`, { text });
+    const formData = new FormData();
+    formData.append('media', file);
+    const response = await api.post('/upload-media', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data; // Expected { url: '/uploads/filename.ext' }
+  } catch (error) {
+    console.error('Failed to upload media', error);
+    throw error;
+  }
+};
+
+export const sendMessage = async (channelId: string | number, text: string, imageUrl?: string | null, audioUrl?: string | null, isImage?: boolean, isVoiceMessage?: boolean, replyTo?: any) => {
+  try {
+    const payload: any = { text };
+    if (imageUrl) payload.imageUrl = imageUrl;
+    if (audioUrl) payload.audioUrl = audioUrl;
+    if (isImage !== undefined) payload.isImage = isImage;
+    if (isVoiceMessage !== undefined) payload.isVoiceMessage = isVoiceMessage;
+    if (replyTo) payload.replyTo = replyTo;
+    
+    const response = await api.post(`/channels/${channelId}/messages`, payload);
     return response.data;
   } catch (error) {
     if (localStorage.getItem('fallbackMode') === 'true') {
       return { id: Date.now(), text, time: new Date().toLocaleTimeString(), sender: 'me' };
     }
+    throw error;
+  }
+};
+
+export const deleteChannelMessage = async (channelId: string, messageId: string) => {
+  try {
+    const response = await api.delete(`/channels/${channelId}/messages/${messageId}`);
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
     throw error;
   }
 };
@@ -580,6 +612,26 @@ export const addDebateMessage = async (debateId: string | number, text: string) 
       }
       throw new Error('Debate not found');
     }
+    throw error;
+  }
+};
+
+export const likeDebateMessage = async (debateId: string, messageId: string) => {
+  try {
+    const response = await api.post(`/debates/${debateId}/messages/${messageId}/like`);
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+
+export const likeDebateReply = async (debateId: string, messageId: string, replyId: string) => {
+  try {
+    const response = await api.post(`/debates/${debateId}/messages/${messageId}/replies/${replyId}/like`);
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
     throw error;
   }
 };

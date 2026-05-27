@@ -162,8 +162,8 @@ export const MessageCard: React.FC<MessageCardProps> = ({
           <div
             className={`px-3 py-2 rounded-2xl transition-all duration-200 ${
               isOwnMessage 
-                ? 'bg-emerald-600/80 dark:bg-emerald-500/80 backdrop-blur-md text-white rounded-br-none border border-emerald-500/30 shadow-[0_4px_15px_rgba(16,185,129,0.15)]' 
-                : 'bg-white/70 dark:bg-gray-800/70 backdrop-blur-md text-gray-800 dark:text-gray-200 rounded-bl-none border border-gray-200/50 dark:border-gray-700/50 shadow-[0_4px_15px_rgba(0,0,0,0.05)]'
+                ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-gray-900 dark:text-gray-100 rounded-br-none shadow-sm' 
+                : 'bg-white dark:bg-[#202c33] text-gray-900 dark:text-gray-100 rounded-bl-none shadow-sm'
             }`}
             onMouseDown={startLongPress}
             onMouseUp={cancelLongPress}
@@ -174,7 +174,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
           >
             {/* Sender Name & Badges */}
             <div className="flex items-center space-x-1 mb-1 opacity-90">
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${isOwnMessage ? 'text-green-100' : 'text-green-600 dark:text-green-400'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${isOwnMessage ? 'text-emerald-700 dark:text-emerald-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                 {message.user.username}
               </span>
               {message.user.role === 'admin' && (
@@ -200,7 +200,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                 }}
               >
                 <p className="text-[10px] font-bold text-green-500 truncate">{message.replyTo.username}</p>
-                <p className={`text-[11px] truncate ${isOwnMessage ? 'text-green-50' : 'text-gray-500 dark:text-gray-400'}`}>
+                <p className={`text-[11px] truncate ${isOwnMessage ? 'text-gray-700 dark:text-gray-300' : 'text-gray-500 dark:text-gray-400'}`}>
                   {message.replyTo.text}
                 </p>
               </div>
@@ -259,14 +259,14 @@ export const MessageCard: React.FC<MessageCardProps> = ({
 
               {/* Text Content */}
               {message.text && !(message.isImage && !message.imageUrl) && !(message.isVoiceMessage && !message.audioUrl) && (
-                <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${isOwnMessage ? 'text-white' : 'text-gray-800 dark:text-gray-200'}`}>
+                <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${isOwnMessage ? 'text-gray-900 dark:text-white' : 'text-gray-800 dark:text-gray-200'}`}>
                   {message.text}
                 </p>
               )}
             </div>
 
             {/* Time and Status */}
-            <div className={`flex items-center mt-1 space-x-1 ${isOwnMessage ? 'justify-end text-green-100' : 'justify-start text-gray-400'}`}>
+            <div className={`flex items-center mt-1 space-x-1 ${isOwnMessage ? 'justify-end text-emerald-800 dark:text-emerald-200' : 'justify-start text-gray-500 dark:text-gray-400'}`}>
               <span className="text-[9px] opacity-70">
                 {message.timestamp instanceof Date && !isNaN(message.timestamp.getTime())
                   ? message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
