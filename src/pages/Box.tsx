@@ -22,6 +22,7 @@ import {
   updateDebate, 
   deleteDebate, 
   addDebateMessage, 
+  addDebateReply,
   likeDebate,
   likeDebateMessage,
   likeDebateReply,
@@ -36,7 +37,13 @@ const Box = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { addNotification } = useNotifications();
-  const { channelData, addChannel, setChannelJoined } = useChannelData();
+  const { channelData, addChannel, setChannelJoined, refreshChannels } = useChannelData();
+
+  useEffect(() => {
+    if (refreshChannels) {
+      refreshChannels();
+    }
+  }, []);
   
   const [mainView, setMainView] = useState<'canaux' | 'debats'>(() => {
     return (localStorage.getItem('pronobox_mainView') as 'canaux' | 'debats') || 'canaux';
@@ -352,38 +359,71 @@ const Box = () => {
         const debateToUpdate = debates.find(d => String(d.id) === String(activeDebate));
         if (!debateToUpdate) return;
         
-        const result = await addDebateMessage(activeDebate, debateInput);
-        
+        let result;
         let updatedDebates;
         let debateTitle = debateToUpdate.title;
-        
-        if (result && result.text && !result.title) {
-          // Live mode: returned object is the new message/comment
-          const newMessage = {
-            ...result,
-            id: result.id || result._id,
-            // Normalize user/avatar fields for robust rendering
-            user: typeof result.user === 'object' && result.user !== null ? result.user.username : (result.user || currentUser.username),
-            avatar: typeof result.user === 'object' && result.user !== null ? result.user.avatar : (result.avatar || currentUser.avatar),
-            time: result.time || "à l'instant"
-          };
+
+        if (replyToMessage) {
+          // If we are replying to a specific message, call the nested reply API
+          result = await addDebateReply(activeDebate, replyToMessage.id, debateInput);
           
           updatedDebates = debates.map(d => {
             if (String(d.id) === String(activeDebate)) {
               return {
                 ...d,
-                messages: [...(d.messages || []), newMessage]
+                messages: d.messages.map(m => {
+                  if (String(m.id) === String(replyToMessage.id)) {
+                    const normalizedReply = {
+                      ...result,
+                      id: result.id || result._id,
+                      user: typeof result.user === 'object' && result.user !== null ? result.user.username : (result.user || currentUser.username),
+                      avatar: typeof result.user === 'object' && result.user !== null ? result.user.avatar : (result.avatar || currentUser.avatar),
+                      time: result.time || "à l'instant"
+                    };
+                    return {
+                      ...m,
+                      replies: [...(m.replies || []), normalizedReply]
+                    };
+                  }
+                  return m;
+                })
               };
             }
             return d;
           });
         } else {
-          // Fallback/mock mode: returned object is the full updated debate
-          updatedDebates = debates.map(d => String(d.id) === String(activeDebate) ? { ...d, ...result, id: d.id } : d);
+          // Send top-level comment
+          result = await addDebateMessage(activeDebate, debateInput);
           
-          const updatedDebateObj = updatedDebates.find(d => String(d.id) === String(activeDebate));
-          if (updatedDebateObj) {
-            debateTitle = updatedDebateObj.title;
+          if (result && result.text && !result.title) {
+            // Live mode: returned object is the new message/comment
+            const newMessage = {
+              ...result,
+              id: result.id || result._id,
+              // Normalize user/avatar fields for robust rendering
+              user: typeof result.user === 'object' && result.user !== null ? result.user.username : (result.user || currentUser.username),
+              avatar: typeof result.user === 'object' && result.user !== null ? result.user.avatar : (result.avatar || currentUser.avatar),
+              time: result.time || "à l'instant",
+              replies: []
+            };
+            
+            updatedDebates = debates.map(d => {
+              if (String(d.id) === String(activeDebate)) {
+                return {
+                  ...d,
+                  messages: [...(d.messages || []), newMessage]
+                };
+              }
+              return d;
+            });
+          } else {
+            // Fallback/mock mode: returned object is the full updated debate
+            updatedDebates = debates.map(d => String(d.id) === String(activeDebate) ? { ...d, ...result, id: d.id } : d);
+            
+            const updatedDebateObj = updatedDebates.find(d => String(d.id) === String(activeDebate));
+            if (updatedDebateObj) {
+              debateTitle = updatedDebateObj.title;
+            }
           }
         }
         
@@ -420,24 +460,11 @@ const Box = () => {
     try {
       const response = await likeDebateMessage(String(debateId), String(messageId));
       const updatedDebates = debates.map((debate) => {
-        if (debate.id === debateId) {
+        if (String(debate.id) === String(debateId)) {
           return {
             ...debate,
             messages: debate.messages.map((message) => {
-              if (message.id === messageId) {
-                const userLiked = message.likedBy && message.likedBy.some((id: string | number) => String(id) === String(currentUser.id));
-                if (!userLiked && message.user !== currentUser.username) {
-                  addNotification({
-                    type: 'like',
-                    title: "J'aime sur votre message",
-                    message: `${currentUser.username} a aimé votre message dans le débat "${debate.title}"`,
-                    time: "à l'instant",
-                    read: false,
-                    user: currentUser.username,
-                    avatar: currentUser.avatar,
-                    debateId: debate.id as Debate['id']
-                  });
-                }
+              if (String(message.id) === String(messageId)) {
                 return {
                   ...message,
                   likes: response.likes,
@@ -460,28 +487,15 @@ const Box = () => {
     try {
       const response = await likeDebateReply(String(debateId), String(messageId), String(replyId));
       const updatedDebates = debates.map((debate) => {
-        if (debate.id === debateId) {
+        if (String(debate.id) === String(debateId)) {
           return {
             ...debate,
             messages: debate.messages.map((message) => {
-              if (message.id === messageId) {
+              if (String(message.id) === String(messageId)) {
                 return {
                   ...message,
                   replies: (message.replies || []).map((reply: Reply) => {
-                    if (reply.id === replyId) {
-                      const userLiked = reply.likedBy && reply.likedBy.some((id: string | number) => String(id) === String(currentUser.id));
-                      if (!userLiked && reply.user !== currentUser.username) {
-                        addNotification({
-                          type: 'like',
-                          title: "J'aime sur votre réponse",
-                          message: `${currentUser.username} a aimé votre réponse dans le débat "${debate.title}"`,
-                          time: "à l'instant",
-                          read: false,
-                          user: currentUser.username,
-                          avatar: currentUser.avatar,
-                          debateId: debate.id as Debate['id']
-                        });
-                      }
+                    if (String(reply.id) === String(replyId)) {
                       return {
                         ...reply,
                         likes: response.likes,
@@ -505,9 +519,14 @@ const Box = () => {
   };
 
   const handleReplyToMessage = (_debateId: number | string, messageId: number | string, user: string) => {
+    // Look up parent comment text preview for quote box display
+    const debate = debates.find(d => String(d.id) === String(activeDebate));
+    const message = debate?.messages.find(m => String(m.id) === String(messageId));
+
     setReplyToMessage({
       id: messageId,
-      user
+      user,
+      text: message?.text
     });
     document.getElementById('debate-input')?.focus();
   };
@@ -518,20 +537,6 @@ const Box = () => {
       const updatedDebate = await likeDebate(debateId);
       // Preserve the exact same ID value and type as the existing debate to prevent the detail modal from shrinking
       setDebates(debates.map((d: Debate) => String(d.id) === String(debateId) ? { ...d, ...updatedDebate, id: d.id } : d));
-      
-      const userLiked = updatedDebate.likedBy?.some((id: string | number) => String(id) === String(currentUser.id));
-      if (userLiked && updatedDebate.author?.id !== currentUser.id) {
-        addNotification({
-          type: 'like',
-          title: "J'aime sur votre débat",
-          message: `${currentUser.username} a aimé votre débat "${updatedDebate.title}"`,
-          time: "à l'instant",
-          read: false,
-          user: currentUser.username,
-          avatar: currentUser.avatar,
-          debateId: debateId
-        });
-      }
     } catch (err) {
       console.error("Failed to like debate", err);
     }

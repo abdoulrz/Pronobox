@@ -90,8 +90,61 @@ api.interceptors.request.use(
 );
 
 // Response interceptor to handle connection errors and switch to fallback
+
+const transformUploadUrls = (obj: any): any => {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'string') {
+    if (obj.startsWith('/uploads/')) {
+      const apiURL = (import.meta as any).env?.VITE_API_URL || '/api';
+      const cleanApiURL = apiURL.endsWith('/') ? apiURL.slice(0, -1) : apiURL;
+      const cleanObj = obj.startsWith('/') ? obj : `/${obj}`;
+      // This will map /uploads/xxx to /api/uploads/xxx (or http://domain/api/uploads/xxx)
+      // which is correctly served by the backend proxy.
+      return `${cleanApiURL}${cleanObj}`;
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(transformUploadUrls);
+  }
+  if (typeof obj === 'object') {
+    const newObj: any = {};
+    for (const key in obj) {
+      newObj[key] = transformUploadUrls(obj[key]);
+    }
+    return newObj;
+  }
+  return obj;
+};
+
+const normalizeIds = (obj: any): any => {
+  if (obj === null || obj === undefined) return obj;
+  if (obj instanceof Date) return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map(normalizeIds);
+  }
+
+  if (typeof obj === 'object') {
+    if (obj._id && !obj.id) {
+      obj.id = String(obj._id);
+    }
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        obj[key] = normalizeIds(obj[key]);
+      }
+    }
+  }
+  return obj;
+};
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.data) {
+      response.data = normalizeIds(transformUploadUrls(response.data));
+    }
+    return response;
+  },
   (error) => {
     if (error.code === 'ECONNREFUSED' || error.code === 'ECONNABORTED' || !error.response) {
       console.log('API Connection failed - using fallback mode');
@@ -437,7 +490,16 @@ export const leaveChannel = async (id: string | number) => {
 export const uploadMedia = async (file: File | Blob) => {
   try {
     const formData = new FormData();
-    formData.append('media', file);
+    if (file instanceof Blob && !(file instanceof File)) {
+      const mime = file.type || '';
+      let extension = 'bin';
+      if (mime.includes('/')) {
+        extension = mime.split('/')[1];
+      }
+      formData.append('media', file, `voice-message.${extension}`);
+    } else {
+      formData.append('media', file);
+    }
     const response = await api.post('/upload-media', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -611,6 +673,41 @@ export const addDebateMessage = async (debateId: string | number, text: string) 
         return debates[index];
       }
       throw new Error('Debate not found');
+    }
+    throw error;
+  }
+};
+
+export const addDebateReply = async (debateId: string | number, messageId: string | number, text: string) => {
+  try {
+    const response = await api.post(`/debates/${debateId}/messages/${messageId}/replies`, { text });
+    return response.data;
+  } catch (error) {
+    if (localStorage.getItem('fallbackMode') === 'true') {
+      const user = JSON.parse(localStorage.getItem('fallbackUser') || 'null');
+      const debates = JSON.parse(localStorage.getItem('pronobox_debates') || '[]');
+      const index = debates.findIndex((d: Debate) => String(d.id) === String(debateId));
+      if (index !== -1) {
+        const msgIndex = debates[index].messages.findIndex((m: any) => String(m.id) === String(messageId));
+        if (msgIndex !== -1) {
+          const newReply: Reply = {
+            id: Date.now(),
+            user: user?.username || 'Anonyme',
+            avatar: user?.avatar || '',
+            text,
+            time: "À l'instant",
+            likes: 0,
+            likedBy: []
+          };
+          if (!debates[index].messages[msgIndex].replies) {
+            debates[index].messages[msgIndex].replies = [];
+          }
+          debates[index].messages[msgIndex].replies.push(newReply);
+          localStorage.setItem('pronobox_debates', JSON.stringify(debates));
+          return newReply;
+        }
+      }
+      throw new Error('Debate or message not found');
     }
     throw error;
   }

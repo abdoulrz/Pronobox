@@ -15,6 +15,7 @@ interface MessageInputProps {
   onStopRecording: () => void;
   replyTo?: Message | null;
   onCancelReply?: () => void;
+  allowVoiceMessages?: boolean;
 }
 
 export const MessageInput: React.FC<MessageInputProps> = ({
@@ -29,7 +30,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onStartRecording,
   onStopRecording,
   replyTo,
-  onCancelReply
+  onCancelReply,
+  allowVoiceMessages = true
 }) => {
   const [message, setMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -77,6 +79,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleStartRecording = () => {
+    if (!allowVoiceMessages) {
+      alert("L'administrateur de ce canal a désactivé les messages vocaux.");
+      return;
+    }
     if (userFunctions && !userFunctions.canSendVoiceMessages) {
       alert('Passez à Pro pour envoyer des messages vocaux !');
       return;

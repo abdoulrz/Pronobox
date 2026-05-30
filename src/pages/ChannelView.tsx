@@ -8,7 +8,7 @@ import { ChannelHeader } from '../components/channel/ChannelHeader';
 import { MessageCard } from '../components/channel/MessageCard';
 import { MessageInput } from '../components/channel/MessageInput';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
-import { leaveChannel, deleteChannel, updateChannel, uploadMedia, deleteChannelMessage } from '../services/api';
+import api, { leaveChannel, deleteChannel, updateChannel, uploadMedia, deleteChannelMessage } from '../services/api';
 import ChannelLeaveConfirmation from '../components/ChannelLeaveConfirmation';
 
 const ChannelView = () => {
@@ -74,7 +74,7 @@ const ChannelView = () => {
     }
   };
 
-  const { setChannelJoined } = useChannelData();
+  const { setChannelJoined, refreshChannels } = useChannelData();
 
   const handleLeaveChannel = async () => {
     if (isLeaving) return;
@@ -120,12 +120,9 @@ const ChannelView = () => {
     setLoading(true);
 
     // Always fetch from the API to get fresh data including saved messages
-    fetch(`/api/channels/${id}`)
+    api.get(`/channels/${id}`)
       .then(res => {
-        if (!res.ok) throw new Error('Canal introuvable');
-        return res.json();
-      })
-      .then(data => {
+        const data = res.data;
         const channelObj: Channel = {
           id: data._id || data.id,
           name: data.name,
@@ -262,24 +259,15 @@ const ChannelView = () => {
         finalAudioUrl = res.url;
       }
 
-      const token = localStorage.getItem('token');
-      const res = await fetch(`/api/channels/${id}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          text: optimisticMessage.text,
-          imageUrl: finalImageUrl,
-          audioUrl: finalAudioUrl,
-          isImage: optimisticMessage.isImage,
-          isVoiceMessage: optimisticMessage.isVoiceMessage,
-          replyTo: optimisticMessage.replyTo
-        })
+      const response = await api.post(`/channels/${id}/messages`, {
+        text: optimisticMessage.text,
+        imageUrl: finalImageUrl,
+        audioUrl: finalAudioUrl,
+        isImage: optimisticMessage.isImage,
+        isVoiceMessage: optimisticMessage.isVoiceMessage,
+        replyTo: optimisticMessage.replyTo
       });
-      if (res.ok) {
-        const savedMsg = await res.json();
+      const savedMsg = response.data;
         // Replace the optimistic message with the server-confirmed one
         setChannel(prev => {
           if (!prev) return prev;
@@ -295,7 +283,15 @@ const ChannelView = () => {
             )
           };
         });
-      }
+        
+        // Reset staged media previews/files so they are not sent again
+        setStagedImage(null);
+        setStagedImageFile(null);
+        setStagedAudio(null);
+        setStagedAudioBlob(null);
+
+        // Sync channel list globally
+        if (refreshChannels) refreshChannels();
     } catch (err) {
       console.error('Erreur envoi message:', err);
       // Keep optimistic message in UI even if save failed (graceful degradation)
@@ -463,6 +459,7 @@ const ChannelView = () => {
         onStopRecording={stopRecording}
         replyTo={replyToMessage}
         onCancelReply={() => setReplyToMessage(null)}
+        allowVoiceMessages={channel.allowVoiceMessages !== false}
       />
 
       {/* Channel Info Panel (Telegram-style) */}
@@ -486,7 +483,11 @@ const ChannelView = () => {
                 </button>
                 <div className="flex items-end space-x-3 w-full">
                   <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white flex-shrink-0 relative group">
-                    <img src={channel.avatar} alt={channel.name} className="w-full h-full object-cover" />
+                    <img 
+                      src={channel.avatar || 'https://via.placeholder.com/150'}
+                      alt={channel.name} 
+                      className="w-full h-full object-cover bg-gray-200" 
+                    />
                     {isEditingInfo && (
                       <label className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -500,6 +501,7 @@ const ChannelView = () => {
                               const res = await uploadMedia(file);
                               setChannel(prev => prev ? { ...prev, avatar: res.url } : prev);
                               await updateChannel(channel.id, { avatar: res.url });
+                              if (refreshChannels) refreshChannels();
                             } catch (err) {
                               console.error('Erreur upload avatar:', err);
                             }
@@ -542,6 +544,7 @@ const ChannelView = () => {
                         setChannel(prev => prev ? { ...prev, name: editName, description: editDesc } : prev); 
                         try {
                           await updateChannel(channel.id, { name: editName, description: editDesc });
+                          if (refreshChannels) refreshChannels();
                         } catch (err) {
                           console.error('Erreur lors de la mise à jour des paramètres', err);
                         }
@@ -572,7 +575,11 @@ const ChannelView = () => {
                 <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Propriétaire</h4>
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 rounded-full overflow-hidden">
-                    <img src={channel.owner.avatar} alt={channel.owner.username} className="w-full h-full object-cover" />
+                    <img 
+                      src={channel.owner.avatar || 'https://via.placeholder.com/150'}
+                      alt={channel.owner.username} 
+                      className="w-full h-full object-cover bg-gray-200" 
+                    />
                   </div>
                   <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{channel.owner.username}</span>
                 </div>
@@ -621,6 +628,7 @@ const ChannelView = () => {
                         try {
                           await updateChannel(channel.id, { allowVoiceMessages: newVal });
                           setChannel(prev => prev ? { ...prev, allowVoiceMessages: newVal } : prev);
+                          if (refreshChannels) refreshChannels();
                         } catch (err) {
                           console.error(err);
                         }
@@ -760,6 +768,7 @@ const ChannelView = () => {
                     try {
                       await deleteChannelMessage(channel.id, selectedMessageId.toString());
                       setChannel({ ...channel, messages: channel.messages.filter(m => m.id !== selectedMessageId) });
+                      if (refreshChannels) refreshChannels();
                     } catch (error) {
                       console.error('Erreur lors de la suppression du message:', error);
                     }

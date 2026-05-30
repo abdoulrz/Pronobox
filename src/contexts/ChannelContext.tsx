@@ -35,7 +35,7 @@ const mapApiChannel = (c: any, currentUserId?: string): Channel => {
   let msgText = '';
   if (lastMsg) {
     if (lastMsg.isImage) msgText = '📷 Image';
-    else if (lastMsg.isAudio) msgText = '🎵 Audio';
+    else if (lastMsg.isAudio || lastMsg.isVoiceMessage) msgText = '🎙️ Message vocal';
     else msgText = lastMsg.text || 'Message';
   }
 

@@ -50,6 +50,7 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 app.use('/uploads', express.static(uploadsDir));
+app.use('/api/uploads', express.static(uploadsDir)); // Also serve at /api/uploads for Nginx proxy compatibility
 
 // MongoDB Connection Options
 const mongoOptions = {
@@ -834,11 +835,17 @@ app.get('/api/channels/:id', async (req, res) => {
   }
 });
 
-app.put('/api/channels/:id', authenticateToken, requireProOrAdmin, async (req, res) => {
+app.put('/api/channels/:id', authenticateToken, async (req, res) => {
   try {
-    const channel = await Channel.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const channel = await Channel.findById(req.params.id);
     if (!channel) return res.status(404).json({ message: 'Channel not found' });
-    res.json(channel);
+    
+    if (channel.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Seul le propriétaire du canal peut le modifier' });
+    }
+
+    const updated = await Channel.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(updated);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -1024,7 +1031,7 @@ app.post('/api/debates/:id/like', authenticateToken, async (req, res) => {
     const debate = await Debate.findById(req.params.id);
     if (!debate) return res.status(404).json({ message: 'Debate not found' });
     
-    const userIndex = debate.likedBy.indexOf(req.user.id);
+    const userIndex = debate.likedBy.findIndex(id => id.toString() === req.user.id.toString());
     if (userIndex === -1) {
       debate.likedBy.push(req.user.id);
       debate.likes += 1;
@@ -1033,7 +1040,11 @@ app.post('/api/debates/:id/like', authenticateToken, async (req, res) => {
       debate.likes -= 1;
     }
     await debate.save();
-    res.json({ likes: debate.likes, likedBy: debate.likedBy });
+    const populated = await Debate.findById(debate._id)
+      .populate('author', 'username avatar')
+      .populate('messages.user', 'username avatar')
+      .populate('messages.replies.user', 'username avatar');
+    res.json(populated);
   } catch (error) {
     console.error('Like debate error:', error);
     res.status(500).json({ message: error.message });
@@ -1048,7 +1059,7 @@ app.post('/api/debates/:id/messages/:messageId/like', authenticateToken, async (
     const message = debate.messages.id(req.params.messageId);
     if (!message) return res.status(404).json({ message: 'Message not found' });
 
-    const userIndex = message.likedBy.indexOf(req.user.id);
+    const userIndex = message.likedBy.findIndex(id => id.toString() === req.user.id.toString());
     if (userIndex === -1) {
       message.likedBy.push(req.user.id);
       message.likes += 1;
@@ -1075,7 +1086,7 @@ app.post('/api/debates/:id/messages/:messageId/replies/:replyId/like', authentic
     const reply = message.replies.id(req.params.replyId);
     if (!reply) return res.status(404).json({ message: 'Reply not found' });
 
-    const userIndex = reply.likedBy.indexOf(req.user.id);
+    const userIndex = reply.likedBy.findIndex(id => id.toString() === req.user.id.toString());
     if (userIndex === -1) {
       reply.likedBy.push(req.user.id);
       reply.likes += 1;
@@ -1087,6 +1098,46 @@ app.post('/api/debates/:id/messages/:messageId/replies/:replyId/like', authentic
     res.json({ likes: reply.likes, likedBy: reply.likedBy });
   } catch (error) {
     console.error('Like debate reply error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/debates/:id/messages/:messageId/replies', authenticateToken, async (req, res) => {
+  try {
+    const debate = await Debate.findById(req.params.id);
+    if (!debate) return res.status(404).json({ message: 'Debate not found' });
+    
+    const message = debate.messages.id(req.params.messageId);
+    if (!message) return res.status(404).json({ message: 'Message not found' });
+    
+    const reply = {
+      user: req.user.id,
+      text: req.body.text,
+      likes: 0,
+      likedBy: []
+    };
+    
+    message.replies.push(reply);
+    
+    // Add participant check
+    const isParticipant = debate.messages.some(msg => msg.user.toString() === req.user.id || (msg.replies && msg.replies.some(r => r.user.toString() === req.user.id))) || debate.author.toString() === req.user.id;
+    if (!isParticipant) {
+      debate.participants += 1;
+    }
+    
+    await debate.save();
+    
+    const updated = await Debate.findById(debate._id)
+      .populate('messages.user', 'username avatar')
+      .populate('messages.replies.user', 'username avatar')
+      .populate('author', 'username avatar');
+      
+    const updatedMessage = updated.messages.id(req.params.messageId);
+    const addedReply = updatedMessage.replies[updatedMessage.replies.length - 1];
+    
+    res.status(201).json(addedReply);
+  } catch (error) {
+    console.error('Add reply error:', error);
     res.status(500).json({ message: error.message });
   }
 });

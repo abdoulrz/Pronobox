@@ -195,10 +195,7 @@ const Channels = () => {
     description: channel.description,
     premium: false, // Default value as it's not in the base Channel
     joined: joinedChannels.includes(String(channel.id)),
-    lastMessage:
-    channel.posts && channel.posts.length > 0 ?
-    channel.posts[0].title :
-    'Pas de messages récents',
+    lastMessage: channel.lastMessage || 'Pas de messages récents',
     // Ajouter des utilisateurs simulés pour le header
     users: (channel as any).users || generateMockUsers(channel.members || 0)
   })) || [];
