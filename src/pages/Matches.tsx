@@ -5,6 +5,7 @@ import type { Match } from '../components/MatchCard';
 import LeagueSidebar from '../components/matches/LeagueSidebar';
 import NewsSidebar from '../components/matches/NewsSidebar';
 import DateNavigator from '../components/matches/DateNavigator';
+import SafeImage from '../components/common/SafeImage';
 
 // Static data defined outside component — stable references, no useEffect dep warnings
 const FIFA_LEAGUE_IMPORTANCE = [
@@ -307,7 +308,7 @@ const Matches = () => {
                     onClick={() => navigate(`/league/${leagueData.id}`)}
                   >
                     <div className="w-5 h-5 rounded-full bg-white dark:bg-brand-navy-1 flex items-center justify-center flex-shrink-0 border border-slate-200 dark:border-brand-slate/50 p-0.5">
-                      <img src={leagueData.logo} alt={leagueData.name} className="w-full h-full object-contain" />
+                      <SafeImage src={leagueData.logo} alt={leagueData.name} className="w-full h-full object-contain" />
                     </div>
                     <h3 className="text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">{leagueKey}</h3>
                     <div className="ml-auto flex items-center gap-2">

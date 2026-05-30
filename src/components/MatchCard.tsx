@@ -1,4 +1,5 @@
 import React from 'react';
+import SafeImage from './common/SafeImage';
 
 export interface Match {
   id: number;
@@ -60,7 +61,7 @@ const MatchCard: React.FC<MatchCardProps> = ({
           <span className={`text-[13px] truncate ${match.homeScore !== null && match.homeScore > (match.awayScore || 0) ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-700 dark:text-slate-300'}`}>
             {match.homeTeam}
           </span>
-          <img src={match.homeTeamLogo} alt={match.homeTeam} className="w-5 h-5 object-contain flex-shrink-0" />
+          <SafeImage src={match.homeTeamLogo} alt={match.homeTeam} className="w-5 h-5 object-contain flex-shrink-0" />
         </div>
 
         {/* Center: Score or Time */}
@@ -84,7 +85,7 @@ const MatchCard: React.FC<MatchCardProps> = ({
 
         {/* Away Team */}
         <div className="flex-1 flex justify-start items-center gap-3">
-          <img src={match.awayTeamLogo} alt={match.awayTeam} className="w-5 h-5 object-contain flex-shrink-0" />
+          <SafeImage src={match.awayTeamLogo} alt={match.awayTeam} className="w-5 h-5 object-contain flex-shrink-0" />
           <span className={`text-[13px] truncate ${match.awayScore !== null && match.awayScore > (match.homeScore || 0) ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-700 dark:text-slate-300'}`}>
             {match.awayTeam}
           </span>

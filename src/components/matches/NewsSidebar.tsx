@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import SafeImage from '../common/SafeImage';
 
 interface NewsItem {
   title: string;
@@ -51,7 +52,7 @@ const NewsSidebar: React.FC = () => {
             news.map((item, index) => (
               <a key={index} href={item.link} target="_blank" rel="noopener noreferrer" className="block p-4 hover:bg-slate-50 dark:hover:bg-brand-navy-2 transition-colors group">
                 <div className="w-full h-32 rounded-lg overflow-hidden mb-3 relative">
-                  <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <SafeImage src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 </div>
                 <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-snug mb-2 group-hover:text-brand-green transition-colors">
                   {item.title}

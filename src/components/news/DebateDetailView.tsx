@@ -97,19 +97,19 @@ const DebateDetailView: React.FC<DebateDetailViewProps> = ({
       </button>
 
       {/* Facebook-style header */}
-      <div className="flex items-center justify-between mb-4 border-b border-gray-100 dark:border-gray-700/50 pb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 dark:border-brand-slate shadow-sm">
+      <div className="flex flex-wrap items-start justify-between mb-4 border-b border-gray-100 dark:border-gray-700/50 pb-3 gap-y-3 gap-x-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 dark:border-brand-slate shadow-sm flex-shrink-0">
             <img src={debate.author.avatar} alt={debate.author.username} className="w-full h-full object-cover" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-slate-900 dark:text-white">{debate.author.username}</span>
-              <span className="text-[10px] bg-green-100 dark:bg-green-950/40 text-green-800 dark:text-green-300 px-2 py-0.5 rounded-full font-semibold">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+              <span className="font-bold text-sm text-slate-900 dark:text-white truncate max-w-[120px] sm:max-w-none">{debate.author.username}</span>
+              <span className="text-[10px] bg-green-100 dark:bg-green-950/40 text-green-800 dark:text-green-300 px-2 py-0.5 rounded-full font-semibold flex-shrink-0">
                 {debate.category}
               </span>
             </div>
-            <span className="text-xs text-slate-400 dark:text-slate-500">
+            <span className="text-xs text-slate-400 dark:text-slate-500 block">
               {debate.createdAt ? new Date(debate.createdAt).toLocaleDateString('fr-FR', {
                 day: 'numeric',
                 month: 'short',
@@ -120,19 +120,19 @@ const DebateDetailView: React.FC<DebateDetailViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
           {/* Author actions */}
           {debate.author.id === currentUserId && (
-            <div className="flex gap-1">
+            <div className="flex flex-wrap justify-end gap-1.5">
               <button
                 onClick={(e) => { e.stopPropagation(); onOpenEdit(debate.id); }}
-                className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-brand-text-2 px-2.5 py-1.5 rounded-full font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                className="text-[11px] sm:text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-brand-text-2 px-2.5 py-1.5 rounded-full font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors whitespace-nowrap"
               >
                 Modifier
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); onRequestDelete(debate.id); }}
-                className="text-xs bg-red-500 text-white px-2.5 py-1.5 rounded-full font-medium hover:bg-red-600 transition-colors"
+                className="text-[11px] sm:text-xs bg-red-500 text-white px-2.5 py-1.5 rounded-full font-medium hover:bg-red-600 transition-colors whitespace-nowrap"
               >
                 Supprimer
               </button>
@@ -261,120 +261,136 @@ const DebateDetailView: React.FC<DebateDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Messages list */}
+      {/* Messages list (WhatsApp Style - Flat) */}
       <div className="space-y-3 mb-4">
-        {debate.messages.map((message: Message) => {
-          // Robust user data extraction for messages (populated objects vs strings)
-          const msgUser = typeof message.user === 'object' && message.user !== null 
-            ? (message.user as any).username 
-            : (message.user || message.author || 'Anonyme');
+        {(() => {
+          const flatMessages: any[] = [];
+          debate.messages.forEach((message: Message) => {
+            const msgUser = typeof message.user === 'object' && message.user !== null 
+              ? (message.user as any).username 
+              : (message.user || message.author || 'Anonyme');
+            const msgAvatar = typeof message.user === 'object' && message.user !== null 
+              ? (message.user as any).avatar 
+              : (message.avatar || '');
             
-          const msgAvatar = typeof message.user === 'object' && message.user !== null 
-            ? (message.user as any).avatar 
-            : (message.avatar || '');
+            flatMessages.push({
+              ...message,
+              isReply: false,
+              msgId: message.id || (message as any)._id,
+              parentId: message.id || (message as any)._id,
+              msgUser,
+              msgAvatar,
+              sortDate: new Date((message as any).createdAt || message.time || 0).getTime()
+            });
+
+            if (message.replies && message.replies.length > 0) {
+              message.replies.forEach((reply: Reply) => {
+                const rplUser = typeof reply.user === 'object' && reply.user !== null 
+                  ? (reply.user as any).username 
+                  : (reply.user || 'Anonyme');
+                const rplAvatar = typeof reply.user === 'object' && reply.user !== null 
+                  ? (reply.user as any).avatar 
+                  : (reply.avatar || '');
+
+                flatMessages.push({
+                  ...reply,
+                  isReply: true,
+                  msgId: reply.id || (reply as any)._id,
+                  parentId: message.id || (message as any)._id,
+                  msgUser: rplUser,
+                  msgAvatar: rplAvatar,
+                  replyToUser: msgUser,
+                  replyToText: message.text,
+                  sortDate: new Date((reply as any).createdAt || reply.time || 0).getTime()
+                });
+              });
+            }
+          });
+
+          flatMessages.sort((a, b) => a.sortDate - b.sortDate);
+
+          return flatMessages.map((item) => {
+            const msgTime = item.time || 
+              (item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "à l'instant");
             
-          const msgTime = message.time || 
-            ((message as any).createdAt ? new Date((message as any).createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "à l'instant");
-
-          const msgId = message.id || (message as any)._id;
-          return (
-            <div
-              key={msgId}
-              className="card p-3 hover:border-brand-green/20 transition-colors"
-            >
-              <div className="flex gap-2">
-                <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-slate-200 dark:border-brand-slate">
-                  <img src={msgAvatar} alt={msgUser} className="w-full h-full object-cover" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="font-semibold text-sm text-slate-900 dark:text-brand-text-1">{msgUser}</span>
-                    <span className="text-xs text-slate-400 dark:text-brand-text-3 ml-2 flex-shrink-0">{msgTime}</span>
+            return (
+              <div
+                key={`${item.isReply ? 'reply' : 'msg'}-${item.msgId}`}
+                id={`msg-${item.msgId}`}
+                className="card p-3 hover:border-brand-green/20 transition-all duration-500"
+              >
+                <div className="flex gap-2">
+                  <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-slate-200 dark:border-brand-slate">
+                    <img src={item.msgAvatar} alt={item.msgUser} className="w-full h-full object-cover" />
                   </div>
-                  <p className="text-sm text-slate-700 dark:text-brand-text-2 mb-2 leading-relaxed">{formatMessageText(message.text)}</p>
-
-                  {/* Message actions */}
-                  <div className="flex items-center gap-4 text-xs">
-                    <button
-                      className={`flex items-center gap-1 transition-colors ${
-                        message.likedBy?.some(id => String(id) === String(currentUserId)) ? 'text-red-500 font-bold' : 'text-slate-400 dark:text-brand-text-3 hover:text-red-500'
-                      }`}
-                      onClick={(e) => { e.stopPropagation(); onLikeMessage(debate.id, msgId); }}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className={`h-3.5 w-3.5 ${message.likedBy?.some(id => String(id) === String(currentUserId)) ? 'fill-current animate-pulse-heart' : 'fill-none'}`} viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                      </svg>
-                      {message.likes}
-                    </button>
-                    <button
-                      className="flex items-center gap-1 hover:text-brand-green transition-colors"
-                      onClick={(e) => { e.stopPropagation(); onReply(debate.id, msgId, msgUser); }}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                      </svg>
-                      Répondre
-                    </button>
-                  </div>
-
-                  {/* Replies */}
-                  {message.replies && message.replies.length > 0 && (
-                    <div className="mt-3 pl-3 border-l-2 border-slate-200 dark:border-brand-slate space-y-2">
-                      <p className="text-[10px] font-semibold text-slate-400 dark:text-brand-text-3 uppercase tracking-wider mb-1">Réponses</p>
-                      {message.replies.map((reply: Reply) => {
-                        // Robust user data extraction for replies
-                        const replyUser = typeof reply.user === 'object' && reply.user !== null 
-                          ? (reply.user as any).username 
-                          : (reply.user || 'Anonyme');
-                          
-                        const replyAvatar = typeof reply.user === 'object' && reply.user !== null 
-                          ? (reply.user as any).avatar 
-                          : (reply.avatar || '');
-                          
-                        const replyTime = reply.time || 
-                          ((reply as any).createdAt ? new Date((reply as any).createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "à l'instant");
-
-                        const rplId = reply.id || (reply as any)._id;
-                        return (
-                          <div key={rplId} className="bg-slate-50/70 dark:bg-brand-navy-3 border border-slate-100 dark:border-brand-slate rounded-lg p-2.5">
-                            <div className="flex gap-2">
-                              <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border border-slate-200 dark:border-brand-slate">
-                                <img src={replyAvatar} alt={replyUser} className="w-full h-full object-cover" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-start mb-1 flex-wrap gap-1">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="font-semibold text-xs text-slate-900 dark:text-brand-text-1">{replyUser}</span>
-                                    <span className="text-[9px] text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30 px-1 py-0.2 rounded font-semibold whitespace-nowrap">
-                                      En réponse à @{msgUser}
-                                    </span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400 dark:text-brand-text-3">{replyTime}</span>
-                                </div>
-                                <p className="text-xs text-slate-700 dark:text-brand-text-2 mb-1.5 leading-relaxed">{formatMessageText(reply.text)}</p>
-                                <button
-                                  className={`flex items-center gap-1 text-[10px] transition-colors ${
-                                    reply.likedBy?.some(id => String(id) === String(currentUserId)) ? 'text-red-500 font-bold' : 'text-slate-400 dark:text-brand-text-3 hover:text-red-500'
-                                  }`}
-                                  onClick={(e) => { e.stopPropagation(); onLikeReply(debate.id, msgId, rplId); }}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 ${reply.likedBy?.some(id => String(id) === String(currentUserId)) ? 'fill-current animate-pulse-heart' : 'fill-none'}`} viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                                  </svg>
-                                  {reply.likes}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-semibold text-sm text-slate-900 dark:text-brand-text-1">{item.msgUser}</span>
+                      <span className="text-xs text-slate-400 dark:text-brand-text-3 ml-2 flex-shrink-0">{msgTime}</span>
                     </div>
-                  )}
+
+                    {/* Reply Block (WhatsApp style quote) */}
+                    {item.isReply && (
+                      <div 
+                        className="mb-2 p-2 rounded-lg border-l-4 bg-slate-50 dark:bg-white/5 border-green-500 text-left overflow-hidden cursor-pointer hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const parentEl = document.getElementById(`msg-${item.parentId}`);
+                          if (parentEl) {
+                            parentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            // Highlight effect
+                            parentEl.classList.add('ring-2', 'ring-green-500', 'bg-green-50/50', 'dark:bg-green-900/20');
+                            setTimeout(() => {
+                              parentEl.classList.remove('ring-2', 'ring-green-500', 'bg-green-50/50', 'dark:bg-green-900/20');
+                            }, 1500);
+                          }
+                        }}
+                      >
+                        <p className="text-[10px] font-bold text-green-500 truncate">{item.replyToUser}</p>
+                        <p className="text-[11px] truncate text-slate-500 dark:text-slate-400">
+                          {formatMessageText(item.replyToText)}
+                        </p>
+                      </div>
+                    )}
+
+                    <p className="text-sm text-slate-700 dark:text-brand-text-2 mb-2 leading-relaxed">{formatMessageText(item.text)}</p>
+
+                    {/* Message actions */}
+                    <div className="flex items-center gap-4 text-xs">
+                      <button
+                        className={`flex items-center gap-1 transition-colors ${
+                          item.likedBy?.some((id: any) => String(id) === String(currentUserId)) ? 'text-red-500 font-bold' : 'text-slate-400 dark:text-brand-text-3 hover:text-red-500'
+                        }`}
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          if (item.isReply) {
+                            onLikeReply(debate.id, item.parentId, item.msgId);
+                          } else {
+                            onLikeMessage(debate.id, item.msgId); 
+                          }
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-3.5 w-3.5 ${item.likedBy?.some((id: any) => String(id) === String(currentUserId)) ? 'fill-current animate-pulse-heart' : 'fill-none'}`} viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                        </svg>
+                        {item.likes}
+                      </button>
+                      <button
+                        className="flex items-center gap-1 hover:text-brand-green transition-colors"
+                        onClick={(e) => { e.stopPropagation(); onReply(debate.id, item.parentId, item.msgUser); }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                        Répondre
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          });
+        })()}
       </div>
 
       {/* Reply indicator (WhatsApp style quote preview) */}

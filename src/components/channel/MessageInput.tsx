@@ -79,10 +79,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleStartRecording = () => {
-    if (!allowVoiceMessages) {
-      alert("L'administrateur de ce canal a désactivé les messages vocaux.");
-      return;
-    }
     if (userFunctions && !userFunctions.canSendVoiceMessages) {
       alert('Passez à Pro pour envoyer des messages vocaux !');
       return;
@@ -197,16 +193,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 <span className="ml-1 text-xs">{formatRecordingTime(recordingTime)}</span>
               </button>
             ) : (
-              <button
-                type="button"
-                title="Enregistrer un message vocal"
-                onClick={handleStartRecording}
-                className="text-gray-500 hover:text-red-600 p-1"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
-              </button>
+              allowVoiceMessages && (
+                <button
+                  type="button"
+                  title="Enregistrer un message vocal"
+                  onClick={handleStartRecording}
+                  className="text-gray-500 hover:text-red-600 p-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                </button>
+              )
             )}
             <label className="cursor-pointer text-gray-500 hover:text-blue-600 p-1">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
