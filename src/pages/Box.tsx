@@ -27,9 +27,14 @@ import {
   likeDebateMessage,
   likeDebateReply,
   joinChannel,
+  getActualites,
+  favoriteDebate,
   Debate,
-  Reply
+  Reply,
+  NewsArticle
 } from '../services/api';
+import NewsCarousel from '../components/news/NewsCarousel';
+import NewsDetailOverlay from '../components/news/NewsDetailOverlay';
 
 const Box = () => {
   const { user, isPro } = useAuth();
@@ -106,6 +111,11 @@ const Box = () => {
   const [debateToDeleteId, setDebateToDeleteId] = useState<number | string | null>(null);
   const [activeCategory, setActiveCategory] = useState('all');
 
+  // Actualites state
+  const [actualites, setActualites] = useState<NewsArticle[]>([]);
+  const [newsDetailArticle, setNewsDetailArticle] = useState<NewsArticle | null>(null);
+  const [sourceArticleForDebate, setSourceArticleForDebate] = useState<NewsArticle | null>(null);
+
   const currentUser = {
     id: user?.id || 1,
     username: user?.username ?? 'PronosUser',
@@ -136,6 +146,15 @@ const Box = () => {
       .then((data: Debate[]) => setDebates(data))
       .catch((err: Error) => console.error('Failed to load debates', err));
   }, []);
+
+  // Fetch actualites when view changes
+  useEffect(() => {
+    if (mainView === 'debats') {
+      getActualites().then(data => {
+        setActualites(data);
+      }).catch(console.error);
+    }
+  }, [mainView]);
 
   // Determine if the user is a channel owner or admin
   const isChannelOwner = channels.some(
@@ -535,10 +554,46 @@ const Box = () => {
     e.stopPropagation();
     try {
       const updatedDebate = await likeDebate(debateId);
-      // Preserve the exact same ID value and type as the existing debate to prevent the detail modal from shrinking
       setDebates(debates.map((d: Debate) => String(d.id) === String(debateId) ? { ...d, ...updatedDebate, id: d.id } : d));
     } catch (err) {
       console.error("Failed to like debate", err);
+    }
+  };
+
+  const handleFavoriteDebate = async (debateId: string) => {
+    try {
+      const updated = await favoriteDebate(debateId);
+      setDebates(prev => prev.map(d => String(d._id) === String(debateId) ? { ...d, ...updated, id: d.id } : d));
+    } catch (error) {
+      console.error('Error favoriting debate:', error);
+    }
+  };
+
+  const handleCreateDebateFromArticle = (article: NewsArticle) => {
+    setSourceArticleForDebate(article);
+    setIsEditingDebate(false);
+    setEditingDebateId(null);
+    setShowCreateDebateModal(true);
+  };
+
+  const handleDirectDebateFromArticle = async (article: NewsArticle) => {
+    try {
+      const newDebateObj = await createDebate({
+        title: article.title,
+        description: article.description,
+        images: article.image ? [article.image] : [],
+        category: 'Actualités'
+      });
+      const normalizedDebate = { ...newDebateObj, id: newDebateObj.id || newDebateObj._id };
+      setDebates([normalizedDebate, ...debates]);
+      setActiveDebate(normalizedDebate.id);
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        // Debate already exists, navigate to it
+        setActiveDebate(err.response.data.debateId);
+      } else {
+        console.error("Failed to create debate from article", err);
+      }
     }
   };
 
@@ -609,6 +664,15 @@ const Box = () => {
         ) : (
           <div className="w-full">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              
+              <NewsCarousel 
+                articles={actualites} 
+                debates={debates}
+                isChannelOwner={isChannelOwner}
+                onArticleClick={setNewsDetailArticle}
+                onDebattre={handleDirectDebateFromArticle}
+              />
+
               <div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
                 <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -723,11 +787,15 @@ const Box = () => {
       {/* Debate creation/edition modal */}
       <CreateDebateModal
         isOpen={showCreateDebateModal}
-        onClose={() => setShowCreateDebateModal(false)}
+        onClose={() => {
+          setShowCreateDebateModal(false);
+          setSourceArticleForDebate(null);
+        }}
         onSave={handleSaveDebate}
         currentUser={currentUser}
         isEditing={isEditingDebate}
         initialData={editingDebateId ? debates.find(d => d.id === editingDebateId) : undefined}
+        sourceArticle={sourceArticleForDebate}
       />
 
       {/* Delete Debate Confirmation Modal */}
@@ -777,11 +845,30 @@ const Box = () => {
                   onRequestDelete={(id) => { setDebateToDeleteId(id); setShowDeleteConfirmModal(true); }}
                   onTouchStart={handleDetailedViewTouchStart}
                   onTouchEnd={handleDetailedViewTouchEnd}
+                  onFavorite={handleFavoriteDebate}
                 />
               );
             })()}
           </div>
         </div>
+      )}
+
+      {/* Article Detail Overlay */}
+      {newsDetailArticle && (
+        <NewsDetailOverlay
+          article={newsDetailArticle}
+          isChannelOwner={isChannelOwner}
+          existingDebateId={debates.find(d => d.sourceArticle?.articleId === newsDetailArticle.id)?.id as string | undefined}
+          onClose={() => setNewsDetailArticle(null)}
+          onDebattre={(article) => {
+            setNewsDetailArticle(null);
+            handleDirectDebateFromArticle(article);
+          }}
+          onViewDebate={(debateId) => {
+            setNewsDetailArticle(null);
+            setActiveDebate(debateId);
+          }}
+        />
       )}
     </div>
   );

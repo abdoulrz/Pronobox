@@ -7,9 +7,14 @@ interface NewsItem {
   pubDate: string;
   content: string;
   image: string;
+  source?: string;
 }
 
-const NewsSidebar: React.FC = () => {
+interface NewsSidebarProps {
+  className?: string;
+}
+
+const NewsSidebar: React.FC<NewsSidebarProps> = ({ className = 'hidden xl:block' }) => {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,7 +34,7 @@ const NewsSidebar: React.FC = () => {
   }, []);
 
   return (
-    <div className="w-80 flex-shrink-0 sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar pl-4 pb-8 hidden xl:block">
+    <div className={`w-full xl:w-80 flex-shrink-0 sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar pb-8 ${className}`}>
       
       {/* PronosBox Pro Ad / Widget */}
       <div className="card p-4 mb-6 bg-gradient-to-br from-brand-green/20 to-brand-green/5 dark:from-brand-green/10 dark:to-brand-navy-2 border border-brand-green/20">
@@ -58,7 +63,7 @@ const NewsSidebar: React.FC = () => {
                   {item.title}
                 </h4>
                 <div className="flex items-center text-[11px] text-slate-500 dark:text-brand-text-3 gap-2">
-                  <span className="font-medium">Sports.fr</span>
+                  <span className="font-medium">{item.source || 'Actualités'}</span>
                   <span>•</span>
                   <span>{new Date(item.pubDate).toLocaleDateString('fr-FR')}</span>
                 </div>

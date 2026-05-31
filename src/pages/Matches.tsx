@@ -41,6 +41,7 @@ const Matches = () => {
   const [liveOnly, setLiveOnly] = useState(false);
   const [showAllLeagues, setShowAllLeagues] = useState(false);
   const [availableLeagues, setAvailableLeagues] = useState<{id: number, name: string, logo: string, country: string}[]>([]);
+  const [mobileView, setMobileView] = useState<'ligues' | 'matchs' | 'actualites'>('matchs');
   
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(false);
@@ -188,13 +189,50 @@ const Matches = () => {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 flex gap-6 justify-center animate-fade-in pb-12 pt-6">
+    <div className="max-w-[1400px] mx-auto px-4 flex flex-col xl:flex-row gap-6 justify-center animate-fade-in pb-12 pt-6">
       
-      {/* Left Sidebar (Desktop Only) */}
-      <LeagueSidebar leagues={availableLeagues} />
+      {/* Mobile Toggle */}
+      <div className="flex xl:hidden p-1 bg-slate-100 dark:bg-brand-navy-2 rounded-xl w-full sm:max-w-md mx-auto mb-2">
+        <button
+          onClick={() => setMobileView('ligues')}
+          className={`flex-1 py-2 px-2 sm:px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${
+            mobileView === 'ligues'
+              ? 'bg-white dark:bg-brand-navy-1 text-brand-green shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          🏆 Ligues
+        </button>
+        <button
+          onClick={() => setMobileView('matchs')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 sm:px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${
+            mobileView === 'matchs'
+              ? 'bg-white dark:bg-brand-navy-1 text-brand-green shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          ⚽ Matchs
+        </button>
+        <button
+          onClick={() => setMobileView('actualites')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 sm:px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${
+            mobileView === 'actualites'
+              ? 'bg-white dark:bg-brand-navy-1 text-brand-green shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          📰 Actus
+        </button>
+      </div>
+
+      {/* Left Sidebar */}
+      <LeagueSidebar 
+        leagues={availableLeagues} 
+        className={mobileView === 'ligues' ? 'block' : 'hidden xl:block'}
+      />
 
       {/* Main Content (Center) */}
-      <div className="flex-1 max-w-[700px] min-w-0">
+      <div className={`flex-1 max-w-[700px] mx-auto min-w-0 ${mobileView === 'matchs' ? 'block' : 'hidden xl:block'}`}>
         
         {/* Date Navigator */}
         <DateNavigator selectedDate={selectedDate} onSelectDate={setSelectedDate} />
@@ -381,8 +419,8 @@ const Matches = () => {
 
       </div>
 
-      {/* Right Sidebar (Desktop Only) */}
-      <NewsSidebar />
+      {/* Right Sidebar */}
+      <NewsSidebar className={mobileView === 'actualites' ? 'block' : 'hidden xl:block'} />
 
     </div>
   );

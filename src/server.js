@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -336,33 +337,103 @@ app.get('/api/football/fixtures/:league/:season', async (req, res) => {
   }
 });
 
-const parser = new Parser({
-  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
-});
+// --- Enhanced Football News RSS System ---
+const FOOTBALL_RSS_SOURCES = [
+  { url: 'https://www.sports.fr/football/feed/', name: 'Sports.fr', sourceUrl: 'https://www.sports.fr' },
+  { url: 'https://www.sports.fr/transferts/feed/', name: 'Sports.fr', sourceUrl: 'https://www.sports.fr' },
+  { url: 'https://www.foot01.com/feed', name: 'Foot01', sourceUrl: 'https://www.foot01.com' },
+  { url: 'https://www.footmercato.net/feed', name: 'Footmercato', sourceUrl: 'https://www.footmercato.net' },
+];
 
+const newsCache = { data: null, timestamp: 0 };
+const NEWS_CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+
+function generateArticleHash(str) {
+  return crypto.createHash('md5').update(str).digest('hex').substring(0, 12);
+}
+
+function stripHtmlTags(html) {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function extractArticleImage(item) {
+  if (item.enclosure?.url) return item.enclosure.url;
+  if (item['media:content']?.$?.url) return item['media:content'].$.url;
+  const content = item.content || item['content:encoded'] || '';
+  const imgMatch = /<img[^>]+src=["']([^"'>]+)["']/i.exec(content);
+  if (imgMatch) return imgMatch[1];
+  return null;
+}
+
+async function fetchAllFootballNews() {
+  if (newsCache.data && (Date.now() - newsCache.timestamp) < NEWS_CACHE_DURATION) {
+    return newsCache.data;
+  }
+
+  const newsParser = new Parser({
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+    customFields: { item: ['media:content', 'media:thumbnail'] }
+  });
+
+  const feedPromises = FOOTBALL_RSS_SOURCES.map(source =>
+    newsParser.parseURL(source.url)
+      .then(feed => feed.items.map(item => ({
+        id: generateArticleHash((item.title || '') + (item.link || '')),
+        title: item.title || '',
+        description: stripHtmlTags(item.contentSnippet || item.content || '').substring(0, 300),
+        link: item.link || '',
+        image: extractArticleImage(item),
+        source: source.name,
+        sourceUrl: source.sourceUrl,
+        pubDate: item.pubDate || '',
+        timestamp: new Date(item.pubDate || Date.now()).getTime()
+      })))
+      .catch(err => {
+        console.warn(`RSS fetch failed for ${source.name}: ${err.message}`);
+        return [];
+      })
+  );
+
+  const results = await Promise.allSettled(feedPromises);
+  const articles = results
+    .filter(r => r.status === 'fulfilled')
+    .flatMap(r => r.value)
+    .filter(a => a.title && a.link)
+    .sort((a, b) => b.timestamp - a.timestamp);
+
+  // Deduplicate by title similarity
+  const seen = new Set();
+  const uniqueArticles = articles.filter(article => {
+    const key = article.title.toLowerCase().substring(0, 50);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  newsCache.data = uniqueArticles;
+  newsCache.timestamp = Date.now();
+  return uniqueArticles.slice(0, 10);
+}
+
+// Legacy /api/news endpoint (for NewsSidebar backward compat)
 app.get('/api/news', async (req, res) => {
   try {
-    const feed = await parser.parseURL('https://www.sports.fr/football/feed/');
-    
-    const items = feed.items.map(item => {
-      const content = item.content || '';
-      const imgRegex = /<img[^>]+src="([^">]+)"/g;
-      const match = imgRegex.exec(content);
-      
-      const image = item.enclosure?.url || (match ? match[1] : 'https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&q=80&w=400&h=250');
-      
-      return {
-        title: item.title,
-        link: item.link,
-        pubDate: item.pubDate,
-        content: item.contentSnippet || item.content,
-        image: image
-      };
-    });
-    
-    res.json(items);
+    const articles = await fetchAllFootballNews();
+    res.json(articles.slice(0, 10));
   } catch (error) {
-    console.error('Error fetching RSS feed:', error.message);
+    console.error('Error fetching RSS feeds:', error.message);
+    res.status(500).json({ message: 'Error fetching news' });
+  }
+});
+
+// Comprehensive actualites endpoint
+app.get('/api/actualites', async (req, res) => {
+  try {
+    const articles = await fetchAllFootballNews();
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching actualites:', error.message);
     res.status(500).json({ message: 'Error fetching news' });
   }
 });
@@ -957,13 +1028,26 @@ app.post('/api/debates', authenticateToken, requireProOrAdmin, async (req, res) 
     if (!isChannelOwner && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Seuls les propriétaires de canaux peuvent créer un débat' });
     }
-    const { title, description, images, category } = req.body;
+    const { title, description, images, category, sourceArticle } = req.body;
+    
+    // Duplicate check for news-sourced debates
+    if (sourceArticle?.articleId) {
+      const existing = await Debate.findOne({ 'sourceArticle.articleId': sourceArticle.articleId });
+      if (existing) {
+        return res.status(409).json({ 
+          message: 'Un débat existe déjà pour cet article',
+          debateId: existing._id 
+        });
+      }
+    }
+    
     const debate = new Debate({
       title,
       description,
       images: images || [],
       category: category || 'Général',
-      author: req.user.id
+      author: req.user.id,
+      ...(sourceArticle ? { sourceArticle } : {})
     });
     await debate.save();
     const populatedDebate = await Debate.findById(debate._id).populate('author', 'username avatar');
@@ -1167,9 +1251,124 @@ app.post('/api/debates/:id/messages', authenticateToken, async (req, res) => {
   }
 });
 
+// Favorite/unfavorite a debate (prevents auto-deletion)
+app.post('/api/debates/:id/favorite', authenticateToken, async (req, res) => {
+  try {
+    const debate = await Debate.findById(req.params.id);
+    if (!debate) return res.status(404).json({ message: 'Debate not found' });
+    
+    const userIndex = debate.favoritedBy.findIndex(id => id.toString() === req.user.id.toString());
+    if (userIndex === -1) {
+      debate.favoritedBy.push(req.user.id);
+    } else {
+      debate.favoritedBy.splice(userIndex, 1);
+    }
+    
+    // If at least one user has favorited, make it permanent (null expiresAt = no TTL)
+    if (debate.favoritedBy.length > 0) {
+      debate.isFavorite = true;
+      debate.expiresAt = null;
+    } else {
+      debate.isFavorite = false;
+      debate.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    }
+    
+    await debate.save();
+    const populated = await Debate.findById(debate._id)
+      .populate('author', 'username avatar')
+      .populate('messages.user', 'username avatar')
+      .populate('messages.replies.user', 'username avatar');
+    res.json(populated);
+  } catch (error) {
+    console.error('Favorite debate error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// --- Auto-generate top 4 debates from news every 30 minutes ---
+const AUTO_DEBATE_INTERVAL = 30 * 60 * 1000;
+const MAX_AUTO_DEBATES = 4;
+
+async function autoGenerateDebatesFromNews() {
+  try {
+    const articles = await fetchAllFootballNews();
+    if (!articles || articles.length === 0) {
+      console.log('[AutoDebate] No articles available');
+      return;
+    }
+
+    let botUser = await User.findOne({ username: 'PronosBox', role: 'admin' });
+    if (!botUser) botUser = await User.findOne({ role: 'admin' });
+    if (!botUser) {
+      console.log('[AutoDebate] No admin user found for auto-generation');
+      return;
+    }
+
+    const existingAutoDebates = await Debate.countDocuments({ isAutoGenerated: true });
+    const slotsAvailable = MAX_AUTO_DEBATES - existingAutoDebates;
+    
+    if (slotsAvailable <= 0) {
+      console.log('[AutoDebate] Already have 4 auto-generated debates active');
+      return;
+    }
+
+    const existingDebates = await Debate.find({ 'sourceArticle.articleId': { $exists: true, $ne: null } })
+      .select('sourceArticle.articleId');
+    const existingArticleIds = new Set(existingDebates.map(d => d.sourceArticle?.articleId));
+
+    const candidateArticles = articles
+      .filter(a => !existingArticleIds.has(a.id) && a.image)
+      .slice(0, slotsAvailable);
+
+    for (const article of candidateArticles) {
+      const debate = new Debate({
+        title: article.title,
+        description: article.description + (article.link ? `\n\nSource: ${article.source}` : ''),
+        images: article.image ? [article.image] : [],
+        category: 'Général',
+        author: botUser._id,
+        isAutoGenerated: true,
+        sourceArticle: {
+          articleId: article.id,
+          title: article.title,
+          link: article.link,
+          source: article.source,
+          image: article.image
+        }
+      });
+      await debate.save();
+      console.log(`[AutoDebate] Created debate: "${article.title.substring(0, 50)}..."`);
+    }
+    console.log(`[AutoDebate] Created ${candidateArticles.length} new debates`);
+  } catch (error) {
+    console.error('[AutoDebate] Error:', error.message);
+  }
+}
+
+// Run auto-generation on startup (after delay) and every 30 minutes
+setTimeout(() => {
+  autoGenerateDebatesFromNews();
+  setInterval(autoGenerateDebatesFromNews, AUTO_DEBATE_INTERVAL);
+}, 10000);
+
 // Initialize mock data
 const initializeMockData = async () => {
   try {
+    // Ensure PronosBox bot user exists
+    let botUser = await User.findOne({ username: 'PronosBox' });
+    if (!botUser) {
+      botUser = new User({
+        username: 'PronosBox',
+        email: 'bot@pronosbox.com',
+        password: 'botpassword123',
+        role: 'admin',
+        isPro: true,
+        avatar: 'https://images.unsplash.com/photo-1531379410502-63bfe8cdaf6f?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
+      });
+      await botUser.save();
+      console.log('PronosBox bot user created');
+    }
+
     // Check if we already have users
     const userCount = await User.countDocuments();
     if (userCount === 0) {

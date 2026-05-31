@@ -22,6 +22,7 @@ interface DebateDetailViewProps {
   onRequestDelete: (debateId: number | string) => void;
   onTouchStart: (e: React.TouchEvent) => void;
   onTouchEnd: (e: React.TouchEvent, imageCount: number) => void;
+  onFavorite?: (debateId: string) => void;
 }
 
 const DebateDetailView: React.FC<DebateDetailViewProps> = ({
@@ -44,6 +45,7 @@ const DebateDetailView: React.FC<DebateDetailViewProps> = ({
   onRequestDelete,
   onTouchStart,
   onTouchEnd,
+  onFavorite,
 }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showFullDesc, setShowFullDesc] = useState(false);
@@ -64,6 +66,18 @@ const DebateDetailView: React.FC<DebateDetailViewProps> = ({
   };
 
   const isLiked = (debate.likedBy || []).some(id => String(id) === String(currentUserId));
+  const isFavorited = (debate.favoritedBy || []).some(id => String(id) === String(currentUserId));
+
+  // Calculate hours remaining before expiry
+  const getExpiryText = () => {
+    if (debate.isFavorite || !debate.expiresAt) return null;
+    const expiresAt = new Date(debate.expiresAt).getTime();
+    const hoursLeft = Math.max(0, Math.floor((expiresAt - Date.now()) / (1000 * 60 * 60)));
+    const minsLeft = Math.max(0, Math.floor((expiresAt - Date.now()) / (1000 * 60)) % 60);
+    if (hoursLeft > 0) return `${hoursLeft}h${minsLeft > 0 ? minsLeft : ''}`;
+    if (minsLeft > 0) return `${minsLeft}min`;
+    return null;
+  };
 
   const formatMessageText = (text: string) => {
     if (!text) return '';
@@ -95,6 +109,20 @@ const DebateDetailView: React.FC<DebateDetailViewProps> = ({
         </svg>
         Retour aux débats
       </button>
+
+      {/* Source article link */}
+      {debate.sourceArticle && (
+        <a
+          href={debate.sourceArticle.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-full text-xs font-medium hover:bg-blue-500/20 transition-colors mb-3"
+        >
+          <span>📰</span>
+          <span>Source: {debate.sourceArticle.source}</span>
+          <span>→</span>
+        </a>
+      )}
 
       {/* Facebook-style header */}
       <div className="flex flex-wrap items-start justify-between mb-4 border-b border-gray-100 dark:border-gray-700/50 pb-3 gap-y-3 gap-x-2">
@@ -227,37 +255,67 @@ const DebateDetailView: React.FC<DebateDetailViewProps> = ({
         </div>
       )}
 
-      {/* Action Bar: Likes & Comments */}
+      {/* Action Bar: Likes, Favorite & Comments */}
       <div className="flex items-center justify-between border-t border-b border-slate-100 dark:border-slate-800/60 py-3 mb-4 mt-2">
-        <button
-          onClick={(e) => onLikeDebate(e, debate.id)}
-          className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
-            isLiked
-              ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-              : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-400'
-          }`}
-          aria-label={isLiked ? 'Ne plus aimer ce débat' : "J'aime ce débat"}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className={`h-5 w-5 ${isLiked ? 'fill-current text-red-500 animate-pulse-heart' : 'fill-none'}`}
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => onLikeDebate(e, debate.id)}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
+              isLiked
+                ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-400'
+            }`}
+            aria-label={isLiked ? 'Ne plus aimer ce débat' : "J'aime ce débat"}
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-          </svg>
-          <span className="font-semibold">{isLiked ? 'Aimé' : "J'aime"}</span>
-          <span className="bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full text-xs font-bold text-slate-700 dark:text-slate-300">
-            {debate.likes}
-          </span>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-5 w-5 ${isLiked ? 'fill-current text-red-500 animate-pulse-heart' : 'fill-none'}`}
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+            <span className="font-semibold">{isLiked ? 'Aimé' : "J'aime"}</span>
+            <span className="bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full text-xs font-bold text-slate-700 dark:text-slate-300">
+              {debate.likes}
+            </span>
+          </button>
 
-        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 font-medium mr-2">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-          <span>{debate.messages.length} {debate.messages.length > 1 ? 'commentaires' : 'commentaire'}</span>
+          {/* Favorite button */}
+          <button
+            onClick={() => onFavorite?.(debate._id)}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
+              isFavorited
+                ? 'bg-amber-500/10 text-amber-500'
+                : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-400'
+            }`}
+            title={isFavorited ? 'Retirer des favoris' : 'Sauvegarder (empêche la suppression auto)'}
+          >
+            <span className="text-lg">{isFavorited ? '⭐' : '☆'}</span>
+            <span className="text-xs font-bold">{debate.favoritedBy?.length || 0}</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Expiry indicator */}
+          {getExpiryText() && (
+            <span className="text-[10px] text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full font-medium" title="Temps restant avant suppression automatique">
+              ⏱ {getExpiryText()}
+            </span>
+          )}
+          {debate.isFavorite && (
+            <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full font-medium">
+              ⭐ Sauvegardé
+            </span>
+          )}
+
+          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 font-medium mr-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <span>{debate.messages.length} {debate.messages.length > 1 ? 'commentaires' : 'commentaire'}</span>
+          </div>
         </div>
       </div>
 

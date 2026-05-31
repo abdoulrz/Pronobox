@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { NewsArticle } from '../../services/api';
 
 interface ImagePreview {
   id: number;
@@ -9,7 +10,7 @@ interface ImagePreview {
 interface CreateDebateModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (debate: { title: string; description: string; images: string[]; category: string }) => Promise<void>;
+  onSave: (debate: { title: string; description: string; images: string[]; category: string; sourceArticle?: any }) => Promise<void>;
   initialData?: {
     title: string;
     description: string;
@@ -21,6 +22,7 @@ interface CreateDebateModalProps {
     avatar: string;
   };
   isEditing?: boolean;
+  sourceArticle?: NewsArticle | null;
 }
 
 const CreateDebateModal: React.FC<CreateDebateModalProps> = ({
@@ -29,7 +31,8 @@ const CreateDebateModal: React.FC<CreateDebateModalProps> = ({
   onSave,
   initialData,
   currentUser,
-  isEditing = false
+  isEditing = false,
+  sourceArticle
 }) => {
   const [formData, setFormData] = useState({
     title: '',
@@ -53,6 +56,14 @@ const CreateDebateModal: React.FC<CreateDebateModalProps> = ({
           })),
           category: initialData.category || 'Général'
         });
+      } else if (sourceArticle) {
+        // Pre-fill from news article
+        setFormData({
+          title: sourceArticle.title,
+          description: sourceArticle.description + (sourceArticle.link ? `\n\nSource: ${sourceArticle.source}` : ''),
+          images: sourceArticle.image ? [{ id: 1, file: 'article-image', preview: sourceArticle.image }] : [],
+          category: 'Général'
+        });
       } else {
         setFormData({
           title: '',
@@ -62,7 +73,7 @@ const CreateDebateModal: React.FC<CreateDebateModalProps> = ({
         });
       }
     }
-  }, [isOpen, initialData]);
+  }, [isOpen, initialData, sourceArticle]);
 
   if (!isOpen) return null;
 
@@ -103,12 +114,23 @@ const CreateDebateModal: React.FC<CreateDebateModalProps> = ({
     
     setIsLoading(true);
     try {
-      await onSave({
+      const saveData: any = {
         title: formData.title,
         description: formData.description,
         category: formData.category,
         images: formData.images.map(img => img.preview)
-      });
+      };
+      // Include sourceArticle data if creating from a news article
+      if (sourceArticle) {
+        saveData.sourceArticle = {
+          articleId: sourceArticle.id,
+          title: sourceArticle.title,
+          link: sourceArticle.link,
+          source: sourceArticle.source,
+          image: sourceArticle.image
+        };
+      }
+      await onSave(saveData);
       onClose();
     } catch (error) {
       console.error("Error saving debate:", error);
@@ -121,9 +143,14 @@ const CreateDebateModal: React.FC<CreateDebateModalProps> = ({
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-fade-in">
       <div className="glass-modal rounded-2xl max-w-md w-full max-h-[90vh] flex flex-col animate-scale-in border border-slate-200 dark:border-brand-slate overflow-hidden">
         <div className="p-4 border-b border-slate-200 dark:border-brand-slate flex justify-between items-center bg-brand-green/90 backdrop-blur-md text-white">
-          <h3 className="text-lg font-medium">
-            {isEditing ? 'Modifier le débat' : 'Créer un nouveau débat'}
-          </h3>
+          <div>
+            <h3 className="text-lg font-medium">
+              {isEditing ? 'Modifier le débat' : 'Créer un nouveau débat'}
+            </h3>
+            {sourceArticle && (
+              <span className="text-xs opacity-80">📰 À partir de: {sourceArticle.source}</span>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="p-1 rounded-full hover:bg-green-700"

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 interface LeagueSidebarProps {
   leagues: { id: number; name: string; logo: string; country: string }[];
+  className?: string;
 }
 
 const HARDCODED_TOP_LEAGUES = [
@@ -18,7 +19,7 @@ const HARDCODED_TOP_LEAGUES = [
   { id: 4, name: "Euro", logo: "https://media.api-sports.io/football/leagues/4.png" },
 ];
 
-const LeagueSidebar: React.FC<LeagueSidebarProps> = ({ leagues }) => {
+const LeagueSidebar: React.FC<LeagueSidebarProps> = ({ leagues, className = 'hidden lg:block' }) => {
   const navigate = useNavigate();
   const [allLeaguesExpanded, setAllLeaguesExpanded] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
@@ -61,7 +62,7 @@ const LeagueSidebar: React.FC<LeagueSidebarProps> = ({ leagues }) => {
   );
 
   return (
-    <div className="w-64 flex-shrink-0 sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar pr-4 pb-8 hidden lg:block">
+    <div className={`w-full lg:w-64 flex-shrink-0 sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar pb-8 ${className}`}>
       
       {/* Top Leagues */}
       <div className="mb-6 card overflow-hidden border border-slate-100 dark:border-brand-slate bg-white dark:bg-brand-navy-3">
