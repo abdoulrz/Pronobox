@@ -55,13 +55,13 @@ const MatchCard: React.FC<MatchCardProps> = ({
       </div>
 
       {/* Face to Face Layout */}
-      <div className="flex-1 flex items-center justify-center gap-3">
+      <div className="flex-1 flex items-center justify-center gap-1 sm:gap-3 min-w-0">
         {/* Home Team */}
-        <div className="flex-1 flex justify-end items-center gap-3">
-          <span className={`text-[13px] truncate ${match.homeScore !== null && match.homeScore > (match.awayScore || 0) ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-700 dark:text-slate-300'}`}>
+        <div className="flex-1 flex justify-end items-center gap-1.5 sm:gap-3 min-w-0">
+          <span className={`text-[12px] sm:text-[13px] truncate ${match.homeScore !== null && match.homeScore > (match.awayScore || 0) ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-700 dark:text-slate-300'}`}>
             {match.homeTeam}
           </span>
-          <SafeImage src={match.homeTeamLogo} alt={match.homeTeam} className="w-5 h-5 object-contain flex-shrink-0" />
+          <SafeImage src={match.homeTeamLogo} alt={match.homeTeam} className="w-4 h-4 sm:w-5 sm:h-5 object-contain flex-shrink-0" />
         </div>
 
         {/* Center: Score or Time */}
@@ -84,9 +84,9 @@ const MatchCard: React.FC<MatchCardProps> = ({
         </div>
 
         {/* Away Team */}
-        <div className="flex-1 flex justify-start items-center gap-3">
-          <SafeImage src={match.awayTeamLogo} alt={match.awayTeam} className="w-5 h-5 object-contain flex-shrink-0" />
-          <span className={`text-[13px] truncate ${match.awayScore !== null && match.awayScore > (match.homeScore || 0) ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-700 dark:text-slate-300'}`}>
+        <div className="flex-1 flex justify-start items-center gap-1.5 sm:gap-3 min-w-0">
+          <SafeImage src={match.awayTeamLogo} alt={match.awayTeam} className="w-4 h-4 sm:w-5 sm:h-5 object-contain flex-shrink-0" />
+          <span className={`text-[12px] sm:text-[13px] truncate ${match.awayScore !== null && match.awayScore > (match.homeScore || 0) ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-700 dark:text-slate-300'}`}>
             {match.awayTeam}
           </span>
         </div>

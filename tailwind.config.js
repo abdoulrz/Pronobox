@@ -91,11 +91,21 @@ export default {
           from: { height: 'var(--radix-accordion-content-height)' },
           to:   { height: '0' },
         },
+        'fade-in': {
+          from: { opacity: '0' },
+          to:   { opacity: '1' },
+        },
+        'slide-up': {
+          from: { opacity: '0', transform: 'translateY(12px)' },
+          to:   { opacity: '1', transform: 'translateY(0)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up':   'accordion-up 0.2s ease-out',
         'caret-blink':    'caret-blink 1.25s ease-out infinite',
+        'fade-in':        'fade-in 0.3s ease-out',
+        'slide-up':       'slide-up 0.35s ease-out',
       },
     },
   },

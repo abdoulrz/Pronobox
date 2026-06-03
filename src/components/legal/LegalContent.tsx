@@ -1,9 +1,10 @@
 import React from 'react';
 interface LegalContentProps {
   type: 'terms' | 'privacy' | 'cookies' | 'legal';
-  onClose: () => void;
+  onClose?: () => void;
+  isInline?: boolean;
 }
-const LegalContent: React.FC<LegalContentProps> = ({ type, onClose }) => {
+const LegalContent: React.FC<LegalContentProps> = ({ type, onClose, isInline }) => {
   // Content mapping for different legal pages
   const contentMap = {
     terms: {
@@ -33,7 +34,7 @@ const LegalContent: React.FC<LegalContentProps> = ({ type, onClose }) => {
         <h2>4. Divulgation à des tiers</h2>
         <p>Nous ne vendons, n'échangeons, ni ne transférons vos informations personnelles identifiables à des tiers sans votre consentement, sauf si requis par la loi.</p>
         <h2>5. Consentement</h2>
-        <p>En utilisant notre site, vous consentez à notre politique de confidentialité.</p>
+        <p>En utilisant notre site, vous considérez avoir lu et accepté notre politique de confidentialité.</p>
       `
     },
     cookies: {
@@ -68,6 +69,24 @@ const LegalContent: React.FC<LegalContentProps> = ({ type, onClose }) => {
     }
   };
   const selectedContent = contentMap[type];
+
+  if (isInline) {
+    return (
+      <div className="w-full flex flex-col bg-transparent overflow-hidden">
+        <div className="overflow-y-auto max-h-[60vh] pr-2">
+          <div
+            className="text-gray-800 dark:text-gray-200 
+                       [&>h2]:text-base [&>h2]:font-extrabold [&>h2]:mt-5 [&>h2]:mb-2.5 [&>h2]:text-gray-900 [&>h2]:dark:text-white [&>h2]:pb-1.5 [&>h2]:border-b [&>h2]:border-gray-200/50 [&>h2]:dark:border-gray-700/30
+                       [&>p]:text-sm [&>p]:text-gray-600 [&>p]:dark:text-gray-400 [&>p]:leading-relaxed [&>p]:mb-4"
+            dangerouslySetInnerHTML={{
+              __html: selectedContent.content
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
@@ -76,7 +95,7 @@ const LegalContent: React.FC<LegalContentProps> = ({ type, onClose }) => {
             {selectedContent.title}
           </h2>
           <button
-            onClick={onClose}
+            onClick={() => onClose?.()}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
 
             <svg
@@ -105,7 +124,7 @@ const LegalContent: React.FC<LegalContentProps> = ({ type, onClose }) => {
         </div>
         <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
           <button
-            onClick={onClose}
+            onClick={() => onClose?.()}
             className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700">
 
             Fermer

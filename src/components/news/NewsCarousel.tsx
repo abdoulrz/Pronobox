@@ -31,7 +31,18 @@ const NewsCarousel: React.FC<NewsCarouselProps> = ({
     }
   };
 
-  if (articles.length === 0) return null;
+  if (articles.length === 0) {
+    return (
+      <div className="mb-6">
+        <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-3 px-1">
+          <span className="text-xl">📰</span> À la Une
+        </h3>
+        <div className="p-4 text-center text-sm text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
+          Aucune actualité disponible pour le moment.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-6 relative group">

@@ -29,6 +29,8 @@ import {
   joinChannel,
   getActualites,
   favoriteDebate,
+  deleteDebateMessage,
+  deleteDebateReply,
   Debate,
   Reply,
   NewsArticle
@@ -103,6 +105,7 @@ const Box = () => {
   const [replyToMessage, setReplyToMessage] = useState<{
     id: number | string;
     user: string;
+    text?: string;
   } | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isEditingDebate, setIsEditingDebate] = useState(false);
@@ -160,6 +163,15 @@ const Box = () => {
   const isChannelOwner = channels.some(
     (c) => String(c.owner?.id || c.owner) === String(user?.id)
   ) || user?.role === 'admin';
+
+  // Pro/Admin/ChannelOwner can create a debate
+  const canCreateDebate = isChannelOwner || isPro;
+
+  const proLimitReached = isPro && !isAdmin && debates.some(d => {
+    const authorId = d.author?.id || d.author?._id || d.author || d.authorId;
+    const isActive = !d.expiresAt || new Date(d.expiresAt) > new Date();
+    return String(authorId) === String(user?.id) && isActive;
+  });
 
   const handleOpenChannel = (channelId: string | number) => {
     const channel = channels.find((c) => c.id === channelId);
@@ -554,7 +566,7 @@ const Box = () => {
     e.stopPropagation();
     try {
       const updatedDebate = await likeDebate(debateId);
-      setDebates(debates.map((d: Debate) => String(d.id) === String(debateId) ? { ...d, ...updatedDebate, id: d.id } : d));
+      setDebates(debates.map((d: Debate) => (String(d.id) === String(debateId) || String(d._id) === String(debateId)) ? { ...d, ...updatedDebate, id: d.id || d._id } : d));
     } catch (err) {
       console.error("Failed to like debate", err);
     }
@@ -563,9 +575,27 @@ const Box = () => {
   const handleFavoriteDebate = async (debateId: string) => {
     try {
       const updated = await favoriteDebate(debateId);
-      setDebates(prev => prev.map(d => String(d._id) === String(debateId) ? { ...d, ...updated, id: d.id } : d));
+      setDebates(prev => prev.map(d => (String(d.id) === String(debateId) || String(d._id) === String(debateId)) ? { ...d, ...updated, id: d.id || d._id } : d));
     } catch (error) {
       console.error('Error favoriting debate:', error);
+    }
+  };
+
+  const handleDeleteDebateMessage = async (debateId: number | string, messageId: number | string) => {
+    try {
+      const updatedDebate = await deleteDebateMessage(debateId, messageId);
+      setDebates(debates.map((d: Debate) => (String(d.id) === String(debateId) || String(d._id) === String(debateId)) ? { ...d, ...updatedDebate, id: d.id || d._id } : d));
+    } catch (error) {
+      console.error('Error deleting debate message:', error);
+    }
+  };
+
+  const handleDeleteDebateReply = async (debateId: number | string, messageId: number | string, replyId: number | string) => {
+    try {
+      const updatedDebate = await deleteDebateReply(debateId, messageId, replyId);
+      setDebates(debates.map((d: Debate) => (String(d.id) === String(debateId) || String(d._id) === String(debateId)) ? { ...d, ...updatedDebate, id: d.id || d._id } : d));
+    } catch (error) {
+      console.error('Error deleting debate reply:', error);
     }
   };
 
@@ -680,10 +710,14 @@ const Box = () => {
                   </svg>
                   Débats récents
               </h3>
-              {/* Le bouton Nouveau est complètement MASQUÉ si l'utilisateur n'est pas propriétaire de canal */}
-              {isChannelOwner && (
+              {/* Le bouton Nouveau est affiché pour les propriétaires, admins et membres Pro */}
+              {canCreateDebate && (
                 <button
                   onClick={() => {
+                    if (proLimitReached) {
+                      alert("Vous avez déjà un débat actif. Les abonnés Pro sont limités à 1 débat actif à la fois.");
+                      return;
+                    }
                     setIsEditingDebate(false);
                     setEditingDebateId(null);
                     setShowCreateDebateModal(true);
@@ -808,17 +842,31 @@ const Box = () => {
 
       {/* Immersive detailed view modal with backdrop-blur */}
       {activeDebate !== null && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 relative border border-slate-200 dark:border-slate-700">
-            <button
-              onClick={() => { setActiveDebate(null); setReplyToMessage(null); }}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition p-1 bg-slate-100 dark:bg-slate-700 rounded-full z-10"
-              title="Fermer"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] sm:max-h-[85vh] flex flex-col relative border border-slate-200 dark:border-slate-700">
+            {/* Sticky Header */}
+            <div className="flex justify-between items-center p-3 sm:p-4 border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-gray-800 rounded-t-xl z-20 shrink-0">
+               <button
+                 onClick={() => { setActiveDebate(null); setReplyToMessage(null); }}
+                 className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 dark:text-brand-text-2 hover:text-brand-green transition-colors"
+               >
+                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                 </svg>
+                 Retour aux débats
+               </button>
+               <button
+                 onClick={() => { setActiveDebate(null); setReplyToMessage(null); }}
+                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition p-1 bg-slate-100 dark:bg-slate-700 rounded-full"
+                 title="Fermer"
+               >
+                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                 </svg>
+               </button>
+            </div>
+            {/* Scrollable Content */}
+            <div className="overflow-y-auto p-4 sm:p-6 flex-1">
             {(() => {
               const activeDebateObj = debates.find((d) => String(d.id) === String(activeDebate));
               if (!activeDebateObj) return null;
@@ -846,9 +894,13 @@ const Box = () => {
                   onTouchStart={handleDetailedViewTouchStart}
                   onTouchEnd={handleDetailedViewTouchEnd}
                   onFavorite={handleFavoriteDebate}
+                  isAdmin={currentUser.role === 'admin'}
+                  onDeleteMessage={handleDeleteDebateMessage}
+                  onDeleteReply={handleDeleteDebateReply}
                 />
               );
             })()}
+            </div>
           </div>
         </div>
       )}

@@ -95,7 +95,12 @@ const Pronos = () => {
                     <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                       {prono.league || 'FOOTBALL'}
                     </span>
-                    <span className="text-xs text-slate-500">{formatDate(prono.matchDate)}</span>
+                    <span className="text-xs text-slate-500 font-semibold">Match: {formatDate(prono.matchDate)}</span>
+                    {prono.createdAt && (
+                      <span className="text-xs text-slate-400 dark:text-slate-500 border-l border-slate-200 dark:border-slate-700 pl-2">
+                        Publié le {formatDate(prono.createdAt)}
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     {prono.homeLogo && <img src={prono.homeLogo} alt={prono.homeTeamName} className="w-5 h-5 object-contain" />}
@@ -142,7 +147,12 @@ const Pronos = () => {
                     <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                       {prono.league || 'FOOTBALL'}
                     </span>
-                    <span className="text-xs text-slate-500">{formatDate(prono.matchDate)}</span>
+                    <span className="text-xs text-slate-500 font-semibold">Match: {formatDate(prono.matchDate)}</span>
+                    {prono.createdAt && (
+                      <span className="text-xs text-slate-400 dark:text-slate-500 border-l border-slate-200 dark:border-slate-700 pl-2">
+                        Publié le {formatDate(prono.createdAt)}
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     {prono.homeLogo && <img src={prono.homeLogo} alt={prono.homeTeamName} className="w-5 h-5 object-contain" />}

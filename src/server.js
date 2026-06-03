@@ -1025,9 +1025,26 @@ app.post('/api/channels/:id/messages', authenticateToken, async (req, res) => {
 app.post('/api/debates', authenticateToken, requireProOrAdmin, async (req, res) => {
   try {
     const isChannelOwner = await Channel.exists({ owner: req.user.id });
-    if (!isChannelOwner && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Seuls les propriétaires de canaux peuvent créer un débat' });
+    const isPro = req.user.isPro;
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isChannelOwner && !isAdmin && !isPro) {
+      return res.status(403).json({ message: 'Seuls les administrateurs, abonnés Pro ou propriétaires de canaux peuvent créer un débat' });
     }
+
+    if (isPro && !isAdmin) {
+      const activeDebateCount = await Debate.countDocuments({
+        author: req.user.id,
+        $or: [
+          { expiresAt: { $gt: new Date() } },
+          { expiresAt: null }
+        ]
+      });
+      if (activeDebateCount >= 1) {
+        return res.status(403).json({ message: 'Les abonnés Pro sont limités à 1 débat actif à la fois.' });
+      }
+    }
+
     const { title, description, images, category, sourceArticle } = req.body;
     
     // Duplicate check for news-sourced debates
@@ -1247,6 +1264,73 @@ app.post('/api/debates/:id/messages', authenticateToken, async (req, res) => {
     res.status(201).json(updated.messages[updated.messages.length - 1]);
   } catch (error) {
     console.error('Add message error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete a debate comment
+app.delete('/api/debates/:id/messages/:messageId', authenticateToken, async (req, res) => {
+  try {
+    const debate = await Debate.findById(req.params.id);
+    if (!debate) return res.status(404).json({ message: 'Debate not found' });
+
+    const messageIndex = debate.messages.findIndex(m => m._id.toString() === req.params.messageId);
+    if (messageIndex === -1) return res.status(404).json({ message: 'Message not found' });
+
+    const message = debate.messages[messageIndex];
+    const isAdmin = req.user.role === 'admin';
+    const isOwner = debate.author.toString() === req.user.id;
+    const isAuthor = message.user.toString() === req.user.id;
+
+    if (!isAdmin && !isOwner && !isAuthor) {
+      return res.status(403).json({ message: 'Not authorized to delete this message' });
+    }
+
+    debate.messages.splice(messageIndex, 1);
+    await debate.save();
+    
+    const populated = await Debate.findById(debate._id)
+      .populate('author', 'username avatar')
+      .populate('messages.user', 'username avatar')
+      .populate('messages.replies.user', 'username avatar');
+    res.json(populated);
+  } catch (error) {
+    console.error('Error deleting debate message:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete a debate reply
+app.delete('/api/debates/:id/messages/:messageId/replies/:replyId', authenticateToken, async (req, res) => {
+  try {
+    const debate = await Debate.findById(req.params.id);
+    if (!debate) return res.status(404).json({ message: 'Debate not found' });
+
+    const message = debate.messages.id(req.params.messageId);
+    if (!message) return res.status(404).json({ message: 'Message not found' });
+
+    const replyIndex = message.replies.findIndex(r => r._id.toString() === req.params.replyId);
+    if (replyIndex === -1) return res.status(404).json({ message: 'Reply not found' });
+
+    const reply = message.replies[replyIndex];
+    const isAdmin = req.user.role === 'admin';
+    const isOwner = debate.author.toString() === req.user.id;
+    const isAuthor = reply.user.toString() === req.user.id;
+
+    if (!isAdmin && !isOwner && !isAuthor) {
+      return res.status(403).json({ message: 'Not authorized to delete this reply' });
+    }
+
+    message.replies.splice(replyIndex, 1);
+    await debate.save();
+    
+    const populated = await Debate.findById(debate._id)
+      .populate('author', 'username avatar')
+      .populate('messages.user', 'username avatar')
+      .populate('messages.replies.user', 'username avatar');
+    res.json(populated);
+  } catch (error) {
+    console.error('Error deleting debate reply:', error);
     res.status(500).json({ message: error.message });
   }
 });

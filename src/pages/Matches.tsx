@@ -232,7 +232,7 @@ const Matches = () => {
       />
 
       {/* Main Content (Center) */}
-      <div className={`flex-1 max-w-[700px] mx-auto min-w-0 ${mobileView === 'matchs' ? 'block' : 'hidden xl:block'}`}>
+      <div className={`flex-1 w-full max-w-[700px] mx-auto min-w-0 ${mobileView === 'matchs' ? 'block' : 'hidden xl:block'}`}>
         
         {/* Date Navigator */}
         <DateNavigator selectedDate={selectedDate} onSelectDate={setSelectedDate} />

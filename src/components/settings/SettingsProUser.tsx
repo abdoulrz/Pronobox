@@ -15,6 +15,7 @@ const SettingsProUser: React.FC = () => {
   const { user, updateUser } = useAuth();
   const { channelData } = useChannelData();
   const [activeSection, setActiveSection] = useState<string>('dashboard');
+  const [selectedLegalTab, setSelectedLegalTab] = useState<'terms' | 'privacy' | 'cookies' | 'legal'>('terms');
 
   // Compute channels for the logged-in Pro user
   const userChannels = Object.values(channelData?.channelDetails || {}).filter(
@@ -45,13 +46,44 @@ const SettingsProUser: React.FC = () => {
             {/* Logic for security will go here in the future */}
           </div>
         );
-      case 'about':
+      case 'about': {
+        const legalTabs: { id: 'terms' | 'privacy' | 'cookies' | 'legal'; label: string }[] = [
+          { id: 'terms', label: 'Conditions Générales' },
+          { id: 'privacy', label: 'Confidentialité' },
+          { id: 'cookies', label: 'Cookies' },
+          { id: 'legal', label: 'Mentions Légales' }
+        ];
         return (
           <div className="bg-white/40 dark:bg-gray-800/40 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-3xl p-8">
             <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">Légal & À propos</h3>
-            <LegalContent type="terms" onClose={() => {}} />
+            
+            {/* Horizontal sub-tabs for documents */}
+            <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-200/50 dark:border-gray-700/30 pb-4">
+              {legalTabs.map((tab) => {
+                const isActive = selectedLegalTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSelectedLegalTab(tab.id)}
+                    className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-300 ${
+                      isActive
+                        ? 'bg-green-600 text-white shadow-md shadow-green-500/20'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-white/50 dark:hover:bg-gray-700/40 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Render selected document text inline */}
+            <div className="bg-white/30 dark:bg-gray-900/30 backdrop-blur-md rounded-2xl p-6 border border-white/10 dark:border-gray-800/50 shadow-inner">
+              <LegalContent type={selectedLegalTab} isInline={true} />
+            </div>
           </div>
         );
+      }
       default:
         return <ProDashboard user={user} userChannels={userChannels} />;
     }
