@@ -71,6 +71,86 @@ const MatchPronostics: React.FC<MatchPronosticsProps> = ({ matchId, homeTeamName
 
   return (
     <div className="space-y-6">
+      {/* FREE VERIFICATION STATUS BANNER */}
+      {prono.freeStatus && prono.freeStatus !== 'pending' && (
+        <div className={`rounded-2xl p-4 flex items-center justify-between border mb-4 ${
+          prono.freeStatus === 'won'
+            ? 'bg-green-500/10 border-green-500/20'
+            : 'bg-red-500/10 border-red-500/20'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
+              prono.freeStatus === 'won' ? 'bg-green-500/20' : 'bg-red-500/20'
+            }`}>
+              {prono.freeStatus === 'won' ? '✅' : '❌'}
+            </div>
+            <div>
+              <p className={`text-sm font-black ${
+                prono.freeStatus === 'won' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+              }`}>
+                {prono.freeStatus === 'won' ? 'Pronostic Gratuit Réussi !' : 'Pronostic Gratuit Échoué'}
+              </p>
+              {prono.actualResult && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Score final : <span className="font-bold text-slate-700 dark:text-slate-200">{prono.actualResult}</span>
+                </p>
+              )}
+            </div>
+          </div>
+          {prono.verifiedAt && (
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">
+              Vérifié le {new Date(prono.verifiedAt).toLocaleDateString('fr-FR')}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* PREMIUM VERIFICATION STATUS BANNER */}
+      {(user?.isPro || user?.role === 'admin') && prono.premiumStatus && prono.premiumStatus !== 'pending' && (
+        <div className={`rounded-2xl p-4 flex items-center justify-between border mb-4 ${
+          prono.premiumStatus === 'won'
+            ? 'bg-green-500/10 border-green-500/20'
+            : 'bg-red-500/10 border-red-500/20'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
+              prono.premiumStatus === 'won' ? 'bg-green-500/20' : 'bg-red-500/20'
+            }`}>
+              {prono.premiumStatus === 'won' ? '✅' : '❌'}
+            </div>
+            <div>
+              <p className={`text-sm font-black ${
+                prono.premiumStatus === 'won' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+              }`}>
+                {prono.premiumStatus === 'won' ? 'Pronostic Premium Réussi !' : 'Pronostic Premium Échoué'}
+              </p>
+              {prono.actualResult && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Score final : <span className="font-bold text-slate-700 dark:text-slate-200">{prono.actualResult}</span>
+                </p>
+              )}
+            </div>
+          </div>
+          {prono.verifiedAt && (
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">
+              Vérifié le {new Date(prono.verifiedAt).toLocaleDateString('fr-FR')}
+            </span>
+          )}
+        </div>
+      )}
+
+      {((prono.freeStatus === 'pending' && prono.freeExpectedResult) || (prono.premiumStatus === 'pending' && prono.premiumExpectedResult)) && (
+        <div className="rounded-2xl p-4 flex items-center gap-3 border bg-amber-500/10 border-amber-500/20 mb-4">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-amber-500/20 animate-pulse">
+            ⏳
+          </div>
+          <div>
+            <p className="text-sm font-black text-amber-600 dark:text-amber-400">En attente de vérification</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Le résultat sera vérifié après le match</p>
+          </div>
+        </div>
+      )}
+
       {/* FREE PRONOSTIC BLOCK OR PREMIUM LOCK */}
       {(user?.isPro || user?.role === 'admin') ? (
         <>

@@ -87,7 +87,11 @@ const Pronos = () => {
         <div className="space-y-4">
           {pronos.filter(p => p.freeExpectedResult).map(prono => (
             <div key={prono._id || prono.id} className="glass-panel p-6 relative overflow-hidden group">
-              <div className="absolute top-0 left-0 w-1 h-full bg-brand-green"></div>
+              <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors duration-500 ${
+                prono.freeStatus === 'won' ? 'bg-brand-green' :
+                prono.freeStatus === 'lost' ? 'bg-red-500' :
+                'bg-amber-400 animate-pulse'
+              }`}></div>
               
               <div className="flex justify-between items-start mb-4">
                 <div>
@@ -110,18 +114,52 @@ const Pronos = () => {
                 </div>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-100 dark:border-slate-700/50">
+              <div
+                className={`rounded-xl p-4 mb-4 border backdrop-blur-sm transition-all duration-500 ${
+                  prono.freeStatus === 'won'
+                    ? 'bg-green-500/[0.07] dark:bg-green-500/10 border-green-500/25 shadow-[inset_0_1px_12px_rgba(34,197,94,0.10)]'
+                    : prono.freeStatus === 'lost'
+                    ? 'bg-red-500/[0.07] dark:bg-red-500/10 border-red-500/25 shadow-[inset_0_1px_12px_rgba(239,68,68,0.10)]'
+                    : 'bg-amber-500/[0.05] dark:bg-amber-400/[0.07] border-amber-400/20 shadow-[inset_0_1px_12px_rgba(245,158,11,0.08)]'
+                }`}
+              >
                 <p className="text-slate-700 dark:text-slate-300 font-medium">Pronostic Expert :</p>
                 <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <p className="text-lg font-bold text-brand-green">{prono.freeExpectedResult}</p>
+                  <p className={`text-lg font-bold ${
+                    prono.freeStatus === 'won' ? 'text-green-600 dark:text-green-400' :
+                    prono.freeStatus === 'lost' ? 'text-red-500 dark:text-red-400 line-through decoration-2' :
+                    'text-brand-green'
+                  }`}>{prono.freeExpectedResult}</p>
                   <div className="sm:text-right">
                     <span className="text-sm text-slate-500 block mb-1">Confiance</span>
-                    <div className="inline-flex items-center justify-center bg-brand-green/10 text-brand-green border border-brand-green/20 rounded-lg px-3 py-1 font-bold">
+                    <div className={`inline-flex items-center justify-center rounded-lg px-3 py-1 font-bold border transition-colors duration-500 ${
+                      prono.freeStatus === 'won' ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20' :
+                      prono.freeStatus === 'lost' ? 'bg-red-500/10 text-red-500 dark:text-red-400 border-red-500/20' :
+                      'bg-brand-green/10 text-brand-green border-brand-green/20'
+                    }`}>
                       {prono.freeConfidence}%
                     </div>
                   </div>
                 </div>
               </div>
+
+              {prono.freeStatus && prono.freeStatus !== 'pending' && (
+                <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border mb-4 ${
+                  prono.freeStatus === 'won' 
+                    ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20' 
+                    : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20'
+                }`}>
+                  <span className="text-base">{prono.freeStatus === 'won' ? '✅' : '❌'}</span>
+                  <span>{prono.freeStatus === 'won' ? 'Pronostic Gagné' : 'Pronostic Perdu'}</span>
+                  {prono.actualResult && <span className="font-black ml-auto">Score: {prono.actualResult}</span>}
+                </div>
+              )}
+              {(!prono.freeStatus || prono.freeStatus === 'pending') && (
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border mb-4 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                  <span className="text-base">⏳</span>
+                  <span>En attente du résultat</span>
+                </div>
+              )}
               
               {prono.freeObservation && (
                 <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-line">
@@ -138,7 +176,11 @@ const Pronos = () => {
         <div className="space-y-4">
           {pronos.filter(p => p.premiumExpectedResult).map(prono => (
             <div key={prono._id || prono.id} className="glass-panel p-6 relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-yellow-400 to-amber-500"></div>
+              <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors duration-500 ${
+                prono.premiumStatus === 'won' ? 'bg-gradient-to-b from-green-400 to-green-600' :
+                prono.premiumStatus === 'lost' ? 'bg-gradient-to-b from-red-400 to-red-600' :
+                'bg-gradient-to-b from-yellow-400 to-amber-500 animate-pulse'
+              }`}></div>
               
               <div className="flex justify-between items-start mb-4">
                 <div>
@@ -174,16 +216,36 @@ const Pronos = () => {
                     </button>
                   </div>
                 )}
-                <div className={`bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50 ${!isAuthorizedPremium ? 'opacity-20 blur-sm select-none' : ''}`}>
+                <div className={`rounded-xl p-4 backdrop-blur-sm transition-all duration-500 ${
+                  prono.premiumStatus === 'won'
+                    ? 'bg-green-500/[0.07] dark:bg-green-500/10 border border-green-500/25 shadow-[inset_0_1px_12px_rgba(34,197,94,0.10)]'
+                    : prono.premiumStatus === 'lost'
+                    ? 'bg-red-500/[0.07] dark:bg-red-500/10 border border-red-500/25 shadow-[inset_0_1px_12px_rgba(239,68,68,0.10)]'
+                    : 'bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50'
+                } ${!isAuthorizedPremium ? 'opacity-20 blur-sm select-none' : ''}`}>
                   <p className="text-sm text-slate-500 mb-1">Résultat attendu</p>
-                  <p className="text-lg font-bold text-slate-900 dark:text-white">{prono.premiumExpectedResult}</p>
+                  <p className={`text-lg font-bold ${
+                    prono.premiumStatus === 'won' ? 'text-green-600 dark:text-green-400' :
+                    prono.premiumStatus === 'lost' ? 'text-red-500 dark:text-red-400 line-through decoration-2' :
+                    'text-slate-900 dark:text-white'
+                  }`}>{prono.premiumExpectedResult}</p>
                 </div>
-                <div className={`bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50 flex justify-between items-center ${!isAuthorizedPremium ? 'opacity-20 blur-sm select-none' : ''}`}>
+                <div className={`rounded-xl p-4 flex justify-between items-center backdrop-blur-sm transition-all duration-500 ${
+                  prono.premiumStatus === 'won'
+                    ? 'bg-green-500/[0.07] dark:bg-green-500/10 border border-green-500/25 shadow-[inset_0_1px_12px_rgba(34,197,94,0.10)]'
+                    : prono.premiumStatus === 'lost'
+                    ? 'bg-red-500/[0.07] dark:bg-red-500/10 border border-red-500/25 shadow-[inset_0_1px_12px_rgba(239,68,68,0.10)]'
+                    : 'bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50'
+                } ${!isAuthorizedPremium ? 'opacity-20 blur-sm select-none' : ''}`}>
                   <div>
                     <p className="text-sm text-slate-500 mb-1">Cote & Confiance</p>
                     <p className="text-lg font-bold text-amber-500">@ {prono.premiumOdds ? prono.premiumOdds.toFixed(2) : '-'}</p>
                   </div>
-                  <div className="h-10 w-10 rounded-full flex items-center justify-center border-4 border-amber-500 text-sm font-bold text-slate-900 dark:text-white shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center border-4 text-sm font-bold text-slate-900 dark:text-white transition-all duration-500 ${
+                    prono.premiumStatus === 'won' ? 'border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.3)]' :
+                    prono.premiumStatus === 'lost' ? 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]' :
+                    'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+                  }`}>
                     {prono.premiumConfidence}%
                   </div>
                 </div>
@@ -195,6 +257,24 @@ const Pronos = () => {
                   <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">
                     {prono.premiumObservation}
                   </p>
+                </div>
+              )}
+
+              {prono.status && prono.status !== 'pending' && (
+                <div className={`mx-4 mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border ${
+                  prono.status === 'won' 
+                    ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20' 
+                    : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20'
+                }`}>
+                  <span className="text-base">{prono.status === 'won' ? '✅' : '❌'}</span>
+                  <span>{prono.status === 'won' ? 'Pronostic Gagné' : 'Pronostic Perdu'}</span>
+                  {prono.actualResult && <span className="font-black ml-auto">Score: {prono.actualResult}</span>}
+                </div>
+              )}
+              {(!prono.status || prono.status === 'pending') && (
+                <div className="mx-4 mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                  <span className="text-base">⏳</span>
+                  <span>En attente du résultat</span>
                 </div>
               )}
             </div>

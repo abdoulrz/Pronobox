@@ -21,7 +21,11 @@ const PronoSchema = new mongoose.Schema({
   premiumConfidence: { type: Number, default: 0 },
   premiumObservation: { type: String, default: '' },
 
-  status: { type: String, enum: ['pending', 'won', 'lost'], default: 'pending' }
+  status: { type: String, enum: ['pending', 'won', 'lost', 'partial'], default: 'pending' },
+  freeStatus: { type: String, enum: ['pending', 'won', 'lost'], default: 'pending' },
+  premiumStatus: { type: String, enum: ['pending', 'won', 'lost'], default: 'pending' },
+  actualResult: { type: String, default: '' },
+  verifiedAt: { type: Date }
 }, {
   timestamps: true
 });

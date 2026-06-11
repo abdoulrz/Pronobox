@@ -1443,6 +1443,11 @@ const PronosManagement = () => {
     premiumObservation: ''
   });
 
+  // Verification State
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [verifyingAll, setVerifyingAll] = useState(false);
+  const [verifyResults, setVerifyResults] = useState<any[] | null>(null);
+
   // Search Engine State
   const [searchTerm, setSearchTerm] = useState('');
   const [searchDate, setSearchDate] = useState(new Date().toISOString().split('T')[0]);
@@ -1565,17 +1570,138 @@ const PronosManagement = () => {
     }
   };
 
+  const handleVerifySingle = async (id: string) => {
+    setVerifyingId(id);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/pronos/${id}/verify`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchPronos();
+        if (data.needsManualReview) {
+          alert(`Score enregistré (${data.prono?.actualResult}), mais le résultat n'a pas pu être déterminé automatiquement. Veuillez vérifier manuellement.`);
+        }
+      } else {
+        alert(data.error || data.message || 'Erreur de vérification');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erreur de connexion');
+    } finally {
+      setVerifyingId(null);
+    }
+  };
+
+  const handleVerifyAll = async () => {
+    setVerifyingAll(true);
+    setVerifyResults(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/pronos/verify-all', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setVerifyResults(data.results || []);
+        fetchPronos();
+      } else {
+        alert(data.error || 'Erreur de vérification');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erreur de connexion');
+    } finally {
+      setVerifyingAll(false);
+    }
+  };
+
+  const handleStatusOverride = async (id: string, type: 'free' | 'premium', status: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const body = type === 'free' ? { freeStatus: status } : { premiumStatus: status };
+      const res = await fetch(`/api/pronos/${id}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        fetchPronos();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Erreur');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Gestion des Pronostics</h3>
-        <button 
-          onClick={() => { setIsAdding(!isAdding); setEditingId(null); }} 
-          className="w-full sm:w-auto btn-primary py-2.5 px-6 text-sm font-bold shadow-lg shadow-brand-green/20"
-        >
-          {isAdding ? 'Annuler' : 'Nouveau Pronostic'}
-        </button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button 
+            onClick={handleVerifyAll}
+            disabled={verifyingAll}
+            className={`py-2.5 px-5 text-sm font-bold rounded-xl transition-all shadow-lg ${
+              verifyingAll 
+                ? 'bg-slate-300 dark:bg-slate-600 text-slate-500 cursor-not-allowed' 
+                : 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
+            }`}
+            title="Vérifier automatiquement tous les pronostics dont le match est terminé"
+          >
+            {verifyingAll ? (
+              <span className="flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                Vérification...
+              </span>
+            ) : 'Vérifier tout'}
+          </button>
+          <button 
+            onClick={() => { setIsAdding(!isAdding); setEditingId(null); }} 
+            className="w-full sm:w-auto btn-primary py-2.5 px-6 text-sm font-bold shadow-lg shadow-brand-green/20"
+          >
+            {isAdding ? 'Annuler' : 'Nouveau Pronostic'}
+          </button>
+        </div>
       </div>
+
+      {/* Batch verification results toast */}
+      {verifyResults && verifyResults.length > 0 && (
+        <div className="bg-white dark:bg-brand-navy-2 rounded-xl border border-slate-200 dark:border-brand-slate p-4 shadow-sm animate-fade-in">
+          <div className="flex justify-between items-center mb-3">
+            <h4 className="text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">Résultats de la vérification</h4>
+            <button onClick={() => setVerifyResults(null)} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Fermer</button>
+          </div>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto no-scrollbar">
+            {verifyResults.map((r: any, i: number) => (
+              <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold ${
+                r.status === 'won' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+                r.status === 'lost' ? 'bg-red-500/10 text-red-600 dark:text-red-400' :
+                r.status === 'manual_review' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
+                r.status === 'skipped' ? 'bg-slate-100 dark:bg-slate-800 text-slate-500' :
+                'bg-red-500/10 text-red-500'
+              }`}>
+                <span>{r.match}</span>
+                <span className="uppercase">
+                  {r.status === 'won' ? `✅ Gagné (${r.actualResult})` :
+                   r.status === 'lost' ? `❌ Perdu (${r.actualResult})` :
+                   r.status === 'manual_review' ? `⚠️ Revue manuelle (${r.actualResult})` :
+                   r.status === 'skipped' ? `⏭️ ${r.reason}` :
+                   `❗ ${r.reason}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {isAdding && (
         <form onSubmit={handleSubmit} className="bg-white dark:bg-brand-navy-2 p-6 rounded-xl border border-slate-200 dark:border-brand-slate mb-8 space-y-6 shadow-xl shadow-slate-200/50 dark:shadow-none animate-fade-in">
@@ -1737,16 +1863,20 @@ const PronosManagement = () => {
             <tr>
               <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Match</th>
               <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Choix</th>
+              <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Statut</th>
               <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-brand-navy-2 divide-y divide-slate-100 dark:divide-brand-slate/30">
             {pronos.map((p: any) => (
-              <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-brand-navy-3/30 transition-colors">
+              <tr key={p._id || p.id} className="hover:bg-slate-50 dark:hover:bg-brand-navy-3/30 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex flex-col">
                     <span className="text-sm font-bold text-slate-800 dark:text-white">{p.homeTeamName} vs {p.awayTeamName}</span>
                     <span className="text-[10px] text-slate-400 font-medium uppercase">ID Match: {p.matchId}</span>
+                    {p.actualResult && (
+                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 mt-0.5">Score: {p.actualResult}</span>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -1763,12 +1893,75 @@ const PronosManagement = () => {
                     )}
                   </div>
                 </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center">
+                  <div className="flex flex-col items-center gap-2">
+                    {/* Free Status */}
+                    {p.freeExpectedResult && (
+                      <div className="flex items-center gap-2 w-full max-w-[120px]">
+                        <span className="text-[9px] font-black uppercase text-slate-400 w-8 text-left">GRATUIT</span>
+                        <select
+                          value={p.freeStatus || 'pending'}
+                          onChange={(e) => handleStatusOverride(p._id || p.id, 'free', e.target.value)}
+                          className={`flex-1 text-[9px] border rounded-lg px-1.5 py-1 outline-none cursor-pointer font-bold transition-colors ${
+                            p.freeStatus === 'won' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
+                            p.freeStatus === 'lost' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
+                            'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                          }`}
+                          title="Statut Gratuit"
+                        >
+                          <option value="pending">⏳ Attente</option>
+                          <option value="won">✅ Gagné</option>
+                          <option value="lost">❌ Perdu</option>
+                        </select>
+                      </div>
+                    )}
+                    
+                    {/* Premium Status */}
+                    {p.premiumExpectedResult && (
+                      <div className="flex items-center gap-2 w-full max-w-[120px]">
+                        <span className="text-[9px] font-black uppercase text-slate-400 w-8 text-left">PREMIUM</span>
+                        <select
+                          value={p.premiumStatus || 'pending'}
+                          onChange={(e) => handleStatusOverride(p._id || p.id, 'premium', e.target.value)}
+                          className={`flex-1 text-[9px] border rounded-lg px-1.5 py-1 outline-none cursor-pointer font-bold transition-colors ${
+                            p.premiumStatus === 'won' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
+                            p.premiumStatus === 'lost' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
+                            'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                          }`}
+                          title="Statut Premium"
+                        >
+                          <option value="pending">⏳ Attente</option>
+                          <option value="won">✅ Gagné</option>
+                          <option value="lost">❌ Perdu</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                   <div className="flex justify-end gap-2">
+                    {(p.status === 'pending' || p.freeStatus === 'pending' || p.premiumStatus === 'pending') && (
+                      <button 
+                        onClick={() => handleVerifySingle(p._id || p.id)} 
+                        disabled={verifyingId === (p._id || p.id)}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          verifyingId === (p._id || p.id)
+                            ? 'text-slate-400 cursor-not-allowed'
+                            : 'text-amber-500 hover:bg-amber-500/10'
+                        }`}
+                        title="Vérifier ce pronostic"
+                      >
+                        {verifyingId === (p._id || p.id) ? (
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                        )}
+                      </button>
+                    )}
                     <button onClick={() => handleEdit(p)} className="p-1.5 rounded-lg text-yellow-500 hover:bg-yellow-500/10 transition-colors" title="Modifier">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
                     </button>
-                    <button onClick={() => handleDelete(p.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors" title="Supprimer">
+                    <button onClick={() => handleDelete(p._id || p.id)} className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition-colors" title="Supprimer">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                   </div>

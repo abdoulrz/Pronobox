@@ -691,6 +691,305 @@ app.delete('/api/pronos/:id', authenticateToken, requireAdmin, async (req, res) 
   }
 });
 
+// --- Pronostic Verification System ---
+
+/**
+ * Determines if a prediction was correct based on the actual match result.
+ * Handles common French prediction patterns (1X2, double chance, over/under, BTTS, exact score).
+ * Returns 'won', 'lost', or null if the pattern can't be determined (needs manual review).
+ */
+function determinePronoResult(prediction, homeGoals, awayGoals, homeTeam, awayTeam) {
+  if (!prediction || homeGoals == null || awayGoals == null) return null;
+  const pred = prediction.toLowerCase().trim();
+  const homeTeamLower = homeTeam.toLowerCase();
+  const awayTeamLower = awayTeam.toLowerCase();
+
+  // --- Double chance patterns (check BEFORE single outcome to avoid partial matches) ---
+  // "Victoire X ou Nul" / "1X" / "X ou nul"
+  if (
+    (pred.includes('victoire') && pred.includes('nul') && pred.includes(homeTeamLower)) ||
+    pred === '1x' || pred === '1 ou nul' || pred === '1 ou x'
+  ) {
+    return homeGoals >= awayGoals ? 'won' : 'lost';
+  }
+  if (
+    (pred.includes('victoire') && pred.includes('nul') && pred.includes(awayTeamLower)) ||
+    pred === 'x2' || pred === '2 ou nul' || pred === 'x ou 2'
+  ) {
+    return awayGoals >= homeGoals ? 'won' : 'lost';
+  }
+  if (pred === '12' || pred === '1 ou 2' || pred.includes('pas de nul')) {
+    return homeGoals !== awayGoals ? 'won' : 'lost';
+  }
+
+  // --- Single outcome 1X2 ---
+  if (
+    (pred.includes('victoire') && pred.includes(homeTeamLower) && !pred.includes('nul')) ||
+    pred === '1' || pred === 'victoire domicile'
+  ) {
+    return homeGoals > awayGoals ? 'won' : 'lost';
+  }
+  if (
+    (pred.includes('victoire') && pred.includes(awayTeamLower) && !pred.includes('nul')) ||
+    pred === '2' || pred === 'victoire extérieur' || pred === 'victoire exterieur'
+  ) {
+    return awayGoals > homeGoals ? 'won' : 'lost';
+  }
+  if (pred === 'x' || pred === 'nul' || pred.includes('match nul')) {
+    return homeGoals === awayGoals ? 'won' : 'lost';
+  }
+
+  // --- Over/Under ---
+  const overMatch = pred.match(/(?:\+|plus de\s*)(\d+[,.]\d*)\s*buts?/i);
+  if (overMatch) {
+    return (homeGoals + awayGoals) > parseFloat(overMatch[1].replace(',', '.')) ? 'won' : 'lost';
+  }
+  const underMatch = pred.match(/(?:\-|moins de\s*)(\d+[,.]\d*)\s*buts?/i);
+  if (underMatch) {
+    return (homeGoals + awayGoals) < parseFloat(underMatch[1].replace(',', '.')) ? 'won' : 'lost';
+  }
+
+  // --- Both Teams To Score (BTTS) ---
+  if (pred.includes('les deux équipes marquent') || pred.includes('les deux equipes marquent') || pred === 'btts') {
+    return (homeGoals > 0 && awayGoals > 0) ? 'won' : 'lost';
+  }
+
+  // --- Exact score (e.g. "2-1", "3:0") ---
+  const exactScoreMatch = pred.match(/(\d+)\s*[-–:]\s*(\d+)/);
+  if (exactScoreMatch) {
+    return (homeGoals === parseInt(exactScoreMatch[1]) && awayGoals === parseInt(exactScoreMatch[2])) ? 'won' : 'lost';
+  }
+
+  // Pattern not recognized — needs manual review
+  return null;
+}
+
+// Batch-verify all pending pronostics (grouped by date to minimize API calls)
+app.post('/api/pronos/verify-all', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const bufferTime = new Date();
+    bufferTime.setHours(bufferTime.getHours() - 2.5);
+
+    const pendingPronos = await Prono.find({ 
+      $or: [
+        { status: 'pending' },
+        { freeStatus: 'pending' },
+        { premiumStatus: 'pending' }
+      ],
+      matchDate: { $lt: bufferTime }
+    });
+
+    if (pendingPronos.length === 0) {
+      return res.json({ message: 'No pending pronostics to verify', results: [] });
+    }
+
+    // Deduplicate by matchId so we only fetch each fixture once
+    const uniqueMatchIds = [...new Set(pendingPronos.map(p => p.matchId).filter(Boolean))];
+    const fixtureCache = {};
+
+    for (const matchId of uniqueMatchIds) {
+      try {
+        const response = await axios.get('https://v3.football.api-sports.io/fixtures', {
+          params: { id: matchId },
+          headers: { 'x-apisports-key': '9a068a21856b2e7f20dedff6b4322352' }
+        });
+        const fixture = response.data?.response?.[0];
+        if (fixture) {
+          fixtureCache[matchId] = fixture;
+        }
+      } catch (apiErr) {
+        console.error(`API error for matchId ${matchId}:`, apiErr.message);
+      }
+    }
+
+    const results = [];
+
+    for (const prono of pendingPronos) {
+      const fixture = fixtureCache[prono.matchId];
+      if (!fixture) {
+        results.push({ id: prono._id, match: `${prono.homeTeamName} vs ${prono.awayTeamName}`, status: 'skipped', reason: 'Match introuvable dans l\'API' });
+        continue;
+      }
+
+      const matchStatus = fixture.fixture?.status?.short;
+      const finishedStatuses = ['FT', 'AET', 'PEN'];
+      if (!finishedStatuses.includes(matchStatus)) {
+        results.push({ id: prono._id, match: `${prono.homeTeamName} vs ${prono.awayTeamName}`, status: 'skipped', reason: `Match pas encore terminé (${fixture.fixture?.status?.long || matchStatus})` });
+        continue;
+      }
+
+      const homeGoals = fixture.goals?.home ?? null;
+      const awayGoals = fixture.goals?.away ?? null;
+      const actualResult = `${homeGoals}-${awayGoals}`;
+
+      let freeResult = null;
+      if (prono.freeExpectedResult && prono.freeStatus === 'pending') {
+        freeResult = determinePronoResult(prono.freeExpectedResult, homeGoals, awayGoals, prono.homeTeamName, prono.awayTeamName);
+        if (freeResult) prono.freeStatus = freeResult;
+      }
+      
+      let premiumResult = null;
+      if (prono.premiumExpectedResult && prono.premiumStatus === 'pending') {
+        premiumResult = determinePronoResult(prono.premiumExpectedResult, homeGoals, awayGoals, prono.homeTeamName, prono.awayTeamName);
+        if (premiumResult) prono.premiumStatus = premiumResult;
+      }
+
+      // Update global status based on the parsed results
+      // If any pending part couldn't be parsed, it remains pending/partial
+      const freeNeedsReview = (prono.freeExpectedResult && prono.freeStatus === 'pending');
+      const premiumNeedsReview = (prono.premiumExpectedResult && prono.premiumStatus === 'pending');
+      
+      prono.actualResult = actualResult;
+      prono.verifiedAt = new Date();
+
+      if (freeNeedsReview || premiumNeedsReview) {
+        prono.status = 'pending';
+        await prono.save();
+        results.push({ id: prono._id, match: `${prono.homeTeamName} vs ${prono.awayTeamName}`, status: 'manual_review', actualResult });
+      } else {
+        // If everything is parsed, consider the overall match verified.
+        // We set global status to 'won' if the premium pick (or free if no premium) won, else 'lost'.
+        const mainResult = prono.premiumExpectedResult ? prono.premiumStatus : prono.freeStatus;
+        prono.status = mainResult || 'won'; // fallback
+        await prono.save();
+        results.push({ id: prono._id, match: `${prono.homeTeamName} vs ${prono.awayTeamName}`, status: prono.status, actualResult });
+      }
+    }
+
+    res.json({ 
+      message: `Vérification terminée : ${results.filter(r => r.status === 'won' || r.status === 'lost').length} vérifiés, ${results.filter(r => r.status === 'manual_review').length} à vérifier manuellement`,
+      results 
+    });
+  } catch (err) {
+    console.error('Error batch-verifying pronos:', err);
+    res.status(500).json({ error: 'Failed to batch verify' });
+  }
+});
+
+// Verify a single pronostic by fetching the match result from API-Sports
+app.post('/api/pronos/:id/verify', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const prono = await Prono.findById(req.params.id);
+    if (!prono) return res.status(404).json({ error: 'Prono not found' });
+
+    if (prono.status !== 'pending' && prono.freeStatus !== 'pending' && prono.premiumStatus !== 'pending') {
+      return res.json({ message: 'Already verified', prono });
+    }
+
+    // Fetch match result from API-Sports
+    const response = await axios.get('https://v3.football.api-sports.io/fixtures', {
+      params: { id: prono.matchId },
+      headers: { 'x-apisports-key': '9a068a21856b2e7f20dedff6b4322352' }
+    });
+
+    const fixture = response.data?.response?.[0];
+    if (!fixture) {
+      return res.status(404).json({ error: 'Match not found in API' });
+    }
+
+    const matchStatus = fixture.fixture?.status?.short;
+    const finishedStatuses = ['FT', 'AET', 'PEN'];
+    if (!finishedStatuses.includes(matchStatus)) {
+      return res.status(400).json({ 
+        error: 'Match not finished yet', 
+        matchStatus: fixture.fixture?.status?.long || matchStatus 
+      });
+    }
+
+    const homeGoals = fixture.goals?.home ?? null;
+    const awayGoals = fixture.goals?.away ?? null;
+    const actualResult = `${homeGoals}-${awayGoals}`;
+
+    let freeResult = null;
+    if (prono.freeExpectedResult && prono.freeStatus === 'pending') {
+      freeResult = determinePronoResult(prono.freeExpectedResult, homeGoals, awayGoals, prono.homeTeamName, prono.awayTeamName);
+      if (freeResult) prono.freeStatus = freeResult;
+    }
+    
+    let premiumResult = null;
+    if (prono.premiumExpectedResult && prono.premiumStatus === 'pending') {
+      premiumResult = determinePronoResult(prono.premiumExpectedResult, homeGoals, awayGoals, prono.homeTeamName, prono.awayTeamName);
+      if (premiumResult) prono.premiumStatus = premiumResult;
+    }
+
+    const freeNeedsReview = (prono.freeExpectedResult && prono.freeStatus === 'pending');
+    const premiumNeedsReview = (prono.premiumExpectedResult && prono.premiumStatus === 'pending');
+    
+    prono.actualResult = actualResult;
+    prono.verifiedAt = new Date();
+
+    if (freeNeedsReview || premiumNeedsReview) {
+      prono.status = 'pending';
+      await prono.save();
+      return res.json({ 
+        message: 'Could not auto-determine result. Actual score saved — please set status manually.',
+        prono,
+        needsManualReview: true
+      });
+    }
+
+    const mainResult = prono.premiumExpectedResult ? prono.premiumStatus : prono.freeStatus;
+    prono.status = mainResult || 'won';
+    await prono.save();
+
+    res.json({ message: `Prono verified: ${prono.status}`, prono });
+  } catch (err) {
+    console.error('Error verifying prono:', err);
+    res.status(500).json({ error: 'Failed to verify prono' });
+  }
+});
+
+// Manual status override for a pronostic
+app.put('/api/pronos/:id/status', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { status, freeStatus, premiumStatus, actualResult } = req.body;
+    
+    const updateData = {};
+    if (status) {
+      if (!['pending', 'won', 'lost'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+      updateData.status = status;
+    }
+    if (freeStatus) {
+      if (!['pending', 'won', 'lost'].includes(freeStatus)) return res.status(400).json({ error: 'Invalid freeStatus' });
+      updateData.freeStatus = freeStatus;
+    }
+    if (premiumStatus) {
+      if (!['pending', 'won', 'lost'].includes(premiumStatus)) return res.status(400).json({ error: 'Invalid premiumStatus' });
+      updateData.premiumStatus = premiumStatus;
+    }
+    
+    if (actualResult !== undefined) {
+      updateData.actualResult = actualResult;
+    }
+
+    // Determine global status dynamically if individual statuses are updated
+    const pronoToUpdate = await Prono.findById(req.params.id);
+    if (!pronoToUpdate) return res.status(404).json({ error: 'Prono not found' });
+    
+    if (freeStatus || premiumStatus) {
+       const newFree = freeStatus || pronoToUpdate.freeStatus;
+       const newPremium = premiumStatus || pronoToUpdate.premiumStatus;
+       if ((pronoToUpdate.freeExpectedResult && newFree === 'pending') || 
+           (pronoToUpdate.premiumExpectedResult && newPremium === 'pending')) {
+         updateData.status = 'pending';
+       } else {
+         const mainResult = pronoToUpdate.premiumExpectedResult ? newPremium : newFree;
+         updateData.status = mainResult || 'won';
+       }
+    }
+
+    const prono = await Prono.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true }
+    );
+    res.json(prono);
+  } catch (err) {
+    console.error('Error updating prono status:', err);
+    res.status(500).json({ error: 'Failed to update status' });
+  }
+});
+
 // User routes
 app.get('/api/users/me', authenticateToken, async (req, res) => {
   try {
