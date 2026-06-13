@@ -2,6 +2,7 @@ import React, { useEffect, useState, createContext, useContext } from 'react';
 import {
   login as apiLogin,
   register as apiRegister,
+  googleLogin as apiGoogleLogin,
   getCurrentUser,
   updateUser as apiUpdateUser } from
 '../services/api';
@@ -40,6 +41,7 @@ type AuthContextType = {
     email: string;
     password: string;
   }) => Promise<User | void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
   updateUser: (data: Partial<User>) => Promise<User | void>;
   isFallbackMode: boolean;
@@ -190,6 +192,37 @@ export const AuthProvider: React.FC<{
       throw error;
     }
   };
+  const loginWithGoogle = async (credential: string) => {
+    try {
+      const data = await apiGoogleLogin(credential);
+      // Save token to localStorage
+      localStorage.setItem('token', data.token);
+      // Set user data
+      setUser({
+        id: data.user.id,
+        email: data.user.email,
+        username: data.user.username,
+        role: data.user.role,
+        isPro: data.user.isPro,
+        avatar: data.user.avatar,
+        walletBalance: data.user.walletBalance,
+        bio: data.user.bio,
+        notifications: data.user.notifications || {
+          email: false,
+          push: true,
+          matches: true,
+          channels: true
+        },
+        paymentMethods: data.user.paymentMethods || [],
+        unlockedResources: data.user.unlockedResources || []
+      });
+      // Check if we're in fallback mode
+      setIsFallbackMode(localStorage.getItem('fallbackMode') === 'true');
+    } catch (error) {
+      console.error('Google login error:', error);
+      throw error;
+    }
+  };
   const logout = () => {
     // Remove token from localStorage
     localStorage.removeItem('token');
@@ -239,6 +272,7 @@ export const AuthProvider: React.FC<{
         isPro,
         login,
         register,
+        loginWithGoogle,
         logout,
         updateUser,
         isFallbackMode

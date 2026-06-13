@@ -14,7 +14,12 @@ import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
 import Parser from 'rss-parser';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { OAuth2Client } from 'google-auth-library';
 import User from './models/User.js';
+
+const googleClient = new OAuth2Client('380256594201-dnalojsu0p5266j4mhjlcg8fnapd5rf3.apps.googleusercontent.com');
 import Transaction from './models/Transaction.js';
 import Channel from './models/Channel.js';
 import Debate from './models/Debate.js';
@@ -40,8 +45,63 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage, limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB limit
 const app = express();
 
-// Middleware
-app.use(cors());
+// Secure backend with Helmet (Security Headers)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "https:", "http:", "https://images.unsplash.com"],
+      connectSrc: ["'self'", "https:", "http:", "wss:", "ws:"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'", "https:", "http:"],
+      frameSrc: ["'self'", "https:"]
+    }
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// API Rate Limiting to prevent brute force and DDoS attacks
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 500, // Limit each IP to 500 requests per windowMs
+  message: { message: 'Trop de requêtes effectuées depuis cette IP, veuillez réessayer plus tard.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // Limit each IP to 30 authentication requests per windowMs
+  message: { message: 'Trop de tentatives de connexion, veuillez réessayer dans 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply rate limiting to routes
+app.use('/api/', apiLimiter);
+app.use('/api/auth/', authLimiter);
+
+// Secured CORS configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',') 
+  : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      callback(new Error('Blocked by CORS policy (Unauthorized Domain)'));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -222,6 +282,92 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ message: 'Google credential is required' });
+    }
+
+    // Verify token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: '380256594201-dnalojsu0p5266j4mhjlcg8fnapd5rf3.apps.googleusercontent.com'
+    });
+
+    const payload = ticket.getPayload();
+    const { email, name, picture } = payload;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email not provided by Google account' });
+    }
+
+    // Find or create user
+    let user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      // Generate unique username
+      let baseUsername = (name || email.split('@')[0])
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .substring(0, 20);
+      if (!baseUsername) baseUsername = 'User';
+
+      let username = baseUsername;
+      let userExists = await User.findOne({ username });
+      let counter = 1;
+      while (userExists) {
+        username = `${baseUsername}${counter}`;
+        userExists = await User.findOne({ username });
+        counter++;
+      }
+
+      // Generate secure random password
+      const randomPassword = crypto.randomBytes(16).toString('hex');
+
+      user = new User({
+        username,
+        email: email.toLowerCase(),
+        password: randomPassword,
+        avatar: picture || undefined,
+        isPro: false
+      });
+      await user.save();
+    } else {
+      // Update last login
+      user.lastLogin = Date.now();
+      // If user's avatar is the default Unsplash image, we can update it with the Google picture
+      if (picture && (!user.avatar || user.avatar.includes('unsplash.com'))) {
+        user.avatar = picture;
+      }
+      await user.save();
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: user._id, role: user.role, isPro: user.isPro },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        isPro: user.isPro,
+        avatar: user.avatar,
+        walletBalance: user.walletBalance,
+        unlockedResources: user.unlockedResources || []
+      }
+    });
+  } catch (error) {
+    console.error('Google Auth Route Error:', error);
+    res.status(500).json({ message: 'Authentication failed: ' + error.message });
+  }
+});
+
 app.delete('/api/channels/:id/messages/:messageId', authenticateToken, async (req, res) => {
   try {
     const channel = await Channel.findById(req.params.id);
@@ -248,6 +394,10 @@ app.delete('/api/channels/:id/messages/:messageId', authenticateToken, async (re
   }
 });
 
+// Football API proxy cache
+const matchesCache = {};
+const MATCHES_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 // Football API proxy route
 app.get('/api/football/matches', async (req, res) => {
   try {
@@ -257,7 +407,13 @@ app.get('/api/football/matches', async (req, res) => {
       return res.status(400).json({ message: 'Date parameter is required (YYYY-MM-DD)' });
     }
 
-    console.log(`Fetching matches for date: ${date}`);
+    const now = Date.now();
+    if (matchesCache[date] && (now - matchesCache[date].timestamp < MATCHES_CACHE_DURATION)) {
+      console.log(`Serving matches from server cache for date: ${date}`);
+      return res.json(matchesCache[date].data);
+    }
+
+    console.log(`Fetching matches from API-Sports for date: ${date}`);
     
     const response = await axios.get('https://v3.football.api-sports.io/fixtures', {
       params: { date },
@@ -269,6 +425,12 @@ app.get('/api/football/matches', async (req, res) => {
     console.log(`API-Football response status: ${response.status}`);
     console.log(`API-Football response data count: ${response.data.response?.length || 0}`);
     
+    // Store in cache
+    matchesCache[date] = {
+      data: response.data,
+      timestamp: now
+    };
+
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching football data:', error.message);
@@ -435,6 +597,93 @@ app.get('/api/actualites', async (req, res) => {
   } catch (error) {
     console.error('Error fetching actualites:', error.message);
     res.status(500).json({ message: 'Error fetching news' });
+  }
+});
+
+// GET /api/admin/stats - Calculate actual statistics from MongoDB
+app.get('/api/admin/stats', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    // 1. Users Stats
+    const totalUsers = await User.countDocuments();
+    const activeUsers = await User.countDocuments({ isBanned: false });
+    const proUsers = await User.countDocuments({ isPro: true });
+    const newToday = await User.countDocuments({ createdAt: { $gte: startOfDay } });
+
+    // 2. Channels Stats
+    const totalChannels = await Channel.countDocuments();
+    const premiumChannels = await Channel.countDocuments({ premium: true });
+    const freeChannels = await Channel.countDocuments({ premium: false });
+
+    // 3. Revenue Stats (from completed transactions)
+    const completedTransactions = await Transaction.find({ status: 'completed' });
+    const totalRevenue = completedTransactions.reduce((acc, t) => {
+      if (t.type === 'recharge' || t.type === 'pro' || t.type === 'subscription') {
+        return acc + t.amount;
+      }
+      return acc;
+    }, 0);
+
+    const thisMonthTransactions = completedTransactions.filter(t => t.createdAt >= startOfMonth);
+    const thisMonthRevenue = thisMonthTransactions.reduce((acc, t) => {
+      if (t.type === 'recharge' || t.type === 'pro' || t.type === 'subscription') {
+        return acc + t.amount;
+      }
+      return acc;
+    }, 0);
+
+    const subscriptionRevenue = completedTransactions
+      .filter(t => t.type === 'subscription')
+      .reduce((acc, t) => acc + t.amount, 0);
+    const proRevenue = completedTransactions
+      .filter(t => t.type === 'pro')
+      .reduce((acc, t) => acc + t.amount, 0);
+
+    // 4. Content (Pronos) Stats
+    const totalPronos = await Prono.countDocuments();
+    const publishedToday = await Prono.countDocuments({ createdAt: { $gte: startOfDay } });
+    const pendingReview = await Prono.countDocuments({ status: 'pending' });
+
+    // Success Rate: based on general status 'won' or 'lost'
+    const totalEvaluated = await Prono.countDocuments({ status: { $in: ['won', 'lost'] } });
+    const wonPronos = await Prono.countDocuments({ status: 'won' });
+    const successRate = totalEvaluated > 0 ? Math.round((wonPronos / totalEvaluated) * 100) : 0;
+
+    res.json({
+      users: {
+        total: totalUsers,
+        active: activeUsers,
+        premium: proUsers,
+        newToday: newToday
+      },
+      channels: {
+        total: totalChannels,
+        premium: premiumChannels,
+        free: freeChannels,
+        mostActive: totalChannels > 0 ? 'Canaux Communautaires' : 'Aucun'
+      },
+      revenue: {
+        total: totalRevenue,
+        thisMonth: thisMonthRevenue,
+        subscriptions: proRevenue,
+        channelFees: subscriptionRevenue
+      },
+      content: {
+        totalPronos: totalPronos,
+        publishedToday: publishedToday,
+        successRate: successRate,
+        pendingReview: pendingReview
+      }
+    });
+  } catch (error) {
+    console.error('Error calculating admin stats:', error);
+    res.status(500).json({ message: 'Error calculating admin stats' });
   }
 });
 

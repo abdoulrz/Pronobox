@@ -1,174 +1,153 @@
 import React, { useState } from 'react';
-import { X, Check, ArrowLeft, CreditCard } from 'lucide-react';
-import { usePayment } from '../hooks/usePayment';
-import { useAuth } from '../contexts/AuthContext';
+import { X, Check, ArrowLeft, Crown, Sparkles } from 'lucide-react';
+
 interface UpgradeProModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
 }
+
 const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
   isOpen,
   onClose,
   onSuccess
 }) => {
-  const { processPayment } = usePayment();
-  const { updateUser } = useAuth();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isJoined, setIsJoined] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   if (!isOpen) return null;
-  // Prix fixe de 25€ pour un accès définitif
-  const proPrice = 25;
-  const handlePayment = async () => {
-    try {
-      setIsProcessing(true);
-      // Simuler un traitement de paiement
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      await processPayment({
-        amount: proPrice,
-        method: 'card',
-        plan: 'lifetime'
-      });
-      
-      // Mettre à jour le statut de l'utilisateur en local/mock
-      await updateUser({ isPro: true });
-      
-      if (onSuccess) {
-        onSuccess();
-      }
-      onClose();
-    } catch (error) {
-      console.error('Erreur de paiement:', error);
-    } finally {
-      setIsProcessing(false);
+
+  const handleJoinWaitlist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailInput) return;
+
+    setIsSubmitting(true);
+    // Simulate API call to save email to waitlist
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    setIsSubmitting(false);
+    setIsJoined(true);
+
+    if (onSuccess) {
+      onSuccess();
     }
   };
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="glass-modal rounded-lg shadow-lg w-full max-w-xs mx-4 overflow-hidden">
-        {/* Header */}
-        <div className="relative px-3 py-2 bg-green-600 text-white">
-          <h3 className="text-base font-medium">Passez à PronosBox Pro</h3>
-          <p className="text-xs opacity-90">Créez votre propre canal</p>
-          <button
-            title="Fermer le modal"
-            type="button"
-            onClick={onClose}
-            className="absolute right-2 top-2 text-white hover:text-gray-200">
 
-            <X size={16} />
-          </button>
-        </div>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-all duration-300 animate-fade-in">
+      <div className="relative bg-slate-900/90 border border-amber-500/30 rounded-3xl shadow-[0_0_50px_rgba(245,158,11,0.15)] w-full max-w-md mx-4 overflow-hidden">
+        {/* Glow effect in background */}
+        <div className="absolute -top-16 -left-16 w-36 h-36 bg-amber-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-16 -right-16 w-36 h-36 bg-green-500/20 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 text-slate-400 hover:text-white bg-slate-800/40 hover:bg-slate-800/80 p-2 rounded-full transition-all duration-300"
+          title="Fermer"
+        >
+          <X size={18} />
+        </button>
+
         {/* Content */}
-        <div className="p-3">
-          <div className="mb-3">
-            <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Offre exclusive
-            </h4>
-            <div className="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md text-center">
-              <div className="text-xl font-bold text-green-700 dark:text-green-300">
-                25€
-              </div>
-              <div className="text-xs text-green-600 dark:text-green-400 mt-1">
-                Accès Pro définitif
-              </div>
-              <div className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                Paiement unique, pas d'abonnement
-              </div>
+        <div className="p-6 sm:p-8 flex flex-col items-center text-center">
+          {/* Animated icon header */}
+          <div className="relative mb-6">
+            <div className="w-16 h-16 bg-gradient-to-tr from-amber-500 to-yellow-400 rounded-2xl flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/20 transform rotate-6 animate-pulse">
+              <Crown className="w-8 h-8 -rotate-6" />
+            </div>
+            <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full p-1 animate-bounce">
+              <Sparkles className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="bg-gray-50 dark:bg-gray-900/50 p-2 rounded-md mb-3">
-            <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Avantages PronosBox Pro
+
+          <h3 className="text-2xl font-black text-white tracking-tight mb-2">
+            PronosBox Premium
+          </h3>
+          <p className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20 tracking-wider mb-4">
+            Arrive bientôt !
+          </p>
+
+          <p className="text-sm text-slate-300 leading-relaxed mb-6">
+            La version Premium de PronosBox est actuellement en cours de finalisation et sera disponible très prochainement.
+          </p>
+
+          {/* Benefits */}
+          <div className="bg-slate-950/40 border border-white/5 rounded-2xl p-4 w-full mb-6 text-left">
+            <h4 className="text-xs font-black uppercase text-amber-500 tracking-wider mb-3 flex items-center gap-1.5">
+              <Sparkles size={12} /> Ce qui vous attend :
             </h4>
-            <ul className="text-xs space-y-1">
-              <li className="flex items-start">
-                <Check
-                  size={12}
-                  className="text-green-600 dark:text-green-400 mr-1 mt-0.5 flex-shrink-0" />
-
-                <span>
-                  Créez votre propre canal et monétisez vos pronostics
-                </span>
+            <ul className="text-xs text-slate-300 space-y-2.5">
+              <li className="flex items-start gap-2.5">
+                <Check size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                <span><strong>Analyses ultra-détaillées</strong> et pronostics de haut niveau.</span>
               </li>
-              <li className="flex items-start">
-                <Check
-                  size={12}
-                  className="text-green-600 dark:text-green-400 mr-1 mt-0.5 flex-shrink-0" />
-
-                <span>Accédez à des statistiques détaillées</span>
+              <li className="flex items-start gap-2.5">
+                <Check size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                <span><strong>Création & Monétisation</strong> de vos propres canaux de pronostics.</span>
               </li>
-              <li className="flex items-start">
-                <Check
-                  size={12}
-                  className="text-green-600 dark:text-green-400 mr-1 mt-0.5 flex-shrink-0" />
-
-                <span>Retirez vos gains via différentes méthodes</span>
+              <li className="flex items-start gap-2.5">
+                <Check size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                <span><strong>Outils de gestion de bankroll</strong> et statistiques avancées de réussite.</span>
               </li>
-              <li className="flex items-start">
-                <Check
-                  size={12}
-                  className="text-green-600 dark:text-green-400 mr-1 mt-0.5 flex-shrink-0" />
-
-                <span>Configurez des coupons payants</span>
-              </li>
-              <li className="flex items-start">
-                <Check
-                  size={12}
-                  className="text-green-600 dark:text-green-400 mr-1 mt-0.5 flex-shrink-0" />
-
-                <span>Envoyez des messages vocaux dans vos canaux</span>
+              <li className="flex items-start gap-2.5">
+                <Check size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                <span><strong>Notifications prioritaires</strong> par Telegram ou alertes push.</span>
               </li>
             </ul>
           </div>
-        </div>
-        {/* Footer */}
-        <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900/30 flex justify-between">
-          <button
-            onClick={onClose}
-            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
 
-            <ArrowLeft size={12} className="mr-1" />
-            Retour
-          </button>
-          <button
-            onClick={handlePayment}
-            disabled={isProcessing}
-            className={`px-2 py-1 bg-green-600 text-white rounded-md text-xs font-medium hover:bg-green-700 flex items-center ${isProcessing ? 'opacity-75 cursor-not-allowed' : ''}`}>
+          {/* Form / Success state */}
+          {!isJoined ? (
+            <form onSubmit={handleJoinWaitlist} className="w-full space-y-3">
+              <div className="text-xs text-slate-400 mb-1">
+                Soyez le premier informé du lancement officiel et obtenez un accès anticipé :
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="Votre adresse email"
+                  required
+                  className="flex-1 px-4 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50 focus:border-transparent transition-all"
+                />
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-amber-500/10 transition-all flex items-center justify-center min-w-[120px]"
+                >
+                  {isSubmitting ? (
+                    <svg className="animate-spin h-4 w-4 text-slate-950" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                  ) : (
+                    "Rejoindre"
+                  )}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="w-full bg-green-500/10 border border-green-500/30 rounded-2xl p-4 text-green-400 text-xs font-semibold animate-fade-in flex flex-col items-center gap-1.5">
+              <span>🎉 Inscription réussie !</span>
+              <span className="text-slate-400 font-normal">Vous recevrez une invitation prioritaire dès l'ouverture de la version Pro.</span>
+            </div>
+          )}
 
-            {isProcessing ?
-            <>
-                <svg
-                className="animate-spin -ml-1 mr-1 h-3 w-3 text-white"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24">
-
-                  <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4">
-                </circle>
-                  <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-                </path>
-                </svg>
-                Traitement...
-              </> :
-
-            <>
-                <CreditCard size={12} className="mr-1" />
-                Payer {proPrice}€
-              </>
-            }
-          </button>
+          {/* Footer action */}
+          <div className="mt-6 w-full flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors"
+            >
+              Fermer
+            </button>
+          </div>
         </div>
       </div>
-    </div>);
-
+    </div>
+  );
 };
+
 export default UpgradeProModal;

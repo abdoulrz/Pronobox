@@ -212,6 +212,29 @@ export const login = async (credentials: any) => {
   }
 };
 
+export const googleLogin = async (credential: string) => {
+  try {
+    const response = await api.post('/auth/google', { credential });
+    return response.data;
+  } catch (error) {
+    if (localStorage.getItem('fallbackMode') === 'true') {
+      const mockUser: User = {
+        _id: 'mock-google-id',
+        id: 'mock-google-id',
+        email: 'google-user@example.com',
+        username: 'google_user',
+        role: 'user',
+        isPro: false,
+        walletBalance: 0,
+        avatar: 'https://lh3.googleusercontent.com/a/default-user'
+      };
+      localStorage.setItem('fallbackUser', JSON.stringify(mockUser));
+      return { token: 'mock-token', user: mockUser };
+    }
+    throw error;
+  }
+};
+
 export const getCurrentUser = async () => {
   try {
     const response = await api.get('/users/me');

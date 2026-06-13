@@ -32,6 +32,9 @@ const AdminDashboard = () => {
 
   const [activeTransactionsTab, setActiveTransactionsTab] = useState('historique');
 
+  const [realStats, setRealStats] = useState<any>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+
   const loadUsers = useCallback(async () => {
     setIsLoadingUsers(true);
     try { 
@@ -71,11 +74,32 @@ const AdminDashboard = () => {
     }
   };
 
+  const loadStats = async () => {
+    setIsLoadingStats(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/admin/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRealStats(data);
+      }
+    } catch (error) {
+      console.error("Error loading admin stats:", error);
+    } finally {
+      setIsLoadingStats(false);
+    }
+  };
+
   useEffect(() => { 
     loadUsers(); 
     loadTransactions(); 
     loadWithdrawalRequests(); 
     loadSupportMessages(); 
+    loadStats();
   }, [loadUsers]);
 
   useEffect(() => {
@@ -229,8 +253,8 @@ const AdminDashboard = () => {
   };
 
 
-  // Mock data for statistics
-  const siteStatistics = {
+  // Real stats data with fallback to mock data
+  const siteStatistics = realStats || {
     users: {
       total: 8547,
       active: 3250,

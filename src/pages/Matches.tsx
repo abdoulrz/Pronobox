@@ -25,6 +25,7 @@ const COUNTRY_TRANSLATIONS: Record<string, string> = {
   'FRANCE': 'France',
   'BRAZIL': 'Brésil',
   'ARGENTINA': 'Argentine',
+  'WORLD': 'Monde',
 };
 
 const PRIORITY_COUNTRIES = ['FRANCE', 'ESPAGNE', 'ANGLETERRE', 'ALLEMAGNE', 'ITALIE']; // Top European nations first
@@ -33,7 +34,7 @@ const PRIORITY_COUNTRIES = ['FRANCE', 'ESPAGNE', 'ANGLETERRE', 'ALLEMAGNE', 'ITA
 
 const Matches = () => {
   const navigate = useNavigate();
-  const [favoriteLeagues, setFavoriteLeagues] = useState<string[]>([]);
+  const [favoriteLeagues, setFavoriteLeagues] = useState<number[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [favoriteMatches, setFavoriteMatches] = useState<number[]>([]);
   const [collapsedLeagues, setCollapsedLeagues] = useState<string[]>([]);
@@ -154,8 +155,10 @@ const Matches = () => {
 
   const sortedLeagues = Object.keys(groupedByLeague).sort((a, b) => {
     // 1. Check favorite leagues
-    const isFavA = favoriteLeagues.includes(a);
-    const isFavB = favoriteLeagues.includes(b);
+    const idA = groupedByLeague[a].id;
+    const idB = groupedByLeague[b].id;
+    const isFavA = favoriteLeagues.includes(idA);
+    const isFavB = favoriteLeagues.includes(idB);
     if (isFavA && !isFavB) return -1;
     if (!isFavA && isFavB) return 1;
 
@@ -229,6 +232,12 @@ const Matches = () => {
       <LeagueSidebar 
         leagues={availableLeagues} 
         className={mobileView === 'ligues' ? 'block' : 'hidden xl:block'}
+        favoriteLeagues={favoriteLeagues}
+        onToggleFavorite={(leagueId) => {
+          setFavoriteLeagues(prev => 
+            prev.includes(leagueId) ? prev.filter(id => id !== leagueId) : [...prev, leagueId]
+          );
+        }}
       />
 
       {/* Main Content (Center) */}
@@ -355,12 +364,12 @@ const Matches = () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           setFavoriteLeagues(prev => 
-                            prev.includes(leagueKey) ? prev.filter(l => l !== leagueKey) : [...prev, leagueKey]
+                            prev.includes(leagueData.id) ? prev.filter(id => id !== leagueData.id) : [...prev, leagueData.id]
                           );
                         }}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${favoriteLeagues.includes(leagueKey) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-400'}`} viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${favoriteLeagues.includes(leagueData.id) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-400'}`} viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.519-4.674z" />
                         </svg>
                       </button>
                       <button 

@@ -1,4 +1,5 @@
 import React, { useEffect, ReactNode } from 'react';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import {
   BrowserRouter as Router,
   Routes,
@@ -40,8 +41,9 @@ const AuthChecker: React.FC<{ children: ReactNode }> = ({ children }) => {
 };
 export function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
+    <GoogleOAuthProvider clientId="380256594201-dnalojsu0p5266j4mhjlcg8fnapd5rf3.apps.googleusercontent.com">
+      <ThemeProvider>
+        <AuthProvider>
         <PaymentProvider>
           <NotificationProvider>
             <ChannelDataProvider>
@@ -189,6 +191,7 @@ export function App() {
           </NotificationProvider>
         </PaymentProvider>
       </AuthProvider>
-    </ThemeProvider>);
+    </ThemeProvider>
+    </GoogleOAuthProvider>);
 
 }

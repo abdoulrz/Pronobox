@@ -114,29 +114,33 @@ const LeagueDetails: React.FC = () => {
     <div className="max-w-[1000px] mx-auto px-4 py-6 animate-fade-in">
       {/* Header */}
       <div className="bg-white dark:bg-brand-navy-2 rounded-2xl shadow-sm border border-slate-200 dark:border-brand-slate p-6 mb-6">
-        <div className="flex items-center gap-6">
-          <button 
-            onClick={() => navigate(-1)}
-            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-brand-navy-3 transition-colors mr-2"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          
-          <div className="w-16 h-16 shrink-0 bg-slate-50 dark:bg-brand-navy-1 rounded-xl flex items-center justify-center p-2 border border-slate-100 dark:border-brand-slate/50">
-            <img src={data.league.logo} alt={data.league.name} className="w-full h-full object-contain" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <button 
+              onClick={() => navigate(-1)}
+              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-brand-navy-3 transition-colors flex-shrink-0"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            
+            <div className="w-16 h-16 shrink-0 bg-slate-50 dark:bg-brand-navy-1 rounded-xl flex items-center justify-center p-2 border border-slate-100 dark:border-brand-slate/50">
+              <img src={data.league.logo} alt={data.league.name} className="w-full h-full object-contain" />
+            </div>
+            
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2 flex-wrap">
+                <span>{data.league.name}</span>
+                {data.league.flag && <img src={data.league.flag} alt={data.league.country} className="h-4 sm:h-5 rounded-sm shadow-sm" />}
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-1 truncate">
+                {data.league.country} • Saison {data.league.season}/{data.league.season + 1}
+              </p>
+            </div>
           </div>
           
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-3">
-              {data.league.name}
-              {data.league.flag && <img src={data.league.flag} alt={data.league.country} className="h-5 rounded-sm shadow-sm" />}
-            </h1>
-            <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">{data.league.country} • Saison {data.league.season}/{data.league.season + 1}</p>
-          </div>
-          
-          <button className="px-6 py-2 rounded-full bg-slate-800 dark:bg-white text-white dark:text-brand-navy-1 font-bold text-sm hover:opacity-90 transition-opacity">
+          <button className="w-full sm:w-auto px-6 py-2 rounded-full bg-slate-800 dark:bg-white text-white dark:text-brand-navy-1 font-bold text-sm hover:opacity-90 transition-opacity">
             Suivre
           </button>
         </div>
@@ -162,7 +166,7 @@ const LeagueDetails: React.FC = () => {
       <div className="bg-white dark:bg-brand-navy-2 rounded-2xl shadow-sm border border-slate-200 dark:border-brand-slate overflow-hidden">
         {activeTab === 'standings' && (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
+            <table className="w-full text-sm text-left min-w-[650px]">
               <thead className="bg-slate-50 dark:bg-brand-navy-3/50 text-slate-400 dark:text-slate-500 text-xs uppercase font-bold border-b border-slate-100 dark:border-brand-slate/50">
                 <tr>
                   <th className="px-4 py-3 w-12 text-center">#</th>
@@ -214,11 +218,11 @@ const LeagueDetails: React.FC = () => {
         )}
 
         {activeTab === 'matches' && (
-          <div className="p-0">
+          <div className="overflow-x-auto">
             {fixtures.length === 0 ? (
               <div className="p-8 text-center text-slate-500">Aucun match récent ou à venir trouvé.</div>
             ) : (
-              <div className="divide-y divide-slate-100 dark:divide-brand-slate/50">
+              <div className="divide-y divide-slate-100 dark:divide-brand-slate/50 min-w-[550px]">
                 {fixtures.map((match) => {
                   const date = new Date(match.fixture.date);
                   const isFinished = match.fixture.status.short === 'FT';

@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import AccountComparison from '../components/AccountComparison';
+import UpgradeProModal from '../components/UpgradeProModal';
+
 const CompareAccounts: React.FC = () => {
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="mb-6">
@@ -307,7 +310,10 @@ const CompareAccounts: React.FC = () => {
               </ul>
             </div>
             <div className="mt-6">
-              <button className="w-full py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700">
+              <button 
+                onClick={() => setShowUpgradeModal(true)}
+                className="w-full py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors"
+              >
                 Devenir Pro pour 25€
               </button>
             </div>
@@ -328,12 +334,16 @@ const CompareAccounts: React.FC = () => {
           <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-3 sm:mb-0">
             Commencez dès aujourd'hui et développez votre communauté !
           </p>
-          <button className="px-4 py-2 bg-yellow-600 text-white rounded-md text-sm font-medium hover:bg-yellow-700">
+          <button 
+            onClick={() => setShowUpgradeModal(true)}
+            className="px-4 py-2 bg-yellow-600 text-white rounded-md text-sm font-medium hover:bg-yellow-700 transition-colors"
+          >
             En savoir plus
           </button>
         </div>
       </div>
-    </div>);
-
+      <UpgradeProModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
+    </div>
+  );
 };
 export default CompareAccounts;

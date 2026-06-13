@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import SafeImage from '../common/SafeImage';
 
 interface NewsItem {
@@ -15,6 +16,7 @@ interface NewsSidebarProps {
 }
 
 const NewsSidebar: React.FC<NewsSidebarProps> = ({ className = 'hidden xl:block' }) => {
+  const navigate = useNavigate();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -45,8 +47,16 @@ const NewsSidebar: React.FC<NewsSidebarProps> = ({ className = 'hidden xl:block'
 
       {/* News List */}
       <div className="card bg-white dark:bg-brand-navy-3 border border-slate-100 dark:border-brand-slate overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 dark:border-brand-slate">
+        <div className="px-4 py-3 border-b border-slate-100 dark:border-brand-slate flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-800 dark:text-white">Actualités</h3>
+          <button
+            onClick={() => navigate('/box', { state: { mainView: 'debats' } })}
+            className="flex items-center gap-1.5 text-[11px] font-bold text-brand-green hover:text-green-500 bg-brand-green/10 dark:bg-brand-green/20 px-3 py-1 rounded-full transition-all hover:scale-105"
+            title="Accéder aux débats"
+          >
+            <span>Débats</span>
+            <span className="text-xs">💬</span>
+          </button>
         </div>
         <div className="divide-y divide-slate-100 dark:divide-brand-slate/50">
           {loading ? (

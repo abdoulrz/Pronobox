@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { createTransaction } from '../../services/api';
 import SubscriptionModal from '../SubscriptionModal';
+import LegalContent from '../legal/LegalContent';
 
 export interface UserData {
   id?: string;
@@ -34,6 +35,7 @@ const SettingsSimpleUser: React.FC = () => {
 
   // Pas d'onglet ouvert par défaut
   const [activeSection, setActiveSection] = useState('profile');
+  const [selectedLegalTab, setSelectedLegalTab] = useState<'terms' | 'privacy' | 'cookies' | 'legal'>('terms');
 
 
 
@@ -1157,19 +1159,51 @@ const SettingsSimpleUser: React.FC = () => {
             </div>
           }
 
-          {activeSection === 'about' &&
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm animate-fade-in">
-              <div className="space-y-2">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+          {activeSection === 'about' && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4 shadow-sm animate-fade-in">
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">
                   PronosBox est une plateforme dédiée à l'analyse sportive et au partage de pronostics entre passionnés.
                 </p>
-                <div className="pt-2">
-                  <p className="text-xs text-gray-500">Version 2.9.1 (Stabilization)</p>
-                  <p className="text-xs text-gray-500">© 2026 PronosBox - Tous droits réservés</p>
+                
+                {/* Horizontal tabs */}
+                <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700 pb-3">
+                  {[
+                    { id: 'terms', label: 'Conditions Générales' },
+                    { id: 'privacy', label: 'Confidentialité' },
+                    { id: 'cookies', label: 'Cookies' },
+                    { id: 'legal', label: 'Mentions Légales' }
+                  ].map((tab) => {
+                    const isActive = selectedLegalTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setSelectedLegalTab(tab.id as any)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 ${
+                          isActive
+                            ? 'bg-green-600 text-white shadow-md shadow-green-500/20'
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Inline Content */}
+                <div className="bg-gray-50 dark:bg-gray-900/30 rounded-xl p-4 border border-gray-100 dark:border-gray-800 shadow-inner max-h-[50vh] overflow-y-auto">
+                  <LegalContent type={selectedLegalTab} isInline={true} />
+                </div>
+
+                <div className="pt-2 border-t border-gray-100 dark:border-gray-750">
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">Version 2.9.1 (Stabilization)</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">© 2026 PronosBox - Tous droits réservés</p>
                 </div>
               </div>
             </div>
-          }
+          )}
       </div>
       {/* Modal pour recharger le compte */}
       {showRechargeModal &&

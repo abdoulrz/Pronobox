@@ -134,6 +134,47 @@ Le forum des débats est désormais directement intégré dans la page des **Can
    - Chaque débat de la barre latérale affiche un avatar circulaire pour harmoniser l'interface avec la liste des canaux.
    - L'avatar affiche automatiquement la première image du débat. Si aucune image n'est fournie, un visuel de sport dynamique issu d'Unsplash est affiché en secours.
 
+## 10. Sécurité, Robustesse & Production Ready (Back-End)
+
+Pour préparer le déploiement public et accueillir des utilisateurs réels en toute sécurité, plusieurs mécanismes de protection ont été configurés sur le serveur back-end :
+
+### 10.1. Helmet (En-têtes de Sécurité HTTP)
+`helmet` est un middleware Express qui renforce la sécurité de l'application en configurant de manière appropriée divers en-têtes HTTP. Il protège contre plusieurs types d'attaques courantes :
+*   **Content Security Policy (CSP) :** Empêche l'exécution de scripts non autorisés ou malveillants (attaques XSS) en définissant de façon stricte d'où peuvent provenir les scripts, les feuilles de style (CSS), les images, les polices de caractères, et les connexions (APIs/WebSockets).
+*   **Protection Clickjacking :** Configure l'en-tête `X-Frame-Options` à `SAMEORIGIN` pour empêcher que notre site soit intégré dans des frames ou des iframes tierces à des fins malveillantes.
+*   **Désactivation du reniflage MIME :** Configure l'en-tête `X-Content-Type-Options: nosniff` pour forcer le navigateur à respecter le type de contenu envoyé par le serveur, évitant ainsi l'exécution accidentelle de scripts déguisés en images.
+
+### 10.2. Limitation du Taux de Requêtes (Rate Limiting)
+Pour empêcher le déni de service (DDoS) et contrer les attaques de type force brute (tentatives de connexion répétées), un limiteur de débit (`express-rate-limit`) est en place :
+*   **Limiteur API Général (`/api/`) :** Restreint chaque adresse IP à un maximum de **500 requêtes toutes les 15 minutes**. Si ce seuil est dépassé, l'utilisateur reçoit une erreur `429 Too Many Requests` avec un message d'avertissement.
+*   **Limiteur Authentification Strict (`/api/auth/`) :** Restreint chaque adresse IP à un maximum de **30 tentatives de connexion ou d'inscription toutes les 15 minutes**. C'est une barrière robuste contre le piratage de comptes par dictionnaire ou force brute.
+
+### 10.3. Sécurisation de la Configuration CORS (Cross-Origin Resource Sharing)
+Le middleware `cors` a été configuré de façon à refuser les accès d'origines non autorisées en production :
+*   **Configuration d'Origins Autorisées :** L'accès à l'API est restreint aux domaines déclarés dans la variable d'environnement `ALLOWED_ORIGINS` (séparés par des virgules). 
+*   **Mode Développement :** Si aucune variable n'est définie ou si `NODE_ENV` est en mode développement, l'accès local (`http://localhost:5173`) reste pleinement fonctionnel pour faciliter les tests et l'intégration.
+
+### 10.4. Système de Cache pour les Matchs (Optimisation des Performances)
+Afin de résoudre les temps de chargement trop longs lors de la récupération des matchs (dûs à la latence des appels vers l'API-Sports externe), un système de cache serveur a été mis en œuvre :
+*   **Fonctionnement :** La liste des matchs pour une date donnée est stockée en mémoire pendant **5 minutes**.
+*   **Impact :** Le premier utilisateur qui demande une date déclenche le chargement API externe (environ 1-2s). Les utilisateurs suivants chargeant la même date obtiendront les données **instantanément (0ms)**, tout en économisant les quotas d'appels de l'API.
+
+### 11. Comptes de Test pour l'Environnement de Staging / Développement
+Pour faciliter les tests et la validation des différents rôles sur la plateforme sans devoir recréer des comptes à chaque fois, des identifiants de test pré-configurés sont disponibles en base de données de développement :
+
+*   **Compte Administrateur (Admin) :**
+    *   **Email :** `admin@pronosbox.com`
+    *   **Mot de passe :** `admin123`
+    *   *Rôle :* Accès complet au dashboard administrateur, gestion des utilisateurs, validation des pronostics, modération.
+*   **Compte Pro (Expert) :**
+    *   **Email :** `pro@pronosbox.com`
+    *   **Mot de passe :** `pro123`
+    *   *Rôle :* Accès aux fonctionnalités Pro, création de pronostics experts, gestion des canaux premium.
+*   **Compte Standard (Utilisateur) :**
+    *   **Email :** `user@pronosbox.com`
+    *   **Mot de passe :** `user123`
+    *   *Rôle :* Accès standard gratuit, visualisation des pronostics basiques, participation aux canaux gratuits et débats.
+
 ---
-*Dernière mise à jour : Mai 2026*
+*Dernière mise à jour : Juin 2026*
 *Document de référence pour l'administration Pronobox.*
