@@ -395,8 +395,161 @@ app.delete('/api/channels/:id/messages/:messageId', authenticateToken, async (re
 });
 
 // Football API proxy cache
-const matchesCache = {};
+const matchesCache = Object.create(null);
 const MATCHES_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Team names English to French translation dictionary
+const TEAM_TRANSLATIONS = {
+  // Europe
+  'England': 'Angleterre',
+  'Germany': 'Allemagne',
+  'France': 'France',
+  'Italy': 'Italie',
+  'Spain': 'Espagne',
+  'Netherlands': 'Pays-Bas',
+  'Belgium': 'Belgique',
+  'Portugal': 'Portugal',
+  'Croatia': 'Croatie',
+  'Switzerland': 'Suisse',
+  'Denmark': 'Danemark',
+  'Sweden': 'Suède',
+  'Norway': 'Norvège',
+  'Poland': 'Pologne',
+  'Ukraine': 'Ukraine',
+  'Austria': 'Autriche',
+  'Turkey': 'Turquie',
+  'Türkiye': 'Turquie',
+  'Scotland': 'Écosse',
+  'Wales': 'Pays de Galles',
+  'Ireland': 'Irlande',
+  'Northern Ireland': 'Irlande du Nord',
+  'Greece': 'Grèce',
+  'Czech Republic': 'République Tchèque',
+  'Czechia': 'République Tchèque',
+  'Slovakia': 'Slovaquie',
+  'Slovenia': 'Slovénie',
+  'Hungary': 'Hongrie',
+  'Romania': 'Roumanie',
+  'Bulgaria': 'Bulgarie',
+  'Finland': 'Finlande',
+  'Iceland': 'Islande',
+  'Albania': 'Albanie',
+  'Georgia': 'Géorgie',
+  'Serbia': 'Serbie',
+  'Montenegro': 'Monténégro',
+  'North Macedonia': 'Macédoine du Nord',
+  'Bosnia & Herzegovina': 'Bosnie-Herzégovine',
+  'Bosnia and Herzegovina': 'Bosnie-Herzégovine',
+  'Cyprus': 'Chypre',
+  'Luxembourg': 'Luxembourg',
+  'Malta': 'Malte',
+  'Andorra': 'Andorre',
+  'San Marino': 'Saint-Marin',
+  'Liechtenstein': 'Liechtenstein',
+  'Gibraltar': 'Gibraltar',
+  'Faroe Islands': 'Îles Féroé',
+  'Kosovo': 'Kosovo',
+
+  // South America
+  'Brazil': 'Brésil',
+  'Argentina': 'Argentine',
+  'Uruguay': 'Uruguay',
+  'Colombia': 'Colombie',
+  'Chile': 'Chili',
+  'Peru': 'Pérou',
+  'Ecuador': 'Équateur',
+  'Paraguay': 'Paraguay',
+  'Venezuela': 'Venezuela',
+  'Bolivia': 'Bolivie',
+
+  // North/Central America
+  'USA': 'États-Unis',
+  'United States': 'États-Unis',
+  'Mexico': 'Mexique',
+  'Canada': 'Canada',
+  'Costa Rica': 'Costa Rica',
+  'Jamaica': 'Jamaïque',
+  'Panama': 'Panama',
+  'Honduras': 'Honduras',
+  'El Salvador': 'El Salvador',
+  'Haiti': 'Haïti',
+  'Curaçao': 'Curaçao',
+  'Trinidad and Tobago': 'Trinité-et-Tobago',
+  'Trinidad & Tobago': 'Trinité-et-Tobago',
+
+  // Africa
+  'Ivory Coast': "Côte d'Ivoire",
+  'Senegal': 'Sénégal',
+  'Morocco': 'Maroc',
+  'Algeria': 'Algérie',
+  'Tunisia': 'Tunisie',
+  'Egypt': 'Égypte',
+  'Nigeria': 'Nigéria',
+  'Cameroon': 'Cameroun',
+  'Ghana': 'Ghana',
+  'Mali': 'Mali',
+  'Burkina Faso': 'Burkina Faso',
+  'Congo DR': 'RDC',
+  'DR Congo': 'RDC',
+  'Congo': 'Congo',
+  'South Africa': 'Afrique du Sud',
+  'Guinea': 'Guinée',
+  'Cape Verde': 'Cap-Vert',
+  'Angola': 'Angola',
+  'Gabon': 'Gabon',
+  'Togo': 'Togo',
+  'Benin': 'Bénin',
+  'Madagascar': 'Madagascar',
+
+  // Asia / Oceania
+  'Japan': 'Japon',
+  'South Korea': 'Corée du Sud',
+  'Australia': 'Australie',
+  'Iran': 'Iran',
+  'Saudi Arabia': 'Arabie Saoudite',
+  'Qatar': 'Qatar',
+  'China': 'Chine',
+  'Iraq': 'Irak',
+  'Syria': 'Syrie',
+  'Uzbekistan': 'Ouzbékistan',
+  'United Arab Emirates': 'Émirats Arabes Unis',
+  'UAE': 'Émirats Arabes Unis',
+  'New Zealand': 'Nouvelle-Zélande',
+};
+
+function translateTeam(name) {
+  if (!name) return name;
+  return TEAM_TRANSLATIONS[name] || name;
+}
+
+function translateFixture(fixture) {
+  if (!fixture || !fixture.teams) return fixture;
+  if (fixture.teams.home && fixture.teams.home.name) {
+    fixture.teams.home.name = translateTeam(fixture.teams.home.name);
+  }
+  if (fixture.teams.away && fixture.teams.away.name) {
+    fixture.teams.away.name = translateTeam(fixture.teams.away.name);
+  }
+  return fixture;
+}
+
+function translateStandingsResponse(data) {
+  if (!data || !data.response) return data;
+  data.response.forEach(item => {
+    if (item.league && item.league.standings) {
+      item.league.standings.forEach(standingGroup => {
+        if (Array.isArray(standingGroup)) {
+          standingGroup.forEach(row => {
+            if (row.team && row.team.name) {
+              row.team.name = translateTeam(row.team.name);
+            }
+          });
+        }
+      });
+    }
+  });
+  return data;
+}
 
 // Football API proxy route
 app.get('/api/football/matches', async (req, res) => {
@@ -425,6 +578,10 @@ app.get('/api/football/matches', async (req, res) => {
     console.log(`API-Football response status: ${response.status}`);
     console.log(`API-Football response data count: ${response.data.response?.length || 0}`);
     
+    if (response.data && response.data.response) {
+      response.data.response.forEach(translateFixture);
+    }
+
     // Store in cache
     matchesCache[date] = {
       data: response.data,
@@ -451,6 +608,10 @@ app.get('/api/football/match/:id', async (req, res) => {
       }
     });
     
+    if (response.data && response.data.response) {
+      response.data.response.forEach(translateFixture);
+    }
+
     res.json(response.data);
   } catch (error) {
     console.error(`Error fetching match ${req.params.id}:`, error.message);
@@ -471,6 +632,8 @@ app.get('/api/football/standings/:league/:season', async (req, res) => {
       }
     });
     
+    translateStandingsResponse(response.data);
+
     res.json(response.data);
   } catch (error) {
     console.error(`Error fetching standings for ${req.params.league}:`, error.message);
@@ -492,6 +655,10 @@ app.get('/api/football/fixtures/:league/:season', async (req, res) => {
       }
     });
     
+    if (response.data && response.data.response) {
+      response.data.response.forEach(translateFixture);
+    }
+
     res.json(response.data);
   } catch (error) {
     console.error(`Error fetching fixtures for ${req.params.league}:`, error.message);
@@ -671,8 +838,8 @@ app.get('/api/admin/stats', authenticateToken, requireAdmin, async (req, res) =>
       revenue: {
         total: totalRevenue,
         thisMonth: thisMonthRevenue,
-        subscriptions: proRevenue,
-        channelFees: subscriptionRevenue
+        subscriptions: subscriptionRevenue,
+        channelFees: proRevenue
       },
       content: {
         totalPronos: totalPronos,

@@ -300,7 +300,6 @@ const Auth = () => {
               text="continue_with"
               shape="pill"
               size="large"
-              locale="fr"
               width="384"
             />
           </div>

@@ -10,15 +10,15 @@ interface LeagueSidebarProps {
 
 const HARDCODED_TOP_LEAGUES = [
   { id: 1, name: "Coupe du Monde", logo: "https://media.api-sports.io/football/leagues/1.png" },
-  { id: 39, name: "Premier League", logo: "https://media.api-sports.io/football/leagues/39.png" },
+  { id: 4, name: "Euro", logo: "https://media.api-sports.io/football/leagues/4.png" },
   { id: 2, name: "Ligue des Champions", logo: "https://media.api-sports.io/football/leagues/2.png" },
-  { id: 140, name: "La Liga", logo: "https://media.api-sports.io/football/leagues/140.png" },
-  { id: 78, name: "Bundesliga", logo: "https://media.api-sports.io/football/leagues/78.png" },
-  { id: 135, name: "Serie A", logo: "https://media.api-sports.io/football/leagues/135.png" },
   { id: 3, name: "Ligue Europa", logo: "https://media.api-sports.io/football/leagues/3.png" },
+  { id: 39, name: "Premier League", logo: "https://media.api-sports.io/football/leagues/39.png" },
+  { id: 140, name: "La Liga", logo: "https://media.api-sports.io/football/leagues/140.png" },
+  { id: 135, name: "Serie A", logo: "https://media.api-sports.io/football/leagues/135.png" },
+  { id: 78, name: "Bundesliga", logo: "https://media.api-sports.io/football/leagues/78.png" },
   { id: 61, name: "Ligue 1", logo: "https://media.api-sports.io/football/leagues/61.png" },
   { id: 45, name: "FA Cup", logo: "https://media.api-sports.io/football/leagues/45.png" },
-  { id: 4, name: "Euro", logo: "https://media.api-sports.io/football/leagues/4.png" },
 ];
 
 const LeagueSidebar: React.FC<LeagueSidebarProps> = ({ 

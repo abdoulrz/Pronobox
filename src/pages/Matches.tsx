@@ -8,12 +8,6 @@ import DateNavigator from '../components/matches/DateNavigator';
 import SafeImage from '../components/common/SafeImage';
 
 // Static data defined outside component — stable references, no useEffect dep warnings
-const FIFA_LEAGUE_IMPORTANCE = [
-  'Champions League', 'Premier League', 'La Liga', 'Bundesliga',
-  'Serie A', 'Ligue 1', 'Europa League', 'Conference League',
-  'Eredivisie', 'Primeira Liga', 'Serie A (Brazil)', 'MLS',
-  'Ligue 2', 'Championship', 'Segunda Division',
-];
 
 const COUNTRY_TRANSLATIONS: Record<string, string> = {
   'IVORY-COAST': "Côte d'Ivoire",
@@ -29,6 +23,37 @@ const COUNTRY_TRANSLATIONS: Record<string, string> = {
 };
 
 const PRIORITY_COUNTRIES = ['FRANCE', 'ESPAGNE', 'ANGLETERRE', 'ALLEMAGNE', 'ITALIE']; // Top European nations first
+
+const getUserCountry = (): string => {
+  try {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (timezone) {
+      if (timezone.includes('Paris')) return 'FRANCE';
+      if (timezone.includes('Madrid')) return 'ESPAGNE';
+      if (timezone.includes('London')) return 'ANGLETERRE';
+      if (timezone.includes('Berlin')) return 'ALLEMAGNE';
+      if (timezone.includes('Rome')) return 'ITALIE';
+      if (timezone.includes('Brussels')) return 'BELGIQUE';
+      if (timezone.includes('Zurich')) return 'SUISSE';
+      if (timezone.includes('Dakar')) return 'SENEGAL';
+      if (timezone.includes('Abidjan')) return "COTE D'IVOIRE";
+      if (timezone.includes('Casablanca')) return 'MAROC';
+      if (timezone.includes('Tunis')) return 'TUNISIE';
+      if (timezone.includes('Algiers')) return 'ALGERIE';
+      if (timezone.includes('Montreal') || timezone.includes('Toronto') || timezone.includes('Vancouver')) return 'CANADA';
+    }
+    
+    const lang = navigator.language.toLowerCase();
+    if (lang.startsWith('fr')) return 'FRANCE';
+    if (lang.startsWith('es')) return 'ESPAGNE';
+    if (lang.startsWith('it')) return 'ITALIE';
+    if (lang.startsWith('de')) return 'ALLEMAGNE';
+    if (lang.startsWith('en')) return 'ANGLETERRE';
+  } catch (e) {
+    console.error('Error detecting user country:', e);
+  }
+  return 'FRANCE'; // Default fallback
+};
 
 
 
@@ -162,25 +187,32 @@ const Matches = () => {
     if (isFavA && !isFavB) return -1;
     if (!isFavA && isFavB) return 1;
 
-    const countryA = a.split(' - ')[0];
-    const countryB = b.split(' - ')[0];
-    const nameA = a.split(' - ')[1] || a;
-    const nameB = b.split(' - ')[1] || b;
-    
-    // 2. Check priority countries
-    const isPriorityA = PRIORITY_COUNTRIES.includes(countryA.toUpperCase());
-    const isPriorityB = PRIORITY_COUNTRIES.includes(countryB.toUpperCase());
-    if (isPriorityA && !isPriorityB) return -1;
-    if (!isPriorityA && isPriorityB) return 1;
-    
-    // 3. Check importance
-    const ia = FIFA_LEAGUE_IMPORTANCE.indexOf(nameA);
-    const ib = FIFA_LEAGUE_IMPORTANCE.indexOf(nameB);
-    if (ia !== -1 && ib !== -1) return ia - ib;
-    if (ia !== -1) return -1;
-    if (ib !== -1) return 1;
-    
-    // 4. Alphabetical
+    // 2. Check importance of top leagues (Meilleures ligues)
+    const TOP_LEAGUE_IDS = [1, 2, 4, 39, 140, 135, 78, 3, 61, 45];
+    const idxA = TOP_LEAGUE_IDS.indexOf(idA);
+    const idxB = TOP_LEAGUE_IDS.indexOf(idB);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+
+    const countryA = groupedByLeague[a].country.toUpperCase();
+    const countryB = groupedByLeague[b].country.toUpperCase();
+    const userCountry = getUserCountry();
+
+    // 3. User National Country matches first
+    const isNationalA = countryA === userCountry;
+    const isNationalB = countryB === userCountry;
+    if (isNationalA && !isNationalB) return -1;
+    if (!isNationalA && isNationalB) return 1;
+
+    // 4. Other Priority countries
+    const pidxA = PRIORITY_COUNTRIES.indexOf(countryA);
+    const pidxB = PRIORITY_COUNTRIES.indexOf(countryB);
+    if (pidxA !== -1 && pidxB !== -1) return pidxA - pidxB;
+    if (pidxA !== -1) return -1;
+    if (pidxB !== -1) return 1;
+
+    // 5. Alphabetical fallback
     return a.localeCompare(b);
   });
 
@@ -413,7 +445,7 @@ const Matches = () => {
                   onClick={() => setShowAllLeagues(!showAllLeagues)}
                   className="px-6 py-2 bg-white dark:bg-brand-navy-2 border border-slate-200 dark:border-brand-slate rounded-full text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-brand-navy-1 transition-colors flex items-center gap-2 mx-auto"
                 >
-                  <span>{showAllLeagues ? 'Ocultar todas' : 'Mostrar todas'}</span>
+                  <span>{showAllLeagues ? 'Masquer tout' : 'Afficher tout'}</span>
                   <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${showAllLeagues ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>

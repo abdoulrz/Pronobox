@@ -4,296 +4,336 @@ Toutes les modifications notables de ce projet seront documentées dans ce fichi
 
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [2.22.0] - 2026-05-23 ([Design Polishing & Channel Editing Fixes])
+## [2.23.0] - 2026-06-14 ([Google Auth, Performance, Caching & Real Stats])
 
-### Added
-- **Channel Message Timestamps**:
-  - Implemented dynamic date separators (Aujourd'hui, Hier, Date complète) in `ChannelView.tsx` to group messages logically by day.
-- **Header Visual & Logo Extraction**:
-  - Replaced the textual header logo with a stylized image logo, programmatically cropped and extracted to a transparent PNG for perfect responsive integration.
-  - Revamped header styling with an adapted emerald-green gradient and glassmorphic Admin badge.
-- **Channel Owner Editing**:
-  - Added the ability for channel owners to directly edit the channel's name and description from within the information panel.
+### Ajouté
+- **Connexion Google (Google Auth)** :
+  - Intégration du composant officiel `<GoogleLogin>` de `@react-oauth/google` dans le formulaire de connexion.
+  - Implémentation du endpoint `POST /api/auth/google` pour vérifier le jeton d'identité Google (`verifyIdToken`) et créer automatiquement les comptes utilisateurs (mode standard gratuit `isPro: false` avec nom d'utilisateur unique et mot de passe sécurisé aléatoire).
+  - Gestion automatique de la mise à jour de la dernière connexion (`lastLogin`) et synchronisation de la photo de profil Google pour les utilisateurs existants.
+- **Statistiques réelles de l'administrateur** :
+  - Création de la route de back-end `/api/admin/stats` pour calculer de vraies métriques à partir des collections MongoDB (`User`, `Channel`, `Transaction`, `Prono`).
+  - Connexion du tableau de bord d'administration frontend (`AdminDashboard.tsx`) pour afficher en temps réel le total d'utilisateurs actifs/Pro, le nombre de canaux, les revenus réels de la plateforme (VIP et abonnements), et le taux de réussite exact des pronostics d'experts.
+- **Cache côté serveur pour l'API Football** :
+  - Implémentation d'un système de mise en cache en mémoire (`matchesCache`) dans `server.js` pour stocker les matchs du jour pendant **5 minutes**, réduisant les temps de chargement de 2s à **0ms** et protégeant les quotas de l'API.
+- **Tri et Importance des Matchs** :
+  - Tri dynamique du flux principal de matchs selon l'importance des ligues (Coupe du Monde en premier, puis Euro, Ligue des Champions, Ligue Europa, Premier League, etc.).
+  - Réorganisation ergonomique de la liste des "Meilleures ligues" dans la barre latérale gauche.
+- **Géolocalisation et Matchs Nationaux** :
+  - Implémentation d'un détecteur de pays (`getUserCountry()`) basé sur le fuseau horaire et les langues du navigateur.
+  - Priorisation des matchs du pays de l'utilisateur directement sous les ligues majeures (ex: matchs français en premier pour un utilisateur en France).
+- **Traductions des Équipes en Français** :
+  - Intégration d'un dictionnaire de traduction `TEAM_TRANSLATIONS` côté serveur dans `server.js` pour traduire automatiquement les noms d'équipes de l'anglais vers le français (ex: "Germany" -> "Allemagne", "Ivory Coast" -> "Côte d'Ivoire") sur toutes les pages de l'application (Matchs, Classement, Détails).
+- **Navigation vers les Débats** :
+  - Ajout d'un bouton de redirection rapide `Débats 💬` à côté du titre "Actualités" de la page d'accueil pour rediriger l'utilisateur vers le forum de discussion.
 
-### Fixed
-- **Notification Redirection**:
-  - Corrected notification routing logic in `NotificationCenter.tsx` to directly navigate users to specific debates or channels based on the notification payload.
-- **Black Screen Bug**:
-  - Fixed a null pointer exception in `ChannelView.tsx` where state variables were initialized before channel data finished fetching.
-- **Theme "Limbo" State**:
-  - Resolved a visual bug where `bg-slate-100 dark:bg-brand-navy` on layout elements was overriding `body` backgrounds by migrating `Layout.tsx` to use transparent backgrounds.
-- **Message Background Contrast**:
-  - Enhanced the `MessageCard.tsx` background with a subtle glassmorphism effect instead of strong green to alleviate visual strain and improve contrast.
-- **State Mutation Safety**:
-  - Fixed a critical React state mutation bug when updating a channel's name and description locally.
+### Corrigé
+- **Sécurité et Prototype Pollution** :
+  - Sécurisation du cache matches en initialisant `matchesCache` avec `Object.create(null)` pour éliminer les risques d'exploitation de prototype pollution.
+- **Bugs Mobiles sur LeagueDetails** :
+  - Alignement responsive de l'en-tête de ligue pour éviter les coupures sur petits écrans.
+  - Correction du blocage du défilement horizontal sur mobile pour le tableau de classement (`min-w-[650px]`) et la liste des matchs (`min-w-[550px]`) en injectant des conteneurs d'overflow.
+- **Compilation Strict TypeScript** :
+  - Résolution de toutes les erreurs de type sur les fichiers modifiés (suppression de la propriété `locale` invalide sur GoogleLogin, retrait de l'état inutilisé `isLoadingStats` dans AdminDashboard, et nettoyage des imports morts).
+- **Inversion des clés de Revenus** :
+  - Correction de l'association inverse des champs `subscriptions` et `channelFees` dans la réponse API des statistiques d'administration.
+- **Traduction Espagnole** :
+  - Traduction des textes espagnols restants (`Ocultar toutes` / `Mostrar toutes`) en français (`Masquer tout` / `Afficher tout`) sur le flux de matchs.
 
-## [2.21.0] - 2026-05-23 ([Channel Media Persistence & Admin CRUD Safety])
+## [2.22.0] - 2026-05-23 ([Polissage du design & Corrections d'édition de canaux])
 
-### Added
-- **Channel Media Persistence**:
-  - Upgraded `MessageSchema` in MongoDB to officially support `imageUrl`, `audioUrl`, `isImage`, and `isVoiceMessage`.
-  - Refactored `ChannelView.tsx` audio recorder to translate local Blob URLs into universal Base64 DataURLs prior to backend transmission.
-  - Implemented real-time payload logging in the backend for POST message requests to monitor media sizes.
+### Ajouté
+- **Horodatage des messages de canaux** :
+  - Implémentation de séparateurs de dates dynamiques (Aujourd'hui, Hier, Date complète) dans `ChannelView.tsx` pour regrouper logiquement les messages par jour.
+- **Rendu visuel de l'en-tête & extraction de logo** :
+  - Remplacement du logo textuel de l'en-tête par un logo image stylisé, recadré et extrait par programme en un PNG transparent pour une intégration responsive parfaite.
+  - Refonte du style de l'en-tête avec un dégradé vert émeraude adapté et un badge Admin en glassmorphisme.
+- **Édition par le propriétaire du canal** :
+  - Ajout de la possibilité pour les propriétaires de canaux de modifier directement le nom et la description du canal depuis le panneau d'information.
 
-### Fixed
-- **Admin Dashboard CRUD Foolproofing**:
-  - Eliminated the severe "undefined ID" bug in `AdminDashboard.tsx` that silently dropped Delete requests and caused duplicated PUT/POST channels.
-  - Standardized all `c._id` references into dual-safe `(c.id || c._id)` checks following the recent JSON transformation rules.
-- **Frontend Message History Rendering**:
-  - Restored media extraction in the primary GET `ChannelView.tsx` fetch call, guaranteeing that images and voice notes survive hard reloads.
+### Corrigé
+- **Redirection des notifications** :
+  - Correction de la logique de routage des notifications dans `NotificationCenter.tsx` pour diriger directement les utilisateurs vers des débats ou canaux spécifiques selon les données de la notification.
+- **Bug d'écran noir** :
+  - Correction d'une exception de pointeur nul dans `ChannelView.tsx` où les variables d'état étaient initialisées avant la fin du chargement des données du canal.
+- **État d'incertitude du thème** :
+  - Résolution d'un bug visuel où `bg-slate-100 dark:bg-brand-navy` sur les éléments de layout surchargeait les arrière-plans de `body` en migrant `Layout.tsx` vers des arrière-plans transparents.
+- **Contraste de fond des messages** :
+  - Amélioration de l'arrière-plan de `MessageCard.tsx` avec un effet de glassmorphisme subtil au lieu d'un vert prononcé pour réduire la fatigue visuelle et améliorer le contraste.
+- **Sécurité de mutation d'état** :
+  - Correction d'un bug critique de mutation d'état React lors de la mise à jour locale du nom et de la description d'un canal.
 
-## [2.20.0] - 2026-05-18 ([Debate Stability, Safe Population & Sidebar Visuals])
+## [2.21.0] - 2026-05-23 ([Persistance des médias de canaux & Sécurité CRUD Admin])
 
-### Added
-- **Circular Debate Avatars inside Sidebar**:
-  - Integrated circular images on the left of each debate inside the channels sidebar, aligning perfectly with the Channel List design.
-  - Implemented automatic resolution of the debate's own first uploaded image with a curated sports photography fallback from Unsplash.
+### Ajouté
+- **Persistance des médias de canaux** :
+  - Mise à niveau de `MessageSchema` dans MongoDB pour prendre officiellement en charge `imageUrl`, `audioUrl`, `isImage` et `isVoiceMessage`.
+  - Refactoring de l'enregistreur audio de `ChannelView.tsx` pour convertir les URL de Blob locaux en DataURL Base64 universels avant la transmission au backend.
+  - Implémentation d'une journalisation en temps réel des charges utiles dans le backend pour les requêtes de messages POST afin de surveiller la taille des médias.
 
-### Fixed
-- **State and Action Synchronization**:
-  - Resolved server-to-client payload mismatch in `Box.tsx` when adding comments, ensuring the local state handles message-only payloads under live MongoDB mode without wiping out the debate's likes or likedBy arrays.
-  - Fixed self-notification filters and the `"undefined"` debate title notification bug.
-- **Population Child Rendering Crash Safeguards**:
-  - Safeguarded `messages.user` and `messages.replies.user` parsing in `DebateDetailView.tsx` to handle both populated user objects (live mode) and raw strings (fallback mode), eliminating React child rendering crashes.
+### Corrigé
+- **Protection du CRUD du Dashboard Admin** :
+  - Élimination du bug sévère d'ID indéfini dans `AdminDashboard.tsx` qui rejetait silencieusement les requêtes de suppression et dupliquait les canaux en PUT/POST.
+  - Standardisation de toutes les références à `c._id` en vérifications doublement sécurisées `(c.id || c._id)` à la suite des récentes règles de transformation JSON.
+- **Rendu de l'historique des messages frontend** :
+  - Restauration de l'extraction des médias dans l'appel GET principal de `ChannelView.tsx`, garantissant que les images et les notes vocales survivent aux rechargements complets.
 
-## [2.19.0] - 2026-05-18 ([Debates Sidebar Integration, Redundancy Cleaning & Strict Creation Guards])
+## [2.20.0] - 2026-05-18 ([Stabilité des débats, population sécurisée & visuels de la barre latérale])
 
-### Added
-- **Integrated Debates Sidebar inside Canaux (Box)**:
-  - Transformed the `Box.tsx` layout into a modern grid, adding the forum debates directly in a desktop sidebar column for improved user interaction.
-  - Formulated a gorgeous details view modal with smooth backdrop blurring (`backdrop-blur-sm`) to allow reading, liking, and commenting on debates without leaving the page.
-- **Strict Debate Creation Guard**:
-  - Implemented client checks and masked the "+ Nouveau" debate creation button for users who do not own any channels (excluding global admins).
-  - Secured the backend API `/api/debates` via database verification (`Channel.exists`) returning a `403 Forbidden` status on unauthorized posts.
+### Ajouté
+- **Avatars de débat circulaires dans la barre latérale** :
+  - Intégration d'images circulaires à gauche de chaque débat dans la barre latérale des canaux, s'alignant parfaitement avec le design de la liste des canaux.
+  - Implémentation d'une résolution automatique de la première image téléversée du débat avec une photo sportive de couverture provenant d'Unsplash en cas de repli.
 
-### Changed
-- **Redundancy Cleaning & Navigation Restructuring**:
-  - Deleted the redundant standalone predictions page (`Predictions.tsx`) and separate debates page (`News.tsx`).
-  - Adjusted the mobile bottom navigation menu from `grid-cols-6` to a clean `grid-cols-4` for perfect aesthetic alignment.
-  - Setup transparent Route redirects in `App.tsx` mapping `/predictions` and `/news` requests to `/` and `/box` for SEO preservation.
+### Corrigé
+- **Synchronisation des états et des actions** :
+  - Résolution de l'incompatibilité de payload serveur-client dans `Box.tsx` lors de l'ajout de commentaires, garantissant que l'état local gère les payloads contenant uniquement des messages en mode MongoDB réel sans effacer les tableaux de likes ou de likedBy du débat.
+  - Correction des filtres d'auto-notification et du bug de notification avec le titre de débat `"undefined"`.
+- **Protections contre les crashs de rendu des enfants populés** :
+  - Sécurisation de l'analyse de `messages.user` et `messages.replies.user` dans `DebateDetailView.tsx` pour gérer à la fois les objets utilisateur populés (mode réel) et les chaînes brutes (mode repli), éliminant les plantages de rendu React.
 
-## [2.18.0] - 2026-05-18 ([Centralized Admin Control & Zero-Defect Compile Safety])
+## [2.19.0] - 2026-05-18 ([Intégration de la barre latérale des débats dans Canaux (Box), nettoyage des redondances & gardes de création stricts])
 
-### Added
-- **Integrated Administration Hub**:
-  - Centralized all backoffice processes (Users, Transactions, Withdrawals, Support Chat, Global Financial Balance) into a single, fully responsive centralized `AdminDashboard.tsx`.
-  - Created a robust user moderation queue permitting search, role assignment, and direct status toggles.
-  - Formulated dedicated tabs for pending withdrawal validation and detailed transaction history audit.
-  - Linked WebSocket support queue for live real-time conversations with standard/pro users.
-- **Redundancy Pruning**:
-  - Eliminated parallel administrative panels inside standard user settings, migrating them to the master dashboard.
-  - Reduced `SettingsAdminUser.tsx` footprint by over 1,700 redundant lines, streamlining UX to personal settings and the high-level financial summary.
+### Ajouté
+- **Barre latérale de débats intégrée dans Canaux (Box)** :
+  - Transformation de la mise en page de `Box.tsx` en une grille moderne, en ajoutant les débats du forum directement dans une colonne latérale sur bureau pour une meilleure interaction utilisateur.
+  - Création d'une magnifique boîte modale de détails avec un flou d'arrière-plan fluide (`backdrop-blur-sm`) pour permettre de lire, liker et commenter les débats sans quitter la page.
+- **Garde strict pour la création de débats** :
+  - Implémentation de vérifications client et masquage du bouton de création de débat "+ Nouveau" pour les utilisateurs qui ne possèdent aucun canal (à l'exclusion des administrateurs généraux).
+  - Sécurisation de l'API backend `/api/debates` via une vérification en base de données (`Channel.exists`) retournant un statut `403 Forbidden` pour les publications non autorisées.
 
-### Fixed
-- **Strict Compile Safety**:
-  - Refactored all implicit type declarations (`any` callbacks, reducer parameters) to strict structures.
-  - Pruned unused locals (`useRef`, state hooks, mock handlers) from `AdminDashboard.tsx` and settings, successfully achieving zero compile-time warnings and passing full code verification (`npx tsc --noEmit`).
+### Modifié
+- **Nettoyage des redondances & restructuration de la navigation** :
+  - Suppression de la page de pronostics autonome redondante (`Predictions.tsx`) et de la page de débats séparée (`News.tsx`).
+  - Ajustement du menu de navigation inférieur mobile de `grid-cols-6` à un affichage propre en `grid-cols-4` pour un alignement esthétique parfait.
+  - Configuration de redirections de routes transparentes dans `App.tsx` redirigeant les requêtes `/predictions` et `/news` vers `/` et `/box` pour préserver le référencement (SEO).
 
-## [2.17.0] - 2026-05-17 ([Persistent Premium Unlocking & Defensive Security])
+## [2.18.0] - 2026-05-18 ([Contrôle administrateur centralisé & compilation sécurisée sans défaut])
 
-### Added
-- **Persistent Resource Unlocking Architecture**:
-  - Implemented `unlockedResources` database array referencing `BetEduc` models directly inside the `User` schema.
-  - Configured `POST /api/transactions` to automatically push the resource `itemId` to the user's document upon successful checkout.
-  - Extended `/api/auth/register` and `/api/auth/login` to serialize and return the unlocked list to the client.
-  - Linked session updates via `updateUser` hook inside `AuthContext.tsx` to ensure real-time access updates.
-  - Built real-time lock validation logic inside `BetEduc.tsx` bypassing modal prompts for admins, pros, and holders of the persistent resource.
-- **Defensive Reader Security & Crash-Proofing**:
-  - Infused comprehensive safety checks (`content || ''`) across all embedded widgets (YouTube iframe, PDF embed, Video, and Audio), completely protecting the client interface from breaking if empty/unconfigured contents are loaded.
+### Ajouté
+- **Hub d'administration intégré** :
+  - Centralisation de tous les processus d'administration (utilisateurs, transactions, retraits, chat de support, bilan financier global) dans un tableau de bord unique entièrement responsive `AdminDashboard.tsx`.
+  - Création d'une file d'attente de modération des utilisateurs robuste permettant la recherche, l'attribution des rôles et l'activation/désactivation directe des statuts.
+  - Conception d'onglets dédiés pour la validation des retraits en attente et l'audit détaillé de l'historique des transactions.
+  - Connexion de la file d'attente de support WebSocket pour les conversations en temps réel avec les utilisateurs standard et Pro.
 
-### Changed
-- **Wallet Deduction Logic**:
-  - Re-routed the backend transaction process to only deduct purchase amounts from the wallet balance when the transaction method is explicitly `'wallet'`, skipping reductions for external Card, Mobile, or Crypto checkouts.
+### Modifié
+- **Élimination des redondances** :
+  - Suppression des panneaux d'administration parallèles dans les paramètres de l'utilisateur standard, migration vers le tableau de bord principal.
+  - Réduction de l'empreinte de `SettingsAdminUser.tsx` de plus de 1 700 lignes redondantes, rationalisant l'expérience utilisateur vers les paramètres personnels et le résumé financier de haut niveau.
 
-## [2.16.0] - 2026-05-17 ([Universal Content Reader, Comments Integration & Instant Asynchronous Uploads])
+### Corrigé
+- **Sécurité de compilation stricte** :
+  - Refactoring de toutes les déclarations de type implicites (les fonctions de rappel `any`, les paramètres du réducteur) vers des structures strictes.
+  - Suppression des variables locales inutilisées (`useRef`, hooks d'état, gestionnaires de simulation) dans `AdminDashboard.tsx` et les paramètres, réussissant ainsi à obtenir zéro avertissement de compilation et à passer la vérification complète du code (`npx tsc --noEmit`).
 
-### Added
-- **Premium Inline Content Reader & Dynamic Media Player**:
-  - Implemented automatic parsing of standard YouTube video links to embeddable formats, rendering directly inside an iframe sandbox wrapper.
-  - Added native dynamic `<video>` and `<audio>` dynamically loading local media formats internally.
-  - Set up native `<embed>` inline PDF rendering for e-books.
-  - Replaced immediate action redirection with a unified visual overlay holding all links, files, and resources.
-  - Implemented dynamic fallback "Visiter le site externe" and voluntary resource download handlers.
-- **Interactive Discussion & Commenting Board**:
-  - Created a fully responsive bottom discussion board on each educational resource.
-  - Linked commenting interface directly with Mongoose sub-document schema, supporting full username, dynamic avatar loading, formatted timestamps, and reactive state tracking.
-  - Integrated comments API route securely requiring standard token validation.
-- **High-Speed Asynchronous Local Upload Pipeline**:
-  - Refactored server-side `/api/upload` handler to write files asynchronously using `fs.promises.writeFile`, ensuring zero event-loop blocks and extreme file transfer efficiency.
-  - Re-routed `FileReader` onload handler in the administrative dashboard to isolate network and payload size rejections inside robust nested try-catch blocks, resolving UI freeze bugs.
+## [2.17.0] - 2026-05-17 ([Déverrouillage persistant du Premium & Sécurité défensive])
 
-### Changed
-- **Navigation Label Spacing Ergonomics**:
-  - Shortened bottom navigation label from `BET-EDUC` to `EDUC` for seamless single-line compatibility across small and large mobile viewports.
-- **Roadmap & Admin Manual Updates**:
-  - Fully updated strategic guides and milestone roadmap to mark BET-EDUC complete and structure upcoming advanced features.
+### Ajouté
+- **Architecture de déverrouillage de ressources persistantes** :
+  - Implémentation du tableau de base de données `unlockedResources` référençant directement les modèles `BetEduc` dans le schéma `User`.
+  - Configuration de `POST /api/transactions` pour ajouter automatiquement l'identifiant `itemId` de la ressource au document de l'utilisateur après un paiement réussi.
+  - Extension de `/api/auth/register` et `/api/auth/login` pour sérialiser et renvoyer la liste des ressources déverrouillées au client.
+  - Liaison des mises à jour de session via le hook `updateUser` dans `AuthContext.tsx` pour garantir les mises à jour des accès en temps réel.
+  - Création d'une logique de validation des verrous en temps réel dans `BetEduc.tsx` contournant les invitations modales pour les administrateurs, les Pros et les détenteurs de la ressource persistante.
+- **Sécurité défensive du lecteur & protection contre les plantages** :
+  - Intégration de vérifications complètes (`content || ''`) sur tous les widgets intégrés (iframe YouTube, intégration PDF, vidéo et audio), protégeant complètement l'interface client de toute rupture si des contenus vides/non configurés sont chargés.
 
----
+### Modifié
+- **Logique de déduction du portefeuille** :
+  - Modification du processus de transaction backend pour ne déduire les montants d'achat du solde du portefeuille que lorsque le mode de paiement est explicitement `'wallet'`, en ignorant les déductions pour les paiements externes par carte, mobile ou crypto.
 
-## [2.15.0] - 2026-05-16 ([BET-EDUC Modernization & Admin Efficiency])
+## [2.16.0] - 2026-05-17 ([Lecteur de contenu universel, intégration des commentaires & téléversements asynchrones instantanés])
 
-### Added
-- **BET-EDUC Management Overhaul**:
-  - Implemented automated iconography mapping (📖, 🎬, 📝, 🎓) based on content type.
-  - Added a real-time, high-speed administrative search/filter bar.
-  - Developed a "Quick Preview" eye icon to verify content (Markdown/URL) without leaving the dashboard.
-  - Standardized the data entry form with dropdown selections and polished glassmorphism cards.
-- **Educational Portal Redesign (Public)**:
-  - Transitioned to a 2-column responsive grid layout for better content density.
-  - Integrated the premium glassmorphic header design with sub-brand typography.
-  - Polished the Markdown reading experience with optimized prose widths and typography.
-  - Improved the "Format" badges for clearer distinction between E-books, Videos, and Articles.
+### Ajouté
+- **Lecteur de contenu Premium intégré & lecteur média dynamique** :
+  - Analyse automatique des liens vidéo YouTube standard pour les intégrer dans un conteneur sandbox iframe.
+  - Ajout de balises `<video>` et `<audio>` chargant dynamiquement les formats de médias locaux en interne.
+  - Configuration de la balise native `<embed>` pour le rendu des PDF en ligne pour les e-books.
+  - Remplacement de la redirection d'action immédiate par un panneau visuel unifié contenant tous les liens, fichiers et ressources.
+  - Implémentation d'options de repli dynamique "Visiter le site externe" et de téléchargement volontaire des ressources.
+- **Forum de discussion interactif et système de commentaires** :
+  - Création d'un panneau de discussion entièrement responsive au bas de chaque ressource éducative.
+  - Liaison de l'interface des commentaires directement avec le schéma des sous-documents Mongoose, prenant en charge le nom d'utilisateur, le chargement d'avatars dynamiques, les horodatages formatés et le suivi d'état réactif.
+  - Intégration de la route API des commentaires nécessitant une validation standard des jetons.
+- **Pipeline de téléversement local asynchrone à haute vitesse** :
+  - Refactoring du gestionnaire de backend `/api/upload` pour écrire les fichiers de manière asynchrone avec `fs.promises.writeFile`, garantissant l'absence de blocage de la boucle d'événements et une efficacité extrême des transferts de fichiers.
+  - Modification du gestionnaire `FileReader.onload` dans le tableau de bord administratif pour isoler les rejets de réseau et de taille de charge utile dans des blocs try-catch imbriqués robustes, résolvant les gels de l'interface utilisateur.
 
-### Changed
-- **Admin Guide Update**: Documented the new professional BET-EDUC workflow and efficiency tools.
-- **UI Consistency**: Applied the platform's Navy/Green/Glassmorphism design tokens to all educational components.
-
----
-
-## [2.14.0] - 2026-05-16 ([Match Day UI & Broadcaster Modernization])
-
-### Added
-- **Premium Broadcaster Tooltip**:
-  - Integrated official brand logos for beIN SPORTS, DAZN, and Canal+.
-  - Implemented a robust multi-layer loading strategy (Google Favicon CDN + UI Avatars fallback).
-  - Added direct, clickable portal links for each broadcaster.
-- **Match Perspectives Redesign**:
-  - Revamped "Perspectives du match" with glassmorphism, pattern backgrounds, and improved typography.
-  - Achieved 1:1 visual parity between the Admin Editor preview and the public detail page.
-- **Advanced Live Timer**:
-  - Refactored `MatchDetails` timer to anchor to API-provided `elapsed` minutes (halftime-aware).
-  - Added a pulsing green live indicator and FotMob-style `MM:SS` formatting.
-
-### Fixed
-- **Markdown Mutex Logic**: Enforced a rule in the editor to prevent conflicting line prefixes (Citation vs. Bullet Point).
-- **Broken Assets**: Resolved CDN blocking issues by switching to Google's reliable icon service.
+### Modifié
+- **Ergonomie des étiquettes de navigation** :
+  - Raccourcissement du libellé de navigation inférieur de `BET-EDUC` à `EDUC` pour une compatibilité parfaite sur une seule ligne sur les écrans mobiles de toutes tailles.
+- **Mises à jour de la feuille de route et du manuel d'administration** :
+  - Mise à jour complète des guides stratégiques et de la feuille de route des jalons pour marquer BET-EDUC comme terminé et structurer les fonctionnalités avancées à venir.
 
 ---
 
-## [2.13.0] - 2026-05-15 ([Match Details & Pronostics Engine])
+## [2.15.0] - 2026-05-16 ([Modernisation de BET-EDUC & Efficacité administrative])
 
-### Added
-- **MatchDetails.tsx**: Redesigned with a real-time countdown, referee info, and a dynamic "TV Program" bar.
-- **MatchPronostics.tsx**: Implemented a "Freemium" logic allowing all users to see basic picks while gating AI Analysis for Pro members.
-- **Admin Pronos Engine**: Added a dedicated CRUD interface in the Admin Dashboard to manage predictions directly.
-- **Data Persistence**: Created the `Prono` Mongoose model and `/api/pronos` endpoints.
+### Ajouté
+- **Refonte de la gestion de BET-EDUC** :
+  - Implémentation d'une correspondance automatique des icônes (📖, 🎬, 📝, 🎓) selon le type de contenu.
+  - Ajout d'une barre de recherche/filtrage administratif en temps réel et rapide.
+  - Développement d'une icône d'œil de "Prévisualisation rapide" pour vérifier le contenu (Markdown/URL) sans quitter le tableau de bord.
+  - Standardisation du formulaire de saisie des données avec des sélections déroulantes et des cartes en glassmorphisme soignées.
+- **Refonte du portail éducatif (Public)** :
+  - Passage à une mise en page en grille responsive à 2 colonnes pour une meilleure densité de contenu.
+  - Intégration du design de l'en-tête premium en glassmorphisme avec la typographie de la sous-marque.
+  - Amélioration de l'expérience de lecture Markdown avec des largeurs de texte et une typographie optimisées.
+  - Amélioration des badges de format pour une distinction plus claire entre les E-books, les vidéos et les articles.
 
----
-
-## [2.12.0] - 2026-05-14 ([League & Match Data Stabilization])
-
-### Added
-- **FotMob-Style Sidebar**:
-  - Hardcoded "Meilleures ligues" with exact FotMob curated list and French localization.
-  - Reorganized "Toutes les ligues" with an "International" group and alphabetical country groups.
-  - Implemented collapsible country headers in the sidebar for better ergonomics.
-- **League Details Intelligence**:
-  - Implemented client-side filtering and sorting for fixtures (10 past / 10 upcoming).
-  - Added smart "Season Capping" at 2024 to comply with API-Football Free Tier limits.
-- **Data Integrity**:
-  - Resolved sidebar navigation collisions by switching from name-based mapping to unique ID-based mapping.
-  - Fixed Match Feed emptiness by removing restricted API parameters (`next`) in `server.js`.
+### Modifié
+- **Mise à jour du guide d'administration** : Documentation du nouveau flux de travail professionnel de BET-EDUC et des outils d'efficacité.
+- **Cohérence de l'UI** : Application des jetons de conception Bleu Marine/Vert/Glassmorphisme de la plateforme à tous les composants éducatifs.
 
 ---
 
-## [2.11.0] - 2026-05-08 ([Phase 2 Completion: Refactoring & Glassmorphism])
+## [2.14.0] - 2026-05-16 ([UI des matchs du jour & Modernisation des diffuseurs])
 
-### Added
-- **Global Glassmorphism**: Implemented a comprehensive frosted-glass aesthetic across the application. 
-  - Extracted `.glass-modal` class and applied it to all modals in the application.
-  - Enhanced the opacity and blur levels of `.glass-sidebar`, `.glass-bottom-nav`, and `.glass-panel`.
-  - Converted `MatchCard` and `DebateCard` inline styles to a centralized `.card` design system component.
-- **Social Features**:
-  - Integrated `emoji-picker-react` into `DebateDetailView.tsx` to allow users to add emojis to debate comments.
+### Ajouté
+- **Info-bulle des diffuseurs Premium** :
+  - Intégration des logos officiels des marques beIN SPORTS, DAZN et Canal+.
+  - Implémentation d'une stratégie de chargement multi-couches robuste (Favicon Google CDN + repli d'avatars de l'interface utilisateur).
+  - Ajout de liens cliquables directs vers les portails de chaque diffuseur.
+- **Refonte des perspectives des matchs** :
+  - Refonte de la section "Perspectives du match" avec du glassmorphisme, des motifs en arrière-plan et une typographie améliorée.
+  - Obtention d'une parité visuelle 1:1 entre l'aperçu de l'éditeur d'administration et la page de détails publique.
+- **Chronomètre en direct avancé** :
+  - Refactoring du minuteur `MatchDetails` pour se caler sur les minutes écoulées fournies par l'API (prenant en compte la mi-temps).
+  - Ajout d'un indicateur de direct vert clignotant et d'un formatage du temps de type FotMob `MM:SS`.
 
-### Changed
-- **Code Refactoring**:
-  - Broken down the monolithic `News.tsx` page by extracting grid mapping logic and active image carousel indexes into a new `NewsGrid.tsx` component.
-
----
-
-## [2.10.0] - 2026-05-03 ([Settings Persistence & Type Safety])
-
-### To Be Implemented
-- Phase 3: Monetization & Pro Features (NowPayments/FedaPay integration)
-- Phase 4: Admin Dashboard & Stability
-- PWA & Push Notifications
+### Corrigé
+- **Logique d'exclusion mutuelle Markdown** : Application d'une règle dans l'éditeur pour éviter les préfixes de ligne conflictuels (Citation vs Liste à puces).
+- **Ressources défectueuses** : Résolution des problèmes de blocage du CDN en passant au service d'icônes fiable de Google.
 
 ---
 
-## [2.9.0] - 2026-05-02 ([Modular Chat Architecture & Permission Logic])
+## [2.13.0] - 2026-05-15 ([Détails des matchs & Moteur de pronostics])
 
-### Added
-- **Centralized Chat Types**: Created `src/types/chat.ts` regrouping `Message`, `Channel`, and `UserFeatures` for cross-component consistency.
-- **Business Logic Hook**: Implemented `useUserFeatures.ts` to decouple permission management (User/Pro/Admin) from the UI components.
-
-### Changed
-- **Decomposition of Monolithic Pages**:
-  - **Box.tsx**: Reduced from ~1500 to ~200 lines. Extracted `ChannelListItem`, `ChannelTabs`, `CreateChannelModal`, and `SubscribeChannelModal`.
-  - **ChannelView.tsx**: Reduced from ~1300 to ~180 lines. Extracted `ChannelHeader`, `MessageCard`, and `MessageInput`.
-- **Zero Defaut Hardening**:
-  - Eliminated final inline styles in `AdminDashboard.tsx` using Tailwind arbitrary values (`w-[78%]`).
-  - Resolved all remaining TypeScript warnings and "Unexpected any" in chat modules.
-
-### Fixed
-- **Accessibility**: Added `title` and `aria-label` to all interactive elements in the new modular components.
-- **Performance**: Optimized rendering by isolating message list items and input states.
+### Ajouté
+- **`MatchDetails.tsx`** : Redessiné avec un compte à rebours en temps réel, des informations sur l'arbitre et une barre dynamique "Programme TV".
+- **`MatchPronostics.tsx`** : Implémentation d'une logique "Freemium" permettant à tous les utilisateurs de voir les pronostics de base tout en restreignant l'accès à l'analyse de l'IA pour les membres Pro.
+- **Moteur de pronostics d'administration** : Ajout d'une interface CRUD dédiée dans le tableau de bord d'administration pour gérer directement les prédictions.
+- **Persistance des données** : Création du modèle Mongoose `Prono` et des points de terminaison `/api/pronos`.
 
 ---
 
-## [2.8.0] - 2026-05-01 ([Architectural Modularization & Cleanup])
+## [2.12.0] - 2026-05-14 ([Stabilisation des données de ligue & de match])
 
-### Added
-- **Modular Hooks System**:
-  - Extracted `useWebSocket` to `src/hooks/useWebSocket.ts`.
-  - Extracted `usePayment` to `src/hooks/usePayment.ts`.
-  - Created centralized types in `src/types/payment.ts`.
+### Ajouté
+- **Barre latérale de type FotMob** :
+  - Ajout des "Meilleures ligues" codées en dur avec la liste exacte de FotMob et la localisation en français.
+  - Réorganisation de "Toutes les ligues" avec un groupe "International" et des groupes de pays triés par ordre alphabétique.
+  - Implémentation d'en-têtes de pays repliables dans la barre latérale pour une meilleure ergonomie.
+- **Intelligence sur les détails des ligues** :
+  - Implémentation du filtrage et du tri côté client pour les rencontres (10 passées / 10 à venir).
+  - Ajout d'une limitation intelligente de la saison à 2024 pour se conformer aux restrictions de l'offre gratuite d'API-Football.
 
-### Changed
-- **Architectural Stabilization**:
-  - **Fast Refresh Fix**: Separated hooks and types from Context/Service files to resolve development server warnings.
-  - **Service Refactor**: Transformed `WebSocketService` into a pure singleton service (moved to `.ts`).
-- **Codebase Sanitization**:
-  - Systematic removal of unused variables, commented-out code, and redundant imports in `App.tsx`, `BetEduc.tsx`, `Predictions.tsx`, `SubscriptionModal.tsx`, `AdminDashboard.tsx`, and `ThemeContext.tsx`.
-
-### Fixed
-- **Type Safety**:
-  - Resolved complex generic contravariance errors in `WebSocketService` listener management.
-  - Removed explicit `any` in `useWebSocket` subscription helper.
-- **Component Logic**:
-  - Refactored `BetEduc.tsx` to use the unified `UnifiedPaymentModal` flow instead of legacy direct service calls.
-- **Accessibility**:
-  - Final sweep of form labels and aria-labels in `SettingsAdminUser.tsx` and `BetEduc.tsx`.
+### Corrigé
+- **Intégrité des données** :
+  - Résolution des collisions de navigation dans la barre latérale en passant d'un mappage basé sur le nom à un mappage basé sur un identifiant unique (ID).
+  - Résolution de l'absence de matchs dans le flux de matchs en supprimant les paramètres restreints de l'API (`next`) dans `server.js`.
 
 ---
 
-## [2.7.0] - 2026-05-01 ([Zero Defaut Stabilization & Type Safety])
+## [2.11.0] - 2026-05-08 ([Fin de la Phase 2 : Refactoring & Glassmorphisme])
 
-### Added
-- **Typage Centralisé (Core)** :
+### Ajouté
+- **Glassmorphisme global** : Implémentation d'une esthétique globale de verre dépoli à travers l'application.
+  - Extraction de la classe `.glass-modal` appliquée à toutes les fenêtres modales de l'application.
+  - Amélioration de l'opacité et des niveaux de flou de `.glass-sidebar`, `.glass-bottom-nav` et `.glass-panel`.
+  - Conversion des styles en ligne de `MatchCard` et `DebateCard` en composants de conception centralisés `.card`.
+- **Fonctionnalités sociales** :
+  - Intégration de `emoji-picker-react` dans `DebateDetailView.tsx` pour permettre aux utilisateurs d'ajouter des emojis aux commentaires de débats.
+
+### Modifié
+- **Refactoring du code** :
+  - Décomposition de la page monolithique `News.tsx` en extrayant la logique de mappage de la grille et les index carrousels d'images actifs dans un nouveau composant `NewsGrid.tsx`.
+
+---
+
+## [2.10.0] - 2026-05-03 ([Persistance des paramètres & Typage fort])
+
+### À implémenter
+- Phase 3 : Monétisation & Fonctionnalités Pro (intégration NowPayments/FedaPay)
+- Phase 4 : Tableau de bord admin & Stabilité
+- PWA & Notifications Push
+
+---
+
+## [2.9.0] - 2026-05-02 ([Architecture de chat modulaire & Logique de permissions])
+
+### Ajouté
+- **Types de chat centralisés** : Création de `src/types/chat.ts` regroupant `Message`, `Channel` et `UserFeatures` pour une cohérence entre les composants.
+- **Hook de logique métier** : Implémentation de `useUserFeatures.ts` pour découpler la gestion des permissions (Utilisateur/Pro/Admin) des composants de l'interface utilisateur.
+
+### Modifié
+- **Décomposition des pages monolithiques** :
+  - **`Box.tsx`** : Réduction de ~1500 à ~200 lignes. Extraction de `ChannelListItem`, `ChannelTabs`, `CreateChannelModal` et `SubscribeChannelModal`.
+  - **`ChannelView.tsx`** : Réduction de ~1300 à ~180 lignes. Extraction de `ChannelHeader`, `MessageCard` et `MessageInput`.
+- **Durcissement Zéro Défaut** :
+  - Élimination des derniers styles en ligne dans `AdminDashboard.tsx` en utilisant des valeurs arbitraires Tailwind (`w-[78%]`).
+  - Résolution de tous les avertissements TypeScript restants et des occurrences de types implicites `any` dans les modules de chat.
+
+### Corrigé
+- **Accessibilité** : Ajout d'attributs `title` et `aria-label` à tous les éléments interactifs dans les nouveaux composants modulaires.
+- **Performance** : Optimisation du rendu en isolant les éléments de la liste de messages et les états de saisie.
+
+---
+
+## [2.8.0] - 2026-05-01 ([Modularisation architecturale & Nettoyage])
+
+### Ajouté
+- **Système de hooks modulaires** :
+  - Extraction de `useWebSocket` vers `src/hooks/useWebSocket.ts`.
+  - Extraction de `usePayment` vers `src/hooks/usePayment.ts`.
+  - Création de types centralisés dans `src/types/payment.ts`.
+
+### Modifié
+- **Stabilisation architecturale** :
+  - **Correction du "Fast Refresh"** : Séparation des hooks et des types des fichiers Context/Service pour résoudre les avertissements du serveur de développement.
+  - **Refactoring des services** : Transformation de `WebSocketService` en un service singleton pur (déplacé vers un fichier `.ts`).
+- **Nettoyage de la base de code** :
+  - Suppression systématique des variables inutilisées, du code commenté et des importations redondantes dans `App.tsx`, `BetEduc.tsx`, `Predictions.tsx`, `SubscriptionModal.tsx`, `AdminDashboard.tsx` et `ThemeContext.tsx`.
+
+### Corrigé
+- **Sécurité des types** :
+  - Résolution des erreurs complexes de contravariance générique dans la gestion des écouteurs de `WebSocketService`.
+  - Suppression de `any` explicite dans l'aide aux abonnements `useWebSocket`.
+- **Logique des composants** :
+  - Refactoring de `BetEduc.tsx` pour utiliser le flux unifié `UnifiedPaymentModal` au lieu des appels directs aux services hérités.
+- **Accessibilité** :
+  - Balayage final des étiquettes de formulaires et des attributs aria-label dans `SettingsAdminUser.tsx` et `BetEduc.tsx`.
+
+---
+
+## [2.7.0] - 2026-05-01 ([Stabilisation Zéro Défaut & Sécurité des types])
+
+### Ajouté
+- **Typage centralisé (Core)** :
   - Création de `src/types/channel.ts` pour centraliser les interfaces `Channel`, `ChannelData` et `ChannelDetails`.
   - Intégration de `NavigateFunction` dans les contextes pour un routage typé.
-- **Composants Communs** :
-  - `DynamicWidthBar` : Nouveau composant utilitaire pour injecter les largeurs de barres de progression via `useRef`, garantissant la conformité avec les règles strictes de non-utilisation de styles inline.
+- **Composants communs** :
+  - `DynamicWidthBar` : Nouveau composant utilitaire pour injecter les largeurs de barres de progression via `useRef`, garantissant la conformité avec les règles strictes de non-utilisation de styles en ligne.
 
-### Changed
-- **Refonte Stabilization Settings (Pro, Admin, Simple)** :
-  - **Zero Defaut Styles** : Suppression intégrale des styles inline (`style={{...}}`) dans les trois modules de paramètres.
-  - **Progress Bar Utility** : Implémentation d'une classe `.progress-bar-fill` dans `index.css` utilisant des variables CSS (`--progress-width`).
-- **WebSocket Service Refactor** :
-  - Migration du fichier de `.tsx` vers `.ts` pour résoudre les avertissements de "Fast Refresh".
+### Modifié
+- **Refonte de la stabilisation des paramètres (Pro, Admin, Simple)** :
+  - **Styles Zéro Défaut** : Suppression intégrale des styles en ligne (`style={{...}}`) dans les trois modules de paramètres.
+  - **Utilitaire de barre de progression** : Implémentation d'une classe `.progress-bar-fill` dans `index.css` utilisant des variables CSS (`--progress-width`).
+- **Refactoring du service WebSocket** :
+  - Migration du fichier `.tsx` vers `.ts` pour résoudre les avertissements de "Fast Refresh".
   - Typage strict : Remplacement de tous les types `any` par `unknown` et utilisation d'unions de types strictes pour les événements.
-- **App.tsx Clean-up** :
+- **Nettoyage d' `App.tsx`** :
   - Suppression des types `any` dans le `ChannelDataContext`.
   - Ajout de types de props (`ReactNode`) aux composants `AuthChecker` et `ChannelDataProvider`.
 
-### Fixed
+### Corrigé
 - **Accessibilité (A11y)** : Ajout systématique d'attributs `title` sur tous les boutons interactifs (modales, rechargement, retrait) dans les paramètres.
-- **TypeScript Compliance** : Résolution des erreurs de transtypage sur les Map de callbacks WebSocket via des casts `unknown` sécurisés.
+- **Conformité TypeScript** : Résolution des erreurs de transtypage sur les Map de rappels WebSocket via des casts `unknown` sécurisés.
 
 ---
 
 ## [1.0.0] - 2026-01-20
-### Added
-- **Initial Release** : Lancement du MVP PronosBox.
-- **Core Features** : Auth, Matches, Box, Predictions, Channels, and Wallet foundation.
+### Ajouté
+- **Version initiale** : Lancement du MVP PronosBox.
+- **Fonctionnalités de base** : Authentification, Matchs, Box (flux), Pronostics, Canaux et fondations du portefeuille.

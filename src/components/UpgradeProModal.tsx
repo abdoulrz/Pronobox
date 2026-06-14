@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Check, ArrowLeft, Crown, Sparkles } from 'lucide-react';
+import { X, Check, Crown, Sparkles } from 'lucide-react';
 
 interface UpgradeProModalProps {
   isOpen: boolean;

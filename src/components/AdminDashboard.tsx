@@ -33,7 +33,6 @@ const AdminDashboard = () => {
   const [activeTransactionsTab, setActiveTransactionsTab] = useState('historique');
 
   const [realStats, setRealStats] = useState<any>(null);
-  const [isLoadingStats, setIsLoadingStats] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setIsLoadingUsers(true);
@@ -75,7 +74,6 @@ const AdminDashboard = () => {
   };
 
   const loadStats = async () => {
-    setIsLoadingStats(true);
     try {
       const token = localStorage.getItem('token');
       const res = await fetch('/api/admin/stats', {
@@ -89,8 +87,6 @@ const AdminDashboard = () => {
       }
     } catch (error) {
       console.error("Error loading admin stats:", error);
-    } finally {
-      setIsLoadingStats(false);
     }
   };
 
