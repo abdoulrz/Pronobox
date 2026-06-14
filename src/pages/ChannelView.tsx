@@ -26,6 +26,35 @@ const ChannelView = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = (behavior: 'auto' | 'smooth' = 'smooth') => {
+    if (messageListRef.current) {
+      const container = messageListRef.current;
+      if (behavior === 'auto') {
+        container.scrollTop = container.scrollHeight;
+      } else {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    } else {
+      if (behavior === 'smooth') {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (channel && channel.messages.length > 0) {
+      scrollToBottom('auto');
+      const timer = setTimeout(() => scrollToBottom('auto'), 150);
+      return () => clearTimeout(timer);
+    }
+  }, [channel?.id]);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     return localStorage.getItem(`channel_notifications_${id}`) === 'true';
@@ -159,7 +188,8 @@ const ChannelView = () => {
           price: data.subscriptionPrice || 0
         };
         setChannel(channelObj);
-        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        setTimeout(() => scrollToBottom('auto'), 50);
+        setTimeout(() => scrollToBottom('auto'), 150);
       })
       .catch(err => {
         console.error('Erreur chargement canal:', err);
@@ -242,7 +272,7 @@ const ChannelView = () => {
       } : undefined
     };
     setChannel(prev => prev ? { ...prev, messages: [...prev.messages, optimisticMessage] } : prev);
-    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    setTimeout(() => scrollToBottom('smooth'), 50);
 
     // Persist to backend
     try {
@@ -390,7 +420,7 @@ const ChannelView = () => {
         currentUserId={user.id}
       />
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={messageListRef} className="flex-1 overflow-y-auto p-4 space-y-4">
         {channel.messages.map((msg, index) => {
           const messageDate = new Date(msg.timestamp);
           const prevMsg = channel.messages[index - 1];
@@ -439,6 +469,7 @@ const ChannelView = () => {
                 onReply={() => setReplyToMessage(msg)}
                 onScrollToMessage={handleScrollToMessage}
                 onImageClick={(url) => setFullscreenImage(url)}
+                onImageLoad={() => scrollToBottom('auto')}
               />
             </div>
           </div>

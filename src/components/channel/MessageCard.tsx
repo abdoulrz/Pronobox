@@ -10,6 +10,7 @@ interface MessageCardProps {
   onReply: () => void;
   onScrollToMessage: (messageId: number | string) => void;
   onImageClick?: (imageUrl: string) => void;
+  onImageLoad?: () => void;
 }
 
 export const MessageCard: React.FC<MessageCardProps> = ({
@@ -20,7 +21,8 @@ export const MessageCard: React.FC<MessageCardProps> = ({
   onShowReactionPicker,
   onReply,
   onScrollToMessage,
-  onImageClick
+  onImageClick,
+  onImageLoad
 }) => {
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -214,6 +216,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                     src={message.imageUrl || message.text}
                     alt="Shared media"
                     className="w-full max-h-80 object-cover cursor-pointer hover:opacity-95 transition-opacity"
+                    onLoad={onImageLoad}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (onImageClick) {
