@@ -85,10 +85,19 @@ const authLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 app.use('/api/auth/', authLimiter);
 
-// Secured CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',') 
-  : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'];
+  : [
+      'http://localhost:5173', 
+      'http://localhost:3000', 
+      'http://127.0.0.1:5173',
+      'https://pronosbox.com',
+      'https://www.pronosbox.com',
+      'https://api.pronosbox.com',
+      'http://pronosbox.com',
+      'http://www.pronosbox.com',
+      'http://api.pronosbox.com'
+    ];
 
 app.use(cors({
   origin: function (origin, callback) {
