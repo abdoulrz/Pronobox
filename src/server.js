@@ -2366,6 +2366,16 @@ const initializeMockData = async () => {
   }
 };
 
+// Global error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Global unhandled error:', err);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: err.message,
+    details: err.stack ? err.stack.split('\n')[0] : ''
+  });
+});
+
 // Start server
 const PORT = process.env.PORT || 5000;
 

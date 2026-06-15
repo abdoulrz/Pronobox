@@ -7,6 +7,26 @@ import { useAuth } from '../contexts/AuthContext';
 import { useChannelData } from '../contexts/ChannelContext';
 import MarkdownEditor from './MarkdownEditor';
 import { markdownToHtml } from '../utils/markdownToHtml';
+const parseErrorResponse = async (res: Response): Promise<{ error: string; details?: string }> => {
+  try {
+    const errorData = await res.json();
+    return {
+      error: errorData.error || errorData.message || 'Erreur inconnue',
+      details: errorData.details
+    };
+  } catch {
+    try {
+      const text = await res.text();
+      return {
+        error: `Erreur serveur (${res.status})`,
+        details: text.substring(0, 200) + (text.length > 200 ? '...' : '')
+      };
+    } catch {
+      return { error: `Erreur serveur (${res.status})` };
+    }
+  }
+};
+
 const AdminDashboard = () => {
   const { isAdmin } = useAuth();
   const { refreshChannels } = useChannelData();
@@ -1550,8 +1570,8 @@ const PronosManagement = () => {
         });
         fetchPronos();
       } else {
-        const errorData = await res.json();
-        alert(`Échec de l'enregistrement : ${errorData.error || errorData.message || 'Erreur inconnue'}${errorData.details ? ' (' + errorData.details + ')' : ''}`);
+        const errorData = await parseErrorResponse(res);
+        alert(`Échec de l'enregistrement : ${errorData.error}${errorData.details ? ' (' + errorData.details + ')' : ''}`);
       }
     } catch (err) {
       console.error(err);
@@ -1601,14 +1621,15 @@ const PronosManagement = () => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await res.json();
       if (res.ok) {
+        const data = await res.json();
         fetchPronos();
         if (data.needsManualReview) {
           alert(`Score enregistré (${data.prono?.actualResult}), mais le résultat n'a pas pu être déterminé automatiquement. Veuillez vérifier manuellement.`);
         }
       } else {
-        alert(data.error || data.message || 'Erreur de vérification');
+        const errorData = await parseErrorResponse(res);
+        alert(`Erreur de vérification : ${errorData.error}${errorData.details ? ' (' + errorData.details + ')' : ''}`);
       }
     } catch (err) {
       console.error(err);
@@ -1627,12 +1648,13 @@ const PronosManagement = () => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await res.json();
       if (res.ok) {
+        const data = await res.json();
         setVerifyResults(data.results || []);
         fetchPronos();
       } else {
-        alert(data.error || 'Erreur de vérification');
+        const errorData = await parseErrorResponse(res);
+        alert(`Erreur de vérification : ${errorData.error}${errorData.details ? ' (' + errorData.details + ')' : ''}`);
       }
     } catch (err) {
       console.error(err);
@@ -1657,8 +1679,8 @@ const PronosManagement = () => {
       if (res.ok) {
         fetchPronos();
       } else {
-        const data = await res.json();
-        alert(data.error || 'Erreur');
+        const errorData = await parseErrorResponse(res);
+        alert(`Erreur : ${errorData.error}${errorData.details ? ' (' + errorData.details + ')' : ''}`);
       }
     } catch (err) {
       console.error(err);
