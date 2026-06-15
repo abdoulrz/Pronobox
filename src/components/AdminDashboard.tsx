@@ -1549,6 +1549,9 @@ const PronosManagement = () => {
           premiumExpectedResult: '', premiumOdds: 0, premiumConfidence: 0, premiumObservation: ''
         });
         fetchPronos();
+      } else {
+        const errorData = await res.json();
+        alert(`Échec de l'enregistrement : ${errorData.error || errorData.message || 'Erreur inconnue'}${errorData.details ? ' (' + errorData.details + ')' : ''}`);
       }
     } catch (err) {
       console.error(err);

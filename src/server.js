@@ -1083,7 +1083,8 @@ app.post('/api/pronos', authenticateToken, requireAdmin, async (req, res) => {
     await newProno.save();
     res.status(201).json(newProno);
   } catch (err) {
-    res.status(400).json({ error: 'Failed to create prono' });
+    console.error('Error in POST /api/pronos:', err);
+    res.status(400).json({ error: 'Failed to create prono', details: err.message });
   }
 });
 
@@ -1093,7 +1094,8 @@ app.put('/api/pronos/:id', authenticateToken, requireAdmin, async (req, res) => 
     if (!prono) return res.status(404).json({ error: 'Prono not found' });
     res.json(prono);
   } catch (err) {
-    res.status(400).json({ error: 'Failed to update prono' });
+    console.error('Error in PUT /api/pronos/:id:', err);
+    res.status(400).json({ error: 'Failed to update prono', details: err.message });
   }
 });
 
@@ -1103,7 +1105,8 @@ app.delete('/api/pronos/:id', authenticateToken, requireAdmin, async (req, res) 
     if (!prono) return res.status(404).json({ error: 'Prono not found' });
     res.json({ message: 'Prono deleted successfully' });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to delete prono' });
+    console.error('Error in DELETE /api/pronos/:id:', err);
+    res.status(500).json({ error: 'Failed to delete prono', details: err.message });
   }
 });
 
