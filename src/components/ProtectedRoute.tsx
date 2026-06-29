@@ -1,16 +1,21 @@
 import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import Layout from './Layout';
+import AuthRequired from './AuthRequired';
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
 }
+
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requireAdmin = false
 }) => {
   const { isAuthenticated, isAdmin, user } = useAuth();
   const location = useLocation();
+
   useEffect(() => {
     console.log("ProtectedRoute - Vérification d'authentification:", {
       isAuthenticated,
@@ -20,14 +25,22 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       path: location.pathname
     });
   }, [isAuthenticated, isAdmin, requireAdmin, user, location]);
+
   if (!isAuthenticated) {
-    console.log('Redirection vers /auth - Non authentifié');
-    return <Navigate to="/auth" replace />;
+    console.log('Redirection vers AuthRequired - Non authentifié');
+    return (
+      <Layout>
+        <AuthRequired />
+      </Layout>
+    );
   }
+
   if (requireAdmin && !isAdmin) {
     console.log('Redirection vers / - Non admin');
     return <Navigate to="/" replace />;
   }
+
   return <>{children}</>;
 };
+
 export default ProtectedRoute;

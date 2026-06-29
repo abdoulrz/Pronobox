@@ -6,7 +6,11 @@ import LegalContent from '../components/legal/LegalContent';
 import { GoogleLogin } from '@react-oauth/google';
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  const queryParams = new URLSearchParams(window.location.search);
+  const modeParam = queryParams.get('mode');
+  const redirectParam = queryParams.get('redirect') || '/';
+
+  const [isLogin, setIsLogin] = useState(modeParam !== 'register');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -49,11 +53,11 @@ const Auth = () => {
       if (isLogin) {
         // Login logic
         await login({ email, password });
-        navigate('/');
+        navigate(redirectParam);
       } else {
         // Registration logic
         await register({ username, email, password });
-        navigate('/');
+        navigate(redirectParam);
       }
     } catch (err: any) {
       console.error('Auth error:', err);
@@ -88,7 +92,7 @@ const Auth = () => {
     setError('');
     try {
       await loginWithGoogle(credentialResponse.credential);
-      navigate('/');
+      navigate(redirectParam);
     } catch (err: any) {
       console.error('Google Auth Error:', err);
       const backendMessage = err.response?.data?.message || err.message || '';

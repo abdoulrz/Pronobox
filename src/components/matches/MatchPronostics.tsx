@@ -19,7 +19,10 @@ const MatchPronostics: React.FC<MatchPronosticsProps> = ({ matchId, homeTeamName
   const [loading, setLoading] = useState(true);
 
   const handlePremiumClick = () => {
-    if (user?.isPro || user?.role === 'admin') {
+    if (!user) {
+      const redirectUrl = encodeURIComponent(window.location.pathname);
+      window.location.href = `/auth?mode=register&redirect=${redirectUrl}`;
+    } else if (user.isPro || user.role === 'admin') {
       setShowPremiumModal(true);
     } else {
       setShowPaymentModal(true);
@@ -259,13 +262,16 @@ const MatchPronostics: React.FC<MatchPronosticsProps> = ({ matchId, homeTeamName
             </div>
             <h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">Pronostic Premium</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-sm">
-              Débloquez l'analyse experte, le choix de la rédaction et l'avis de notre IA pour ce match.
+              {!user 
+                ? "Créez un compte gratuitement pour débloquer l'analyse experte, le choix de la rédaction et l'avis de notre IA."
+                : "Débloquez l'analyse experte, le choix de la rédaction et l'avis de notre IA pour ce match."
+              }
             </p>
             <button 
               onClick={handlePremiumClick}
               className="btn-primary py-3 px-8 shadow-md shadow-brand-green/20"
             >
-              Débloquer l'analyse
+              {!user ? "S'inscrire gratuitement" : "Débloquer l'analyse"}
             </button>
           </div>
           

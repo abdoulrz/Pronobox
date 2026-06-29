@@ -54,31 +54,25 @@ export function App() {
                     <Route
                       path="/"
                       element={
-                      <ProtectedRoute>
-                          <Layout>
-                            <Matches />
-                          </Layout>
-                        </ProtectedRoute>
+                        <Layout>
+                          <Matches />
+                        </Layout>
                       } />
 
                     <Route
                       path="/match/:id"
                       element={
-                      <ProtectedRoute>
-                          <Layout>
-                            <MatchDetails />
-                          </Layout>
-                        </ProtectedRoute>
+                        <Layout>
+                          <MatchDetails />
+                        </Layout>
                       } />
 
                     <Route
                       path="/league/:id"
                       element={
-                      <ProtectedRoute>
-                          <Layout>
-                            <LeagueDetails />
-                          </Layout>
-                        </ProtectedRoute>
+                        <Layout>
+                          <LeagueDetails />
+                        </Layout>
                       } />
 
                     <Route path="/predictions" element={<Navigate to="/pronos" replace />} />
@@ -98,11 +92,9 @@ export function App() {
                     <Route
                       path="/beteduc"
                       element={
-                      <ProtectedRoute>
-                          <Layout>
-                            <BetEduc />
-                          </Layout>
-                        </ProtectedRoute>
+                        <Layout>
+                          <BetEduc />
+                        </Layout>
                       } />
 
                     <Route
@@ -148,11 +140,9 @@ export function App() {
                     <Route
                       path="/pronos"
                       element={
-                      <ProtectedRoute>
-                          <Layout>
-                            <Pronos />
-                          </Layout>
-                        </ProtectedRoute>
+                        <Layout>
+                          <Pronos />
+                        </Layout>
                       } />
 
                     <Route

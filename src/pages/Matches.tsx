@@ -55,7 +55,7 @@ const getUserCountry = (): string => {
   return 'FRANCE'; // Default fallback
 };
 
-
+const TV_LEAGUE_IDS = [1, 2, 3, 4, 9, 39, 140, 135, 78, 61, 45]; // major competitions that are televised
 
 const Matches = () => {
   const navigate = useNavigate();
@@ -87,6 +87,8 @@ const Matches = () => {
   const [collapsedLeagues, setCollapsedLeagues] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [liveOnly, setLiveOnly] = useState(false);
+  const [tvOnly, setTvOnly] = useState(false);
+  const [sortByTime, setSortByTime] = useState(false);
   const [showAllLeagues, setShowAllLeagues] = useState(false);
   const [availableLeagues, setAvailableLeagues] = useState<{id: number, name: string, logo: string, country: string}[]>([]);
   const [mobileView, setMobileView] = useState<'ligues' | 'matchs' | 'actualites'>('matchs');
@@ -132,6 +134,7 @@ const Matches = () => {
           awayTeamLogo: item.teams.away.logo,
           leagueCountry: item.league.country,
           leagueLogo: item.league.logo,
+          onTv: TV_LEAGUE_IDS.includes(item.league.id),
         }));
         setMatches(mappedMatches);
         
@@ -168,7 +171,25 @@ const Matches = () => {
     }
   };
 
+  const getLocalDateString = (dateString: string) => {
+    const d = new Date(dateString);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const todayStr = getLocalDateString(new Date().toISOString());
+  const isPastDate = selectedDate < todayStr;
+
   const filteredMatches = matches.filter((m) => {
+    // Focus strictly on the day selected (local browser timezone)
+    const matchesDate = getLocalDateString(m.date) === selectedDate;
+    if (!matchesDate) return false;
+
+    // Filter out finished matches for today and future days
+    if (!isPastDate && m.status === 'FT') return false;
+
     const matchesSearch = searchQuery 
       ? m.homeTeam.toLowerCase().includes(searchQuery.toLowerCase()) || 
         m.awayTeam.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -176,9 +197,53 @@ const Matches = () => {
       : true;
       
     const matchesLive = liveOnly ? m.status === 'Live' : true;
+    const matchesTv = tvOnly ? m.onTv : true;
     
-    return matchesSearch && matchesLive;
+    return matchesSearch && matchesLive && matchesTv;
   });
+
+  const compareLeagues = (
+    idA: number, countryA: string, nameA: string,
+    idB: number, countryB: string, nameB: string
+  ) => {
+    // 1. Check favorite leagues
+    const isFavA = favoriteLeagues.includes(idA);
+    const isFavB = favoriteLeagues.includes(idB);
+    if (isFavA && !isFavB) return -1;
+    if (!isFavA && isFavB) return 1;
+
+    // 2. Check importance of top leagues (Meilleures ligues)
+    const TOP_LEAGUE_IDS = [1, 2, 4, 39, 140, 135, 78, 3, 61, 45];
+    const idxA = TOP_LEAGUE_IDS.indexOf(idA);
+    const idxB = TOP_LEAGUE_IDS.indexOf(idB);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+
+    const normCountryA = countryA.toUpperCase();
+    const normCountryB = countryB.toUpperCase();
+    const userCountry = getUserCountry();
+
+    // 3. User National Country matches first
+    const isNationalA = normCountryA === userCountry;
+    const isNationalB = normCountryB === userCountry;
+    if (isNationalA && !isNationalB) return -1;
+    if (!isNationalA && isNationalB) return 1;
+
+    // 4. Other Priority countries
+    const pidxA = PRIORITY_COUNTRIES.indexOf(normCountryA);
+    const pidxB = PRIORITY_COUNTRIES.indexOf(normCountryB);
+    if (pidxA !== -1 && pidxB !== -1) return pidxA - pidxB;
+    if (pidxA !== -1) return -1;
+    if (pidxB !== -1) return 1;
+
+    // 5. Alphabetical fallback
+    return nameA.localeCompare(nameB);
+  };
+
+  const compareMatchesByLeague = (a: Match, b: Match) => {
+    return compareLeagues(a.leagueId, a.leagueCountry, a.league, b.leagueId, b.leagueCountry, b.league);
+  };
 
   const groupedByLeague = filteredMatches.reduce((groups, match) => {
     const normalizedCountry = match.leagueCountry.toUpperCase();
@@ -198,44 +263,54 @@ const Matches = () => {
     return groups;
   }, {} as Record<string, { id: number; name: string; country: string; logo: string; matches: Match[] }>);
 
+  const TOP_LEAGUE_IDS = [1, 2, 4, 39, 140, 135, 78, 3, 61, 45];
+
+  // Separate priority (favorite or top leagues) from other matches
+  const priorityMatches = filteredMatches.filter(
+    (m) => favoriteLeagues.includes(m.leagueId) || TOP_LEAGUE_IDS.includes(m.leagueId)
+  );
+  
+  const otherMatches = filteredMatches.filter(
+    (m) => !favoriteLeagues.includes(m.leagueId) && !TOP_LEAGUE_IDS.includes(m.leagueId)
+  );
+
+  // Group by time for priority matches
+  const groupedPriorityByTime = priorityMatches.reduce((groups, match) => {
+    const timeKey = new Date(match.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    if (!groups[timeKey]) {
+      groups[timeKey] = [];
+    }
+    groups[timeKey].push(match);
+    return groups;
+  }, {} as Record<string, Match[]>);
+
+  // Group by time for other matches
+  const groupedOtherByTime = otherMatches.reduce((groups, match) => {
+    const timeKey = new Date(match.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    if (!groups[timeKey]) {
+      groups[timeKey] = [];
+    }
+    groups[timeKey].push(match);
+    return groups;
+  }, {} as Record<string, Match[]>);
+
+  // Sort matches within each time group by league priority
+  Object.keys(groupedPriorityByTime).forEach((timeKey) => {
+    groupedPriorityByTime[timeKey].sort(compareMatchesByLeague);
+  });
+  Object.keys(groupedOtherByTime).forEach((timeKey) => {
+    groupedOtherByTime[timeKey].sort(compareMatchesByLeague);
+  });
+
+  const sortedPriorityTimes = Object.keys(groupedPriorityByTime).sort((a, b) => a.localeCompare(b));
+  const sortedOtherTimes = Object.keys(groupedOtherByTime).sort((a, b) => a.localeCompare(b));
+
   const favoriteMatchesList = filteredMatches.filter(m => favoriteMatches.includes(m.id));
 
   const sortedLeagues = Object.keys(groupedByLeague).sort((a, b) => {
-    // 1. Check favorite leagues
-    const idA = groupedByLeague[a].id;
-    const idB = groupedByLeague[b].id;
-    const isFavA = favoriteLeagues.includes(idA);
-    const isFavB = favoriteLeagues.includes(idB);
-    if (isFavA && !isFavB) return -1;
-    if (!isFavA && isFavB) return 1;
-
-    // 2. Check importance of top leagues (Meilleures ligues)
-    const TOP_LEAGUE_IDS = [1, 2, 4, 39, 140, 135, 78, 3, 61, 45];
-    const idxA = TOP_LEAGUE_IDS.indexOf(idA);
-    const idxB = TOP_LEAGUE_IDS.indexOf(idB);
-    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-    if (idxA !== -1) return -1;
-    if (idxB !== -1) return 1;
-
-    const countryA = groupedByLeague[a].country.toUpperCase();
-    const countryB = groupedByLeague[b].country.toUpperCase();
-    const userCountry = getUserCountry();
-
-    // 3. User National Country matches first
-    const isNationalA = countryA === userCountry;
-    const isNationalB = countryB === userCountry;
-    if (isNationalA && !isNationalB) return -1;
-    if (!isNationalA && isNationalB) return 1;
-
-    // 4. Other Priority countries
-    const pidxA = PRIORITY_COUNTRIES.indexOf(countryA);
-    const pidxB = PRIORITY_COUNTRIES.indexOf(countryB);
-    if (pidxA !== -1 && pidxB !== -1) return pidxA - pidxB;
-    if (pidxA !== -1) return -1;
-    if (pidxB !== -1) return 1;
-
-    // 5. Alphabetical fallback
-    return a.localeCompare(b);
+    const dataA = groupedByLeague[a];
+    const dataB = groupedByLeague[b];
+    return compareLeagues(dataA.id, dataA.country, dataA.name, dataB.id, dataB.country, dataB.name);
   });
 
   const handleToggleFavorite = (e: React.MouseEvent, matchId: number) => {
@@ -312,10 +387,24 @@ const Matches = () => {
           >
             En direct
           </button>
-          <button className="px-4 py-1.5 rounded-full text-[13px] font-bold bg-slate-100 dark:bg-brand-navy-2 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-brand-slate hover:bg-slate-200 dark:hover:bg-brand-navy-1 transition-colors whitespace-nowrap">
+          <button 
+            onClick={() => setTvOnly(!tvOnly)}
+            className={`px-4 py-1.5 rounded-full text-[13px] font-bold transition-colors whitespace-nowrap ${
+              tvOnly 
+                ? 'bg-brand-green text-white border border-brand-green' 
+                : 'bg-slate-100 dark:bg-brand-navy-2 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-brand-slate hover:bg-slate-200 dark:hover:bg-brand-navy-1'
+            }`}
+          >
             En TV
           </button>
-          <button className="px-4 py-1.5 rounded-full text-[13px] font-bold bg-slate-100 dark:bg-brand-navy-2 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-brand-slate hover:bg-slate-200 dark:hover:bg-brand-navy-1 transition-colors whitespace-nowrap">
+          <button 
+            onClick={() => setSortByTime(!sortByTime)}
+            className={`px-4 py-1.5 rounded-full text-[13px] font-bold transition-colors whitespace-nowrap ${
+              sortByTime 
+                ? 'bg-brand-green text-white border border-brand-green' 
+                : 'bg-slate-100 dark:bg-brand-navy-2 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-brand-slate hover:bg-slate-200 dark:hover:bg-brand-navy-1'
+            }`}
+          >
             Par horaire
           </button>
           <div className="flex-1"></div>
@@ -368,7 +457,7 @@ const Matches = () => {
         )}
 
         {/* No matches */}
-        {!loading && !error && sortedLeagues.length === 0 && (
+        {!loading && !error && (sortByTime ? (sortedPriorityTimes.length === 0 && sortedOtherTimes.length === 0) : sortedLeagues.length === 0) && (
           <div className="text-center py-16">
             <p className="text-slate-400 dark:text-slate-500">Aucun match disponible pour cette date.</p>
           </div>
@@ -393,75 +482,150 @@ const Matches = () => {
                       isFavorite={true}
                       onToggleFavorite={(e) => handleToggleFavorite(e, match.id)}
                       onClick={() => navigate(`/match/${match.id}`)}
+                      showLeague={sortByTime}
                     />
                   ))}
                 </div>
               </div>
             )}
 
-            {(showAllLeagues ? sortedLeagues : sortedLeagues.slice(0, 9)).map((leagueKey) => {
-              const leagueData = groupedByLeague[leagueKey];
-              return (
-                <div key={leagueKey} className="card overflow-hidden">
-                  {/* League Header */}
-                  <div 
-                    className="flex items-center gap-3 px-3 py-2 bg-slate-50 dark:bg-brand-navy-2 border-b border-slate-100 dark:border-brand-slate/50 cursor-pointer select-none hover:bg-slate-100 dark:hover:bg-brand-navy-1 transition-colors"
-                    onClick={() => navigate(`/league/${leagueData.id}`)}
-                  >
-                    <div className="w-5 h-5 rounded-full bg-white dark:bg-brand-navy-1 flex items-center justify-center flex-shrink-0 border border-slate-200 dark:border-brand-slate/50 p-0.5">
-                      <SafeImage src={leagueData.logo} alt={leagueData.name} className="w-full h-full object-contain" />
+            {sortByTime ? (
+              // Chronological View (Par horaire) with Priorities Separation
+              <>
+                {/* 1. Compétitions Principales (Favorite/Top leagues) */}
+                {sortedPriorityTimes.length > 0 && (
+                  <div className="space-y-4 mb-8">
+                    <div className="flex items-center gap-2 border-b border-slate-100 dark:border-brand-slate/30 pb-2">
+                      <span className="text-sm font-bold text-slate-800 dark:text-slate-200">🔥 Matchs Principaux</span>
                     </div>
-                    <h3 className="text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">{leagueKey}</h3>
-                    <div className="ml-auto flex items-center gap-2">
-                      <button 
-                        className="p-1 text-slate-400 hover:text-brand-green transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFavoriteLeagues(prev => 
-                            prev.includes(leagueData.id) ? prev.filter(id => id !== leagueData.id) : [...prev, leagueData.id]
-                          );
-                        }}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${favoriteLeagues.includes(leagueData.id) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-400'}`} viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.519-4.674z" />
-                        </svg>
-                      </button>
-                      <button 
-                        className="p-1 text-slate-400 hover:text-brand-green transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setCollapsedLeagues(prev => 
-                            prev.includes(leagueKey) ? prev.filter(l => l !== leagueKey) : [...prev, leagueKey]
-                          );
-                        }}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${collapsedLeagues.includes(leagueKey) ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                        </svg>
-                      </button>
-                    </div>
+                    {sortedPriorityTimes.map((timeKey) => {
+                      const timeMatches = groupedPriorityByTime[timeKey];
+                      return (
+                        <div key={`priority-${timeKey}`} className="card overflow-hidden">
+                          {/* Time Header */}
+                          <div className="flex items-center gap-3 px-3 py-2 bg-slate-50 dark:bg-brand-navy-2 border-b border-slate-100 dark:border-brand-slate/50">
+                            <span className="text-[13px] font-bold text-brand-green">⏰ {timeKey}</span>
+                          </div>
+                          {/* Matches List */}
+                          <div className="flex flex-col">
+                            {timeMatches.map((match: Match, index) => (
+                              <MatchCard 
+                                key={match.id} 
+                                match={match} 
+                                isLast={index === timeMatches.length - 1}
+                                isFavorite={favoriteMatches.includes(match.id)}
+                                onToggleFavorite={(e) => handleToggleFavorite(e, match.id)}
+                                onClick={() => navigate(`/match/${match.id}`)}
+                                showLeague={true}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {/* Matches List */}
-                  {!collapsedLeagues.includes(leagueKey) && (
-                    <div className="flex flex-col">
-                      {leagueData.matches.map((match: Match, index) => (
-                        <MatchCard 
-                          key={match.id} 
-                          match={match} 
-                          isLast={index === leagueData.matches.length - 1}
-                          isFavorite={favoriteMatches.includes(match.id)}
-                          onToggleFavorite={(e) => handleToggleFavorite(e, match.id)}
-                          onClick={() => navigate(`/match/${match.id}`)}
-                        />
-                      ))}
+                )}
+
+                {/* 2. Autres Compétitions (Minor leagues) */}
+                {sortedOtherTimes.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 border-b border-slate-100 dark:border-brand-slate/30 pb-2">
+                      <span className="text-sm font-bold text-slate-500 dark:text-slate-400">⚽ Autres Matchs</span>
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                    {sortedOtherTimes.map((timeKey) => {
+                      const timeMatches = groupedOtherByTime[timeKey];
+                      return (
+                        <div key={`other-${timeKey}`} className="card overflow-hidden">
+                          {/* Time Header */}
+                          <div className="flex items-center gap-3 px-3 py-2 bg-slate-50 dark:bg-brand-navy-2 border-b border-slate-100 dark:border-brand-slate/50">
+                            <span className="text-[13px] font-bold text-brand-green">⏰ {timeKey}</span>
+                          </div>
+                          {/* Matches List */}
+                          <div className="flex flex-col">
+                            {timeMatches.map((match: Match, index) => (
+                              <MatchCard 
+                                key={match.id} 
+                                match={match} 
+                                isLast={index === timeMatches.length - 1}
+                                isFavorite={favoriteMatches.includes(match.id)}
+                                onToggleFavorite={(e) => handleToggleFavorite(e, match.id)}
+                                onClick={() => navigate(`/match/${match.id}`)}
+                                showLeague={true}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ) : (
+              // League Grouped View (Default)
+              (showAllLeagues ? sortedLeagues : sortedLeagues.slice(0, 9)).map((leagueKey) => {
+                const leagueData = groupedByLeague[leagueKey];
+                return (
+                  <div key={leagueKey} className="card overflow-hidden">
+                    {/* League Header */}
+                    <div 
+                      className="flex items-center gap-3 px-3 py-2 bg-slate-50 dark:bg-brand-navy-2 border-b border-slate-100 dark:border-brand-slate/50 cursor-pointer select-none hover:bg-slate-100 dark:hover:bg-brand-navy-1 transition-colors"
+                      onClick={() => navigate(`/league/${leagueData.id}`)}
+                    >
+                      <div className="w-5 h-5 rounded-full bg-white dark:bg-brand-navy-1 flex items-center justify-center flex-shrink-0 border border-slate-200 dark:border-brand-slate/50 p-0.5">
+                        <SafeImage src={leagueData.logo} alt={leagueData.name} className="w-full h-full object-contain" />
+                      </div>
+                      <h3 className="text-[13px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">{leagueKey}</h3>
+                      <div className="ml-auto flex items-center gap-2">
+                        <button 
+                          className="p-1 text-slate-400 hover:text-brand-green transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFavoriteLeagues(prev => 
+                              prev.includes(leagueData.id) ? prev.filter(id => id !== leagueData.id) : [...prev, leagueData.id]
+                            );
+                          }}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${favoriteLeagues.includes(leagueData.id) ? 'text-yellow-400 fill-yellow-400' : 'text-slate-400'}`} viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.519-4.674z" />
+                          </svg>
+                        </button>
+                        <button 
+                          className="p-1 text-slate-400 hover:text-brand-green transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCollapsedLeagues(prev => 
+                              prev.includes(leagueKey) ? prev.filter(l => l !== leagueKey) : [...prev, leagueKey]
+                            );
+                          }}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${collapsedLeagues.includes(leagueKey) ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    {/* Matches List */}
+                    {!collapsedLeagues.includes(leagueKey) && (
+                      <div className="flex flex-col">
+                        {leagueData.matches.map((match: Match, index) => (
+                          <MatchCard 
+                            key={match.id} 
+                            match={match} 
+                            isLast={index === leagueData.matches.length - 1}
+                            isFavorite={favoriteMatches.includes(match.id)}
+                            onToggleFavorite={(e) => handleToggleFavorite(e, match.id)}
+                            onClick={() => navigate(`/match/${match.id}`)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
 
             {/* Show All / Hide All Button */}
-            {sortedLeagues.length > 9 && (
+            {!sortByTime && sortedLeagues.length > 9 && (
               <div className="text-center mt-6">
                 <button 
                   onClick={() => setShowAllLeagues(!showAllLeagues)}
