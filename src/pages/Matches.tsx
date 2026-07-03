@@ -91,7 +91,13 @@ const Matches = () => {
   const [sortByTime, setSortByTime] = useState(false);
   const [showAllLeagues, setShowAllLeagues] = useState(false);
   const [availableLeagues, setAvailableLeagues] = useState<{id: number, name: string, logo: string, country: string}[]>([]);
-  const [mobileView, setMobileView] = useState<'ligues' | 'matchs' | 'actualites'>('matchs');
+  const [mobileView, setMobileView] = useState<'ligues' | 'matchs' | 'actualites'>(() => {
+    return (localStorage.getItem('pronobox_matches_mobileView') as 'ligues' | 'matchs' | 'actualites') || 'matchs';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pronobox_matches_mobileView', mobileView);
+  }, [mobileView]);
   
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(false);
