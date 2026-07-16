@@ -1119,6 +1119,71 @@ app.delete('/api/pronos/:id', authenticateToken, requireAdmin, async (req, res) 
   }
 });
 
+app.post('/api/pronos/:id/react', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user.id;
+
+    if (!emoji) {
+      return res.status(400).json({ error: 'Emoji is required' });
+    }
+
+    const prono = await Prono.findById(id);
+    if (!prono) {
+      return res.status(404).json({ error: 'Prono not found' });
+    }
+
+    if (!prono.reactions) {
+      prono.reactions = [];
+    }
+
+    // Find any existing reaction from this user
+    let userExistingReactionEmoji = null;
+    for (const r of prono.reactions) {
+      if (r.users.some(uid => uid.toString() === userId.toString())) {
+        userExistingReactionEmoji = r.emoji;
+        break;
+      }
+    }
+
+    if (userExistingReactionEmoji === emoji) {
+      // Toggle off: remove user from this emoji's reactions list
+      prono.reactions = prono.reactions.map(r => {
+        if (r.emoji === emoji) {
+          r.users = r.users.filter(uid => uid.toString() !== userId.toString());
+        }
+        return r;
+      }).filter(r => r.users.length > 0);
+    } else {
+      // If user had a different reaction, remove them from it first
+      if (userExistingReactionEmoji) {
+        prono.reactions = prono.reactions.map(r => {
+          if (r.emoji === userExistingReactionEmoji) {
+            r.users = r.users.filter(uid => uid.toString() !== userId.toString());
+          }
+          return r;
+        }).filter(r => r.users.length > 0);
+      }
+
+      // Add user to the new reaction
+      const targetReaction = prono.reactions.find(r => r.emoji === emoji);
+      if (targetReaction) {
+        targetReaction.users.push(userId);
+      } else {
+        prono.reactions.push({ emoji, users: [userId] });
+      }
+    }
+
+    await prono.save();
+    res.json(prono.reactions);
+  } catch (err) {
+    console.error('Error in POST /api/pronos/:id/react:', err);
+    res.status(500).json({ error: 'Failed to react to prono', details: err.message });
+  }
+});
+
+
 // --- Pronostic Verification System ---
 
 /**

@@ -25,7 +25,11 @@ const PronoSchema = new mongoose.Schema({
   freeStatus: { type: String, enum: ['pending', 'won', 'lost'], default: 'pending' },
   premiumStatus: { type: String, enum: ['pending', 'won', 'lost'], default: 'pending' },
   actualResult: { type: String, default: '' },
-  verifiedAt: { type: Date }
+  verifiedAt: { type: Date },
+  reactions: [{
+    emoji: { type: String, required: true },
+    users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+  }]
 }, {
   timestamps: true
 });

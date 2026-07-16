@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import UnifiedPaymentModal from '../payment/UnifiedPaymentModal';
 import { markdownToHtml } from '../../utils/markdownToHtml';
+import { PronoReactions } from '../predictions/PronoReactions';
 
 interface MatchPronosticsProps {
   matchId: number;
@@ -286,6 +287,19 @@ const MatchPronostics: React.FC<MatchPronosticsProps> = ({ matchId, homeTeamName
             <div className="h-4 bg-slate-200 dark:bg-brand-navy-3 rounded w-5/6 mb-3" />
             <div className="h-4 bg-slate-200 dark:bg-brand-navy-3 rounded w-4/6" />
           </div>
+        </div>
+      )}
+
+      {/* Prono Reactions */}
+      {prono && (
+        <div className="bg-white dark:bg-brand-navy-2 rounded-2xl shadow-sm border border-slate-200 dark:border-brand-slate p-5">
+          <PronoReactions 
+            pronoId={prono._id || prono.id} 
+            initialReactions={prono.reactions}
+            onReactUpdated={(newReactions) => {
+              setProno((prev: any) => prev ? { ...prev, reactions: newReactions } : null);
+            }}
+          />
         </div>
       )}
 

@@ -768,6 +768,62 @@ export const likeDebateReply = async (debateId: string, messageId: string, reply
   }
 };
 
+export const reactToProno = async (pronoId: string, emoji: string) => {
+  try {
+    const response = await api.post(`/pronos/${pronoId}/react`, { emoji });
+    return response.data;
+  } catch (error) {
+    if (localStorage.getItem('fallbackMode') === 'true') {
+      const user = JSON.parse(localStorage.getItem('fallbackUser') || 'null');
+      const userId = user?.id || 'mock-id';
+      
+      const storageKey = `fallback_reactions_${pronoId}`;
+      let reactions = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      
+      let userExistingReactionEmoji = null;
+      for (const r of reactions) {
+        if (r.users && r.users.includes(userId)) {
+          userExistingReactionEmoji = r.emoji;
+          break;
+        }
+      }
+      
+      if (userExistingReactionEmoji === emoji) {
+        // Toggle off
+        reactions = reactions.map((r: any) => {
+          if (r.emoji === emoji) {
+            r.users = r.users.filter((uid: string) => uid !== userId);
+          }
+          return r;
+        }).filter((r: any) => r.users.length > 0);
+      } else {
+        // Remove from old reaction if exists
+        if (userExistingReactionEmoji) {
+          reactions = reactions.map((r: any) => {
+            if (r.emoji === userExistingReactionEmoji) {
+              r.users = r.users.filter((uid: string) => uid !== userId);
+            }
+            return r;
+          }).filter((r: any) => r.users.length > 0);
+        }
+        
+        // Add to new reaction
+        const targetReaction = reactions.find((r: any) => r.emoji === emoji);
+        if (targetReaction) {
+          targetReaction.users.push(userId);
+        } else {
+          reactions.push({ emoji, users: [userId] });
+        }
+      }
+      
+      localStorage.setItem(storageKey, JSON.stringify(reactions));
+      return reactions;
+    }
+    throw error;
+  }
+};
+
+
 // --- News/Actualites Services ---
 export interface NewsArticle {
   id: string;

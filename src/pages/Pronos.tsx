@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { PronoReactions } from '../components/predictions/PronoReactions';
 
 const Pronos = () => {
   const [activeTab, setActiveTab] = useState<'gratuit' | 'premium'>('gratuit');
@@ -166,6 +167,14 @@ const Pronos = () => {
                   {prono.freeObservation}
                 </p>
               )}
+
+              <PronoReactions 
+                pronoId={prono._id || prono.id} 
+                initialReactions={prono.reactions}
+                onReactUpdated={(newReactions) => {
+                  setPronos(prev => prev.map(p => (p._id === prono._id || p.id === prono.id) ? { ...p, reactions: newReactions } : p));
+                }}
+              />
             </div>
           ))}
           {pronos.filter(p => p.freeExpectedResult).length === 0 && (
@@ -283,6 +292,14 @@ const Pronos = () => {
                   <span>En attente du résultat</span>
                 </div>
               )}
+
+              <PronoReactions 
+                pronoId={prono._id || prono.id} 
+                initialReactions={prono.reactions}
+                onReactUpdated={(newReactions) => {
+                  setPronos(prev => prev.map(p => (p._id === prono._id || p.id === prono.id) ? { ...p, reactions: newReactions } : p));
+                }}
+              />
             </div>
           ))}
           {pronos.filter(p => p.premiumExpectedResult).length === 0 && (
