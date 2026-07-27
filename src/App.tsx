@@ -7,6 +7,7 @@ import {
   Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Matches from './pages/Matches';
+import Home from './pages/Home';
 import Box from './pages/Box';
 import MatchDetails from './pages/MatchDetails';
 import LeagueDetails from './pages/LeagueDetails';
@@ -53,6 +54,13 @@ export function App() {
                     <Route path="/auth" element={<Auth />} />
                     <Route
                       path="/"
+                      element={
+                        <Layout>
+                          <Home />
+                        </Layout>
+                      } />
+                    <Route
+                      path="/matches"
                       element={
                         <Layout>
                           <Matches />
