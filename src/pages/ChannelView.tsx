@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Message, Channel } from '../types/chat';
 import { useUserFeatures } from '../hooks/useUserFeatures';
@@ -8,8 +8,9 @@ import { ChannelHeader } from '../components/channel/ChannelHeader';
 import { MessageCard } from '../components/channel/MessageCard';
 import { MessageInput } from '../components/channel/MessageInput';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
-import api, { leaveChannel, deleteChannel, updateChannel, uploadMedia, deleteChannelMessage } from '../services/api';
+import api, { leaveChannel, deleteChannel, updateChannel, uploadMedia, deleteChannelMessage, sendMessage } from '../services/api';
 import ChannelLeaveConfirmation from '../components/ChannelLeaveConfirmation';
+import CreatePronoModal, { PronoSubmissionData } from '../components/predictions/CreatePronoModal';
 
 const ChannelView = () => {
   const { id } = useParams<{ id: string }>();
@@ -67,6 +68,81 @@ const ChannelView = () => {
   const [isLeaving, setIsLeaving] = useState(false);
   const [showChannelInfo, setShowChannelInfo] = useState(false);
   const [showSharePanel, setShowSharePanel] = useState(false);
+  const [showCreatePronoModal, setShowCreatePronoModal] = useState(false);
+
+  // Build member list from data we already have: channel owner + current user
+  const memberList = useMemo(() => {
+    if (!channel) return [];
+
+    const list: Array<{
+      id: string | number;
+      username: string;
+      avatar: string;
+      role: string;
+      isOnline: boolean;
+    }> = [];
+
+    // 1. Channel Owner
+    if (channel.owner && channel.owner.username) {
+      list.push({
+        id: channel.owner.id || 'owner',
+        username: channel.owner.username,
+        avatar: channel.owner.avatar || 'https://via.placeholder.com/150',
+        role: 'Propriétaire',
+        isOnline: true
+      });
+    }
+
+    // 2. Current User (if not owner)
+    if (user && user.username && channel.owner?.username !== user.username) {
+      list.push({
+        id: user.id || 'user',
+        username: user.username,
+        avatar: user.avatar || 'https://via.placeholder.com/150',
+        role: (userFunctions?.canManageAllChannels || channel.owner?.id === user.id) ? 'Admin' : 'Membre',
+        isOnline: true
+      });
+    }
+
+    return list;
+  }, [channel, user, userFunctions]);
+
+
+  const handlePronoSubmitted = async (data: PronoSubmissionData) => {
+    if (!channel) return;
+    const textContent = data.formattedTitle + (data.analysis ? `\n\n💡 Analyse: ${data.analysis}` : '');
+
+    const newMsg: Message = {
+      id: Date.now(),
+      text: textContent,
+      time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      user: {
+        id: user?.id || 'tipster',
+        username: user?.username || 'Tipster',
+        avatar: user?.avatar || ''
+      },
+      timestamp: new Date(),
+      likes: 0,
+      likedBy: []
+    };
+
+    setChannel(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        lastMessage: data.formattedTitle,
+        messages: [...prev.messages, newMsg]
+      };
+    });
+
+    setTimeout(() => scrollToBottom('smooth'), 100);
+
+    try {
+      await sendMessage(channel.id, textContent);
+    } catch (err) {
+      console.warn('Failed to persist pronostic via API:', err);
+    }
+  };
 
   // Staged attachments (WhatsApp/Telegram style: preview before sending)
   const [stagedImage, setStagedImage] = useState<string | null>(null);
@@ -152,6 +228,36 @@ const ChannelView = () => {
     api.get(`/channels/${id}`)
       .then(res => {
         const data = res.data;
+
+        let cachedMsgs: any[] = [];
+        try {
+          cachedMsgs = JSON.parse(localStorage.getItem(`pronobox_channel_messages_${id}`) || '[]');
+        } catch (e) {}
+
+        const serverMessages = (data.messages || []).map((m: any) => ({
+          id: m._id || m.id || Date.now(),
+          user: {
+            id: m.user?._id || m.user?.id || m.user || '',
+            username: m.user?.username || 'Utilisateur',
+            avatar: m.user?.avatar || 'https://via.placeholder.com/150',
+            role: m.user?.role || 'user',
+            isPro: m.user?.isPro || false
+          },
+          text: m.text || '',
+          imageUrl: m.imageUrl,
+          audioUrl: m.audioUrl,
+          isImage: m.isImage || false,
+          isVoiceMessage: m.isVoiceMessage || false,
+          replyTo: m.replyTo,
+          timestamp: new Date(m.time || m.createdAt || Date.now()),
+          likes: m.likes || 0,
+          reactions: m.reactions || []
+        }));
+
+        const existingTexts = new Set(serverMessages.map((m: any) => m.text));
+        const extraCached = cachedMsgs.filter((m: any) => !existingTexts.has(m.text));
+        const combinedMessages = [...serverMessages, ...extraCached];
+
         const channelObj: Channel = {
           id: data._id || data.id,
           name: data.name,
@@ -159,25 +265,7 @@ const ChannelView = () => {
           avatar: data.avatar || 'https://via.placeholder.com/150',
           category: data.premium ? 'premium' : 'free',
           members: Array.isArray(data.members) ? data.members.length : (data.members || 0),
-          messages: (data.messages || []).map((m: any) => ({
-            id: m._id || m.id || Date.now(),
-            user: {
-              id: m.user?._id || m.user?.id || m.user || '',
-              username: m.user?.username || 'Utilisateur',
-              avatar: m.user?.avatar || 'https://via.placeholder.com/150',
-              role: m.user?.role || 'user',
-              isPro: m.user?.isPro || false
-            },
-            text: m.text || '',
-            imageUrl: m.imageUrl,
-            audioUrl: m.audioUrl,
-            isImage: m.isImage || false,
-            isVoiceMessage: m.isVoiceMessage || false,
-            replyTo: m.replyTo,
-            timestamp: new Date(m.time || m.createdAt || Date.now()),
-            likes: m.likes || 0,
-            reactions: m.reactions || []
-          })),
+          messages: combinedMessages,
           joined: true,
           owner: data.owner ? {
             id: data.owner._id || data.owner.id || data.owner,
@@ -409,6 +497,7 @@ const ChannelView = () => {
     }
   };
 
+
   return (
     <div className="fixed inset-0 w-full h-full flex flex-col bg-gray-100 dark:bg-gray-900 z-50">
       <ChannelHeader
@@ -617,13 +706,74 @@ const ChannelView = () => {
               </div>
             )}
             
-            {/* Subscribers List (Simulation for owner/admin) */}
-            {(userFunctions.canManageAllChannels || channel.owner?.id === user.id) && (
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Abonnés ({channel.members})</h4>
-                <p className="text-xs text-gray-500 italic">Liste des abonnés gérée depuis le panel administrateur</p>
+            {/* Espace Tipster / Admin (Publication button inside Channel Parameters) */}
+            {(userFunctions.canManageAllChannels || channel.owner?.id === user.id || channel.owner?.username === user.username) && (
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-green-500/10">
+                <h4 className="text-xs font-black text-green-600 dark:text-brand-green uppercase tracking-wider mb-2.5">Espace Tipster / Admin</h4>
+                <button
+                  onClick={() => {
+                    setShowChannelInfo(false);
+                    setShowCreatePronoModal(true);
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-brand-green hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-green-500/20 flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer"
+                >
+                  <span>🎯</span>
+                  <span>Publier un pronostic</span>
+                </button>
               </div>
             )}
+
+            {/* Telegram-style Members List */}
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200">
+                  Membres ({channel.members})
+                </h4>
+                {memberList.length > 0 && (
+                  <span className="text-xs text-green-500 font-semibold flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    En ligne
+                  </span>
+                )}
+              </div>
+
+              {memberList.length > 0 ? (
+                <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                  {memberList.map((member, idx) => (
+                    <div key={String(member.id) + idx} className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="relative w-9 h-9 rounded-full overflow-hidden border border-gray-300 dark:border-gray-600 shrink-0">
+                          {member.avatar ? (
+                            <img src={member.avatar} alt={member.username} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full bg-slate-700 text-white flex items-center justify-center text-xs font-bold">
+                              {member.username?.substring(0, 2).toUpperCase() || 'U'}
+                            </div>
+                          )}
+                          <span className={`absolute bottom-0 right-0 block w-2.5 h-2.5 rounded-full border-2 border-white dark:border-gray-800 ${
+                            member.isOnline ? 'bg-green-500' : 'bg-gray-400'
+                          }`} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1">
+                            {member.username}
+                            {member.role === 'Propriétaire' && <span className="text-amber-400 text-[10px]">★</span>}
+                          </p>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400">{member.role}</span>
+                        </div>
+                      </div>
+                      {member.role === 'Propriétaire' && (
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                          Admin
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 italic">Aucun membre abonné pour le moment</p>
+              )}
+            </div>
 
             {/* Channel Settings (only for owners/admins) */}
             {(userFunctions.canManageAllChannels || channel.owner?.id === user.id) && (
@@ -795,18 +945,26 @@ const ChannelView = () => {
               <button onClick={() => setShowDeleteModal(false)} className="px-4 py-2 border rounded-md">Annuler</button>
               <button 
                 onClick={async () => {
-                  if (selectedMessageId) {
+                  if (selectedMessageId && channel) {
+                    const targetIdStr = String(selectedMessageId);
+                    
+                    // Instant optimistic removal from UI
+                    setChannel(prev => prev ? {
+                      ...prev,
+                      messages: prev.messages.filter(m => String(m.id) !== targetIdStr)
+                    } : prev);
+
+                    setShowDeleteModal(false);
+
                     try {
-                      await deleteChannelMessage(channel.id, selectedMessageId.toString());
-                      setChannel({ ...channel, messages: channel.messages.filter(m => m.id !== selectedMessageId) });
+                      await deleteChannelMessage(channel.id, targetIdStr);
                       if (refreshChannels) refreshChannels();
                     } catch (error) {
                       console.error('Erreur lors de la suppression du message:', error);
                     }
                   }
-                  setShowDeleteModal(false);
                 }} 
-                className="px-4 py-2 bg-red-600 text-white rounded-md"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 font-bold text-white rounded-xl shadow-md transition-colors"
               >
                 Supprimer
               </button>
@@ -854,6 +1012,13 @@ const ChannelView = () => {
           />
         </div>
       )}
+
+      {/* Structured Pronostic Creation Modal */}
+      <CreatePronoModal
+        isOpen={showCreatePronoModal}
+        onClose={() => setShowCreatePronoModal(false)}
+        onSubmit={handlePronoSubmitted}
+      />
     </div>
   );
 };

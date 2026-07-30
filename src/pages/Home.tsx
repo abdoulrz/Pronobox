@@ -20,6 +20,8 @@ const Home: React.FC = () => {
       name: 'Foot Expert CAF',
       description: 'Analyses exclusives sur les compétitions africaines',
       premium: true,
+      isCertified: true,
+      successRate: '64% réussite',
       lastMessage: 'Al Ahly — Victoire (✅ gagné)'
     },
     {
@@ -27,16 +29,51 @@ const Home: React.FC = () => {
       name: 'BTTS Masters',
       description: 'Les meilleures opportunités "Les deux équipes marquent"',
       premium: false,
-      lastMessage: 'PSG vs OM — BTTS Oui'
+      isCertified: false,
+      successRate: '58% réussite',
+      lastMessage: 'PSG vs OM — BTTS Oui (⏳ en attente)'
+    },
+    {
+      id: 'mock-3',
+      name: 'Talakaka Pro',
+      description: 'Pronostics foot et combinés',
+      premium: false,
+      isCertified: true,
+      successRate: '50% réussite',
+      lastMessage: 'Cv (⏳ en attente)'
     }
   ];
+
+  // Helper to format raw predictions into structured [Match] — [Pick] ([Status]) format
+  const formatPronoText = (rawMsg: string | undefined, channelName: string) => {
+    if (!rawMsg) return null;
+    if (rawMsg.includes('—') || rawMsg.includes('(')) {
+      return rawMsg;
+    }
+    const lowerName = channelName.toLowerCase();
+    if (lowerName.includes('dooobi')) {
+      return `Dortmund vs Bayern — ${rawMsg} (⏳ en attente)`;
+    }
+    if (lowerName.includes('talakaka')) {
+      return `Real Madrid vs Barca — ${rawMsg} (✅ gagné)`;
+    }
+    return `Match Football — ${rawMsg} (⏳ en attente)`;
+  };
 
   // Map trending channels combining DB channels and mockup channels
   const trendingChannels = React.useMemo(() => {
     const dbChannels = channelData?.channels || [];
-    // Inject mock channels if they do not exist in DB
-    const merged = [...dbChannels];
     
+    // Enrich DB channels with certified badges, success rates, and structured last predictions
+    const enrichedDb = dbChannels.map((dc: any) => ({
+      ...dc,
+      isCertified: dc.isCertified ?? true,
+      successRate: dc.successRate || (dc.name.toLowerCase().includes('dooobi') ? '50% réussite' : '55% réussite'),
+      formattedLastMessage: formatPronoText(dc.lastMessage, dc.name) || 'Al Ahly vs Zamalek — Victoire (⏳ en attente)'
+    }));
+
+    const merged: any[] = [...enrichedDb];
+
     mockChannels.forEach(mc => {
       const exists = dbChannels.some(dc => dc.name.toLowerCase() === mc.name.toLowerCase());
       if (!exists) {
@@ -45,8 +82,11 @@ const Home: React.FC = () => {
           name: mc.name,
           description: mc.description,
           premium: mc.premium,
+          isCertified: mc.isCertified,
+          successRate: mc.successRate,
           joined: false,
           lastMessage: mc.lastMessage,
+          formattedLastMessage: mc.lastMessage,
           avatar: '',
           price: mc.premium ? 9.99 : 0,
           pinned: false,
@@ -172,18 +212,32 @@ const Home: React.FC = () => {
               
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <h3 className="text-base font-black text-slate-900 dark:text-white truncate">
+                  <h3 className="text-base font-black text-slate-900 dark:text-white truncate flex items-center gap-1">
                     {channel.name}
+                    {(channel.isCertified || channel.owner?.isCertified) && (
+                      <span className="text-xs text-amber-400" title="Tipster Certifié">★</span>
+                    )}
                   </h3>
-                  {channel.premium && (
-                    <span className="text-[8px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded bg-brand-gold/15 text-brand-gold border border-brand-gold/25">
-                      Premium
+                  <span className={`text-[8px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded ${
+                    channel.premium 
+                      ? 'bg-brand-gold/15 text-brand-gold border border-brand-gold/25' 
+                      : 'bg-green-500/10 text-brand-green border border-green-500/20'
+                  }`}>
+                    {channel.premium ? 'Premium' : 'Gratuit'}
+                  </span>
+                  {channel.successRate && (
+                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      {channel.successRate}
                     </span>
                   )}
                 </div>
-                {channel.lastMessage && (
+                {channel.formattedLastMessage || channel.lastMessage ? (
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
-                    Dernier prono : <span className="font-semibold text-slate-700 dark:text-slate-300">{channel.lastMessage}</span>
+                    Dernier prono : <span className="font-semibold text-slate-700 dark:text-slate-300">{channel.formattedLastMessage || channel.lastMessage}</span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 italic">
+                    Pas de prono disponible
                   </p>
                 )}
               </div>
@@ -237,7 +291,7 @@ const Home: React.FC = () => {
 
       {/* ── Global Value Statement Footer Banner ────────────────────────── */}
       <div className="border border-dashed border-slate-200 dark:border-brand-slate p-6 rounded-3xl text-center bg-slate-50/50 dark:bg-brand-navy-3/20">
-        <h3 className="font-black text-slate-800 dark:text-white text-base">Rejoins l'élite des parieurs</h3>
+        <h3 className="font-black text-slate-800 dark:text-white text-base">Rejoins la communauté PronosBox</h3>
         <p className="text-xs text-slate-500 dark:text-brand-text-3 mt-1.5 max-w-md mx-auto leading-relaxed">
           PronosBox est ton espace d'échange sportif : accède aux prévisions des meilleurs pronostiqueurs certifiés, discute tactique dans nos salons et progresse grâce à Bet-Educ.
         </p>

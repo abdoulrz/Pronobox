@@ -95,7 +95,7 @@ const Header: React.FC<HeaderProps> = ({ onBetEducClick }) => {
 
           {/* User Avatar / Login */}
           {isAuthenticated && user ? (
-            <div className="relative">
+            <div className="relative hidden md:block">
               <button
                 className="flex items-center gap-2 focus:outline-none group"
                 onClick={() => setShowUserMenu(!showUserMenu)}

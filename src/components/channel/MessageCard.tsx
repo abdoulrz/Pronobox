@@ -260,12 +260,103 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                 </div>
               )}
 
-              {/* Text Content */}
-              {message.text && !(message.isImage && !message.imageUrl) && !(message.isVoiceMessage && !message.audioUrl) && (
-                <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${isOwnMessage ? 'text-gray-900 dark:text-white' : 'text-gray-800 dark:text-gray-200'}`}>
-                  {message.text}
-                </p>
-              )}
+              {/* Text / Pronostic Content */}
+              {message.text && !(message.isImage && !message.imageUrl) && !(message.isVoiceMessage && !message.audioUrl) && (() => {
+                const isProno = message.text.includes('⏳ en attente') ||
+                                message.text.includes('✅ gagné') ||
+                                message.text.includes('❌ perdu') ||
+                                message.text.startsWith('🎯') ||
+                                (message.text.includes(' — ') && message.text.includes('vs'));
+
+                if (isProno) {
+                  let mainText = message.text;
+                  let analysisText = '';
+                  if (message.text.includes('💡 Analyse:')) {
+                    const parts = message.text.split('💡 Analyse:');
+                    mainText = parts[0].trim();
+                    analysisText = parts[1].trim();
+                  }
+
+                  let statusBadge = '⏳ EN ATTENTE';
+                  let statusStyle = 'bg-amber-500/20 text-amber-400 border-amber-500/40';
+
+                  if (mainText.includes('✅ gagné') || mainText.includes('gagné')) {
+                    statusBadge = '✅ GAGNÉ';
+                    statusStyle = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40';
+                  } else if (mainText.includes('❌ perdu') || mainText.includes('perdu')) {
+                    statusBadge = '❌ PERDU';
+                    statusStyle = 'bg-rose-500/20 text-rose-400 border-rose-500/40';
+                  }
+
+                  let cleanTitle = mainText
+                    .replace(/\(⏳ en attente\)/gi, '')
+                    .replace(/\(✅ gagné\)/gi, '')
+                    .replace(/\(❌ perdu\)/gi, '')
+                    .replace(/🎯/g, '')
+                    .trim();
+
+                  let matchName = cleanTitle;
+                  let pickName = 'Pronostic Tipster';
+
+                  if (cleanTitle.includes(' — ')) {
+                    const parts = cleanTitle.split(' — ');
+                    matchName = parts[0].trim();
+                    pickName = parts.slice(1).join(' — ').trim();
+                  } else if (cleanTitle.includes(' - ')) {
+                    const parts = cleanTitle.split(' - ');
+                    matchName = parts[0].trim();
+                    pickName = parts.slice(1).join(' - ').trim();
+                  }
+
+                  return (
+                    <div className="rounded-2xl p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 border border-emerald-500/40 shadow-xl max-w-sm w-full my-1 text-white">
+                      {/* Header Badge */}
+                      <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2 mb-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-base">🎯</span>
+                          <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Pronostic Officiel</span>
+                        </div>
+                        <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border shadow-sm ${statusStyle}`}>
+                          {statusBadge}
+                        </span>
+                      </div>
+
+                      {/* Match Title */}
+                      <div className="mb-2">
+                        <h4 className="text-xs sm:text-sm font-black text-white tracking-tight flex items-center gap-1.5">
+                          <span>⚽</span>
+                          <span>{matchName}</span>
+                        </h4>
+                      </div>
+
+                      {/* Pick / Issue */}
+                      <div className="bg-slate-950/70 rounded-xl p-2.5 border border-white/10 mb-2.5 flex items-center justify-between">
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Issue Pronostiquée</span>
+                          <span className="text-xs font-black text-emerald-400">{pickName}</span>
+                        </div>
+                        <div className="flex items-center gap-0.5 text-amber-400 text-xs">
+                          <span>★</span><span>★</span><span>★</span><span>★</span><span className="text-slate-600">★</span>
+                        </div>
+                      </div>
+
+                      {/* Tactical Analysis */}
+                      {analysisText && (
+                        <div className="bg-emerald-950/40 rounded-xl p-2.5 border border-emerald-500/20 text-xs">
+                          <span className="text-[9px] font-bold text-emerald-400 block mb-0.5">💡 Analyse Tactique</span>
+                          <p className="leading-relaxed text-slate-300 italic text-[11px]">{analysisText}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${isOwnMessage ? 'text-gray-900 dark:text-white' : 'text-gray-800 dark:text-gray-200'}`}>
+                    {message.text}
+                  </p>
+                );
+              })()}
             </div>
 
             {/* Time and Status */}
