@@ -70,7 +70,7 @@ const ChannelView = () => {
   const [showSharePanel, setShowSharePanel] = useState(false);
   const [showCreatePronoModal, setShowCreatePronoModal] = useState(false);
 
-  // Build member list from data we already have: channel owner + current user
+  // Build member list from REAL populated user data returned by the backend
   const memberList = useMemo(() => {
     if (!channel) return [];
 
@@ -82,30 +82,48 @@ const ChannelView = () => {
       isOnline: boolean;
     }> = [];
 
-    // 1. Channel Owner
-    if (channel.owner && channel.owner.username) {
+    const seen = new Set<string>();
+
+    // Use real populated member users from the database
+    const realMembers = channel.memberUsers || [];
+    const ownerId = channel.owner?.id ? String(channel.owner.id) : '';
+
+    realMembers.forEach(member => {
+      if (!member || !member.username) return;
+      const key = member.username.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      const isOwner = !!(ownerId && String(member.id) === ownerId);
       list.push({
+        id: member.id,
+        username: member.username,
+        avatar: member.avatar || '',
+        role: isOwner ? 'Propriétaire' : 'Membre',
+        isOnline: isOwner // only owner shown as online for now
+      });
+    });
+
+    // If owner is not in the members array, add them at position 0
+    if (channel.owner && channel.owner.username && !seen.has(channel.owner.username.toLowerCase())) {
+      list.unshift({
         id: channel.owner.id || 'owner',
         username: channel.owner.username,
-        avatar: channel.owner.avatar || 'https://via.placeholder.com/150',
+        avatar: channel.owner.avatar || '',
         role: 'Propriétaire',
         isOnline: true
       });
     }
 
-    // 2. Current User (if not owner)
-    if (user && user.username && channel.owner?.username !== user.username) {
-      list.push({
-        id: user.id || 'user',
-        username: user.username,
-        avatar: user.avatar || 'https://via.placeholder.com/150',
-        role: (userFunctions?.canManageAllChannels || channel.owner?.id === user.id) ? 'Admin' : 'Membre',
-        isOnline: true
-      });
-    }
+    // Sort: owner first, then alphabetically
+    list.sort((a, b) => {
+      if (a.role === 'Propriétaire') return -1;
+      if (b.role === 'Propriétaire') return 1;
+      return a.username.localeCompare(b.username);
+    });
 
     return list;
-  }, [channel, user, userFunctions]);
+  }, [channel]);
 
 
   const handlePronoSubmitted = async (data: PronoSubmissionData) => {
@@ -265,6 +283,15 @@ const ChannelView = () => {
           avatar: data.avatar || 'https://via.placeholder.com/150',
           category: data.premium ? 'premium' : 'free',
           members: Array.isArray(data.members) ? data.members.length : (data.members || 0),
+          memberUsers: Array.isArray(data.members)
+            ? data.members
+                .filter((m: any) => m && (m._id || m.id) && (m.username || m.name))
+                .map((m: any) => ({
+                  id: m._id || m.id,
+                  username: m.username || m.name || '',
+                  avatar: m.avatar || ''
+                }))
+            : [],
           messages: combinedMessages,
           joined: true,
           owner: data.owner ? {
@@ -501,7 +528,7 @@ const ChannelView = () => {
   return (
     <div className="fixed inset-0 w-full h-full flex flex-col bg-gray-100 dark:bg-gray-900 z-50">
       <ChannelHeader
-        channel={channel}
+        channel={{...channel, members: memberList.length}}
         onBack={() => navigate('/box', { state: { activeTab: location.state?.activeTab || 'all' } })}
         userFunctions={userFunctions}
         onOpenSettings={() => setShowChannelInfo(true)}
@@ -727,7 +754,7 @@ const ChannelView = () => {
             <div className="p-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex justify-between items-center mb-3">
                 <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200">
-                  Membres ({channel.members})
+                  Membres ({memberList.length})
                 </h4>
                 {memberList.length > 0 && (
                   <span className="text-xs text-green-500 font-semibold flex items-center gap-1">

@@ -34,6 +34,7 @@ export interface Channel {
   avatar: string;
   category: string;
   members: number;
+  memberUsers?: Array<{ id: string | number; username: string; avatar: string }>;
   messages: Message[];
   joined?: boolean;
   pinned?: boolean;
