@@ -157,6 +157,30 @@ const ChannelView = () => {
 
     try {
       await sendMessage(channel.id, textContent);
+
+      // Sync pronostic to main /pronos page feed so users can view it on the Pronostics page!
+      const teams = (data.match || 'Match Football').split(' vs ');
+      const homeTeamName = teams[0] ? teams[0].trim() : 'Équipe 1';
+      const awayTeamName = teams[1] ? teams[1].trim() : 'Équipe 2';
+      const isPremium = Boolean(channel.premium);
+
+      await api.post('/pronos', {
+        matchId: Date.now(),
+        homeTeamName,
+        awayTeamName,
+        league: channel.name ? `Canal ${channel.name}` : 'PronosBox Channel',
+        matchDate: new Date(),
+        freeExpectedResult: isPremium ? '' : `${data.pick} (@${data.odds || 1.75})`,
+        freeConfidence: isPremium ? 0 : (data.confidence || 4),
+        freeObservation: isPremium ? '' : (data.analysis || 'Publication Canal'),
+        premiumExpectedResult: isPremium ? `${data.pick} (@${data.odds || 1.75})` : '',
+        premiumOdds: isPremium ? (data.odds || 1.75) : 0,
+        premiumConfidence: isPremium ? (data.confidence || 4) : 0,
+        premiumObservation: isPremium ? (data.analysis || 'Publication Canal Premium') : '',
+        status: 'pending',
+        freeStatus: 'pending',
+        premiumStatus: 'pending'
+      });
     } catch (err) {
       console.warn('Failed to persist pronostic via API:', err);
     }

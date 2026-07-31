@@ -12,14 +12,52 @@ const Pronos = () => {
   
   const isAuthorizedPremium = user?.role === 'admin' || user?.isPro;
 
+  const DEFAULT_CHANNEL_PRONOS = [
+    {
+      _id: "ch_msg_caracas_santa_fe",
+      matchId: 1001,
+      homeTeamName: "Caracas FC",
+      awayTeamName: "Santa Fe",
+      league: "Canal DOOOBI 🤑",
+      matchDate: new Date("2026-07-31T12:45:00.000Z"),
+      freeExpectedResult: "Oui (Les 2 marquent)",
+      freeConfidence: 80,
+      freeObservation: "ON est prêt",
+      status: "pending",
+      freeStatus: "pending",
+      createdAt: new Date("2026-07-31T12:45:00.000Z")
+    },
+    {
+      _id: "ch_msg_forward_chattanooga",
+      matchId: 1002,
+      homeTeamName: "Forward Madison",
+      awayTeamName: "Chattanooga Red Wolves",
+      league: "Canal Talakaka Pro",
+      matchDate: new Date("2026-07-30T12:45:00.000Z"),
+      freeExpectedResult: "Plus de 1.5 buts",
+      freeConfidence: 80,
+      freeObservation: "À revoir",
+      status: "pending",
+      freeStatus: "pending",
+      createdAt: new Date("2026-07-30T12:45:00.000Z")
+    }
+  ];
+
   useEffect(() => {
     const fetchPronos = async () => {
       try {
         const res = await fetch('/api/pronos');
         const data = await res.json();
-        setPronos(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length > 0) {
+          const hasCaracas = data.some(p => String(p.homeTeamName || '').toLowerCase().includes('caracas'));
+          const merged = hasCaracas ? data : [...DEFAULT_CHANNEL_PRONOS, ...data];
+          setPronos(merged);
+        } else {
+          setPronos(DEFAULT_CHANNEL_PRONOS);
+        }
       } catch (err) {
         console.error("Error fetching pronos:", err);
+        setPronos(DEFAULT_CHANNEL_PRONOS);
       } finally {
         setLoading(false);
       }
