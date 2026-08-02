@@ -13,7 +13,6 @@ import MatchDetails from './pages/MatchDetails';
 import LeagueDetails from './pages/LeagueDetails';
 import Settings from './pages/Settings';
 import Transactions from './pages/Transactions';
-import Profile from './pages/Profile';
 import Auth from './pages/Auth';
 import CompareAccounts from './pages/CompareAccounts';
 import Pronos from './pages/Pronos';
@@ -130,7 +129,7 @@ export function App() {
                       element={
                       <ProtectedRoute>
                           <Layout>
-                            <Profile />
+                            <Settings />
                           </Layout>
                         </ProtectedRoute>
                       } />

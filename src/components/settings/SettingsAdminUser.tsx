@@ -458,33 +458,35 @@ const SettingsAdminUser: React.FC = () => {
               <form onSubmit={handleProfileSubmit}>
                 <div className="space-y-4">
                   <div className="flex flex-col items-center md:flex-row md:items-start mb-4">
-                    <div className="relative w-24 h-24 mb-4 md:mb-0 md:mr-6">
-                      <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-gray-300 dark:border-gray-600">
+                    <div className="relative w-24 h-24 mb-4 md:mb-0 md:mr-6 group">
+                      <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-green-500 shadow-md">
                         <img
-                        src={
-                        user?.avatar ||
-                        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
-                        }
-                        alt={user?.username || 'Utilisateur'}
-                        className="w-full h-full object-cover" />
-
+                          src={
+                            user?.avatar ||
+                            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
+                          }
+                          alt={user?.username || 'Utilisateur'}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-                      <div className="absolute inset-0 bg-black bg-opacity-40 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer">
-                        <label
+                      <label
                         htmlFor="avatar-upload"
-                        className="text-white text-xs font-medium cursor-pointer p-2 text-center">
-
-                          Modifier
-                          <input
+                        className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center shadow-lg border-2 border-white dark:border-gray-800 cursor-pointer hover:scale-110 active:scale-95 transition-all"
+                        title="Modifier la photo de profil"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <input
                           title="Avatar"
                           type="file"
                           id="avatar-upload"
                           className="hidden"
                           accept="image/*"
-                          onChange={handleAvatarChange} />
-
-                        </label>
-                      </div>
+                          onChange={handleAvatarChange}
+                        />
+                      </label>
                     </div>
                     <div className="md:flex-1">
                       <div className="space-y-2">

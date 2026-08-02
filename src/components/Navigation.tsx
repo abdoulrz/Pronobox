@@ -40,7 +40,7 @@ const navItems = [
     ),
   },
   {
-    path: '/profile',
+    path: '/settings',
     label: 'Profil',
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -59,7 +59,7 @@ const Navigation = () => {
     (path !== '/' && location.pathname.startsWith(path));
 
   const renderIcon = (item: typeof navItems[0]) => {
-    if (item.path === '/profile' && user?.avatar) {
+    if ((item.path === '/settings' || item.path === '/profile') && user?.avatar) {
       return (
         <div className="w-5 h-5 rounded-full overflow-hidden border border-brand-green/50 flex items-center justify-center shrink-0">
           <img src={user.avatar} alt={user.username || 'Profil'} className="w-full h-full object-cover" />
@@ -124,7 +124,7 @@ const Navigation = () => {
       {/* ── Desktop Side Navigation (4 main tabs; Profile is in top-right Header) ── */}
       <nav className="glass-sidebar hidden md:flex flex-col items-center py-4 gap-2 fixed left-0 top-[80px] bottom-0 w-16 z-20">
         {navItems
-          .filter((item) => item.path !== '/profile')
+          .filter((item) => item.path !== '/settings' && item.path !== '/profile')
           .map((item) => (
             <Link
               key={item.path}
