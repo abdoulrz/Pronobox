@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 
 interface ProProfileProps {
   user: any;
@@ -8,6 +8,7 @@ interface ProProfileProps {
 export const ProProfile: React.FC<ProProfileProps> = ({ user, updateUser }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -27,6 +28,7 @@ export const ProProfile: React.FC<ProProfileProps> = ({ user, updateUser }) => {
     e.preventDefault();
     setIsSaving(true);
     setSaveSuccess(false);
+    setErrorMessage('');
 
     const formData = new FormData(e.currentTarget);
     const username = formData.get('username') as string;
@@ -39,8 +41,9 @@ export const ProProfile: React.FC<ProProfileProps> = ({ user, updateUser }) => {
       }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (error) {
-      alert('Erreur lors de la mise à jour du profil');
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || 'Erreur lors de la mise à jour du profil';
+      setErrorMessage(msg);
     } finally {
       setIsSaving(false);
     }
@@ -53,6 +56,11 @@ export const ProProfile: React.FC<ProProfileProps> = ({ user, updateUser }) => {
       </h3>
       
       <form onSubmit={handleProfileSubmit} className="bg-white/40 dark:bg-gray-800/40 backdrop-blur-xl border border-white/40 dark:border-gray-700/50 rounded-3xl p-8 shadow-lg">
+        {errorMessage && (
+          <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-sm font-medium text-center animate-fade-in">
+            {errorMessage}
+          </div>
+        )}
         <div className="flex flex-col md:flex-row items-center md:items-start mb-8">
           <div className="relative w-32 h-32 mb-6 md:mb-0 md:mr-8 group">
             <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-green-500/30 shadow-xl">

@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useEffect, useState, useRef, useMemo } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Message, Channel } from '../types/chat';
 import { useUserFeatures } from '../hooks/useUserFeatures';
@@ -8,9 +8,10 @@ import { ChannelHeader } from '../components/channel/ChannelHeader';
 import { MessageCard } from '../components/channel/MessageCard';
 import { MessageInput } from '../components/channel/MessageInput';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
-import api, { leaveChannel, deleteChannel, updateChannel, uploadMedia, deleteChannelMessage, sendMessage } from '../services/api';
+import api, { joinChannel, leaveChannel, deleteChannel, updateChannel, uploadMedia, deleteChannelMessage, sendMessage } from '../services/api';
 import ChannelLeaveConfirmation from '../components/ChannelLeaveConfirmation';
 import CreatePronoModal, { PronoSubmissionData } from '../components/predictions/CreatePronoModal';
+import UnifiedPaymentModal from '../components/payment/UnifiedPaymentModal';
 
 const ChannelView = () => {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +22,7 @@ const ChannelView = () => {
 
   const [channel, setChannel] = useState<Channel | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -300,6 +302,18 @@ const ChannelView = () => {
         const extraCached = cachedMsgs.filter((m: any) => !existingTexts.has(m.text));
         const combinedMessages = [...serverMessages, ...extraCached];
 
+        const userIdStr = user?.id ? String(user.id) : '';
+        const ownerIdStr = data.owner ? String(data.owner._id || data.owner.id || data.owner) : '';
+        const isOwner = Boolean(userIdStr && ownerIdStr && userIdStr === ownerIdStr);
+        const isAdmin = user?.role === 'admin';
+        const isMemberInApi = Array.isArray(data.members) && data.members.some((m: any) => String(m._id || m.id || m) === userIdStr);
+
+        const membership: Record<string, string[]> = JSON.parse(localStorage.getItem('pronobox_membership') || '{}');
+        const channelKey = String(data._id || data.id);
+        const isJoinedLocal = Boolean(membership[channelKey] && membership[channelKey].includes(userIdStr));
+
+        const isUserJoined = !data.premium || isOwner || isAdmin || isMemberInApi || isJoinedLocal;
+
         const channelObj: Channel = {
           id: data._id || data.id,
           name: data.name,
@@ -317,7 +331,7 @@ const ChannelView = () => {
                 }))
             : [],
           messages: combinedMessages,
-          joined: true,
+          joined: isUserJoined,
           owner: data.owner ? {
             id: data.owner._id || data.owner.id || data.owner,
             username: data.owner.username || '',
@@ -561,7 +575,7 @@ const ChannelView = () => {
       />
 
       <div ref={messageListRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {channel.messages.map((msg, index) => {
+        {(channel.premium && !channel.joined ? channel.messages.slice(0, 1) : channel.messages).map((msg, index) => {
           const messageDate = new Date(msg.timestamp);
           const prevMsg = channel.messages[index - 1];
           const prevDate = prevMsg ? new Date(prevMsg.timestamp) : null;
@@ -614,24 +628,96 @@ const ChannelView = () => {
             </div>
           </div>
         )})}
+
+        {channel.premium && !channel.joined && (
+          <div className="my-6 p-6 sm:p-8 rounded-3xl bg-slate-900/95 border border-amber-500/50 backdrop-blur-xl shadow-2xl text-center max-w-xl mx-auto space-y-4 animate-fade-in relative z-20">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-3xl mx-auto shadow-lg shadow-amber-500/10">
+              🔒
+            </div>
+
+            <div>
+              <span className="inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30 mb-2">
+                Canal Premium Exclusif
+              </span>
+              <h3 className="text-xl sm:text-2xl font-black text-white">
+                Accès Réservé aux Abonnés
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed max-w-md mx-auto">
+                Ce canal regroupe les pronostics certifiés et les conseils exclusifs de <span className="font-bold text-amber-400">{channel.owner?.username || 'ce tipster'}</span>. Abonnez-vous pour débloquer l'accès complet à l'ensemble du contenu.
+              </p>
+            </div>
+
+            <div className="py-2">
+              <div className="text-3xl font-black text-amber-400">
+                {(channel.price || 9.99).toFixed(2)}€ <span className="text-xs text-slate-400 font-semibold">/ mois</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowPaymentModal(true)}
+              className="w-full py-3.5 px-6 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-amber-950 font-black rounded-xl text-sm shadow-xl shadow-amber-500/20 transform active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>👑</span> S'abonner pour {(channel.price || 9.99).toFixed(2)}€/mois
+            </button>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
-      <MessageInput
-        onSend={handleSendMessage}
-        userFunctions={userFunctions}
-        stagedImage={stagedImage}
-        stagedAudio={stagedAudio}
-        onClearStaged={() => { setStagedImage(null); setStagedImageFile(null); setStagedAudio(null); setStagedAudioBlob(null); }}
-        onImageSelected={(imageUrl, file) => { setStagedImage(imageUrl); if (file) setStagedImageFile(file); }}
-        isRecording={isRecording}
-        recordingTime={recordingTime}
-        onStartRecording={startRecording}
-        onStopRecording={stopRecording}
-        replyTo={replyToMessage}
-        onCancelReply={() => setReplyToMessage(null)}
-        allowVoiceMessages={channel.allowVoiceMessages !== false}
-      />
+      {channel.premium && !channel.joined ? (
+        <div className="p-4 bg-slate-900 border-t border-slate-800 text-center flex flex-col sm:flex-row items-center justify-between gap-3 px-6">
+          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+            <span>🔒</span> L'accès aux messages et publications est réservé aux abonnés.
+          </div>
+          <button
+            onClick={() => setShowPaymentModal(true)}
+            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-400 text-amber-950 font-black rounded-xl text-xs shadow-md transform active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+          >
+            S'abonner ({(channel.price || 9.99).toFixed(2)}€/mois)
+          </button>
+        </div>
+      ) : (
+        <MessageInput
+          onSend={handleSendMessage}
+          userFunctions={userFunctions}
+          stagedImage={stagedImage}
+          stagedAudio={stagedAudio}
+          onClearStaged={() => { setStagedImage(null); setStagedImageFile(null); setStagedAudio(null); setStagedAudioBlob(null); }}
+          onImageSelected={(imageUrl, file) => { setStagedImage(imageUrl); if (file) setStagedImageFile(file); }}
+          isRecording={isRecording}
+          recordingTime={recordingTime}
+          onStartRecording={startRecording}
+          onStopRecording={stopRecording}
+          replyTo={replyToMessage}
+          onCancelReply={() => setReplyToMessage(null)}
+          allowVoiceMessages={channel.allowVoiceMessages !== false}
+        />
+      )}
+
+      {showPaymentModal && (
+        <UnifiedPaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          onSuccess={async () => {
+            setShowPaymentModal(false);
+            if (channel) {
+              try {
+                await joinChannel(channel.id);
+              } catch { /* skip */ }
+              setChannel(prev => prev ? { ...prev, joined: true } : prev);
+              if (setChannelJoined) {
+                setChannelJoined(channel.id, true);
+              }
+            }
+          }}
+          paymentDetails={{
+            description: `Abonnement - ${channel.name}`,
+            amount: channel.price || 9.99,
+            type: 'subscription',
+            itemName: channel.name
+          }}
+        />
+      )}
 
       {/* Channel Info Panel (Telegram-style) */}
       {showChannelInfo && (
@@ -1008,7 +1094,7 @@ const ChannelView = () => {
                     setShowDeleteModal(false);
 
                     try {
-                      await deleteChannelMessage(channel.id, targetIdStr);
+                      await deleteChannelMessage(String(channel.id), targetIdStr);
                       if (refreshChannels) refreshChannels();
                     } catch (error) {
                       console.error('Erreur lors de la suppression du message:', error);

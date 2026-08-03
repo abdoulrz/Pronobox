@@ -168,7 +168,7 @@ const Box = () => {
   const canCreateDebate = isChannelOwner || isPro;
 
   const proLimitReached = isPro && !isAdmin && debates.some(d => {
-    const authorId = d.author?.id || d.author?._id || d.author || d.authorId;
+    const authorId = d.author?.id || (d.author as any)?._id || d.author || d.authorId;
     const isActive = !d.expiresAt || new Date(d.expiresAt) > new Date();
     return String(authorId) === String(user?.id) && isActive;
   });
@@ -390,7 +390,7 @@ const Box = () => {
         const debateToUpdate = debates.find(d => String(d.id) === String(activeDebate));
         if (!debateToUpdate) return;
         
-        let result;
+        let result: any;
         let updatedDebates;
         let debateTitle = debateToUpdate.title;
 
@@ -599,12 +599,7 @@ const Box = () => {
     }
   };
 
-  const handleCreateDebateFromArticle = (article: NewsArticle) => {
-    setSourceArticleForDebate(article);
-    setIsEditingDebate(false);
-    setEditingDebateId(null);
-    setShowCreateDebateModal(true);
-  };
+
 
   const handleDirectDebateFromArticle = async (article: NewsArticle) => {
     try {

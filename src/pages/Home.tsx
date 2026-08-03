@@ -15,6 +15,8 @@ const Home: React.FC = () => {
       initials: string;
       color: string;
       avatar?: string;
+      freeChannelId?: string;
+      premiumChannelId?: string;
     }> = [];
 
     const seenOwners = new Set<string>();
@@ -35,26 +37,82 @@ const Home: React.FC = () => {
           'bg-purple-500/20 text-purple-400 border-purple-500/30'
         ];
 
+        const ownerChannels = dbChannels.filter(ch => {
+          const chOwnerName = ch.owner?.username || ch.owner?.name;
+          return chOwnerName && chOwnerName.toLowerCase() === ownerName.toLowerCase();
+        });
+
+        const freeCh = ownerChannels.find(ch => !ch.premium);
+        const premCh = ownerChannels.find(ch => ch.premium);
+
         tipsters.push({
           name: ownerName,
           success: `${65 - (idx * 4)}%`,
           initials,
           color: colors[idx % colors.length],
-          avatar: c.owner?.avatar
+          avatar: c.owner?.avatar,
+          freeChannelId: freeCh ? String(freeCh.id) : undefined,
+          premiumChannelId: premCh ? String(premCh.id) : undefined
         });
       }
     });
 
     // Fallback defaults if no channel owners loaded yet
     if (tipsters.length === 0) {
+      const freeC = dbChannels.find(ch => !ch.premium);
+      const premC = dbChannels.find(ch => ch.premium);
       return [
-        { name: 'AdminUser', success: '64%', initials: 'AU', color: 'bg-green-600/20 text-brand-green border-brand-green/30' },
-        { name: 'Talakaka', success: '59%', initials: 'TA', color: 'bg-amber-500/20 text-amber-500 border-amber-500/30' }
+        { 
+          name: 'Talakaka', 
+          success: '61%', 
+          initials: 'TA', 
+          color: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
+          avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
+          freeChannelId: freeC ? String(freeC.id) : undefined,
+          premiumChannelId: premC ? String(premC.id) : undefined
+        },
+        { 
+          name: 'Hakim', 
+          success: '57%', 
+          initials: 'HA', 
+          color: 'bg-blue-500/20 text-blue-500 border-blue-500/30',
+          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
+          freeChannelId: freeC ? String(freeC.id) : undefined,
+          premiumChannelId: premC ? String(premC.id) : undefined
+        }
       ];
     }
 
     return tipsters;
   }, [channelData]);
+
+const TipsterAvatar: React.FC<{
+  avatar?: string;
+  name: string;
+  initials: string;
+  color: string;
+}> = ({ avatar, name, initials, color }) => {
+  const [imgError, setImgError] = React.useState(false);
+
+  if (avatar && !imgError) {
+    return (
+      <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-brand-green/40 shadow-inner mb-3 transition-transform duration-300 group-hover:scale-105">
+        <img
+          src={avatar}
+          alt={name}
+          className="w-full h-full object-cover"
+          onError={() => setImgError(true)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`w-14 h-14 rounded-full flex items-center justify-center font-black text-lg border-2 shadow-inner mb-3 transition-transform duration-300 group-hover:scale-105 ${color}`}>
+      {initials}
+    </div>
+  );
+};
 
   // Helper to format raw predictions into structured [Match] — [Pick] ([Status]) format
   const formatPronoText = (rawMsg: string | undefined, channelName: string) => {
@@ -84,6 +142,21 @@ const Home: React.FC = () => {
       formattedLastMessage: formatPronoText(dc.lastMessage, dc.name) || 'Al Ahly vs Zamalek — Victoire (⏳ en attente)'
     }));
   }, [channelData]);
+
+  const handleTipsterClick = (tipster: any) => {
+    // 1. Lead directly to free channel if available
+    if (tipster.freeChannelId) {
+      navigateToChannel(tipster.freeChannelId, navigate);
+      return;
+    }
+    // 2. Otherwise (if they only have premium channel), lead to premium channel
+    if (tipster.premiumChannelId) {
+      navigateToChannel(tipster.premiumChannelId, navigate);
+      return;
+    }
+    // 3. Fallback: navigate to channels box
+    navigate('/box');
+  };
 
   const handleChannelClick = (channel: any) => {
     if (String(channel.id).startsWith('mock-')) {
@@ -147,11 +220,14 @@ const Home: React.FC = () => {
             <div 
               key={index} 
               className="flex-shrink-0 w-36 glass-panel rounded-2xl p-4 flex flex-col items-center text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/5 group cursor-pointer"
-              onClick={() => navigate('/box')}
+              onClick={() => handleTipsterClick(tipster)}
             >
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center font-black text-lg border-2 shadow-inner mb-3 transition-transform duration-300 group-hover:scale-105 ${tipster.color}`}>
-                {tipster.initials}
-              </div>
+              <TipsterAvatar
+                avatar={tipster.avatar}
+                name={tipster.name}
+                initials={tipster.initials}
+                color={tipster.color}
+              />
               <p className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-0.5">
                 {tipster.name}
                 <span className="text-[10px] text-brand-green">★</span>

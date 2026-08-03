@@ -34,7 +34,7 @@ const DebateDetailView: React.FC<DebateDetailViewProps> = ({
   activeImageIndex,
   replyToMessage,
   debateInput,
-  onBack,
+  onBack: _onBack,
   onInputChange,
   onSend,
   onLikeDebate,

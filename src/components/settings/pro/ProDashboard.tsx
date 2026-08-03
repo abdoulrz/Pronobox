@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { DynamicWidthBar } from '../../common/DynamicWidthBar';
 
 interface ProDashboardProps {
@@ -7,13 +8,15 @@ interface ProDashboardProps {
 }
 
 export const ProDashboard: React.FC<ProDashboardProps> = ({ user, userChannels }) => {
+  const [showHabilitationInfo, setShowHabilitationInfo] = useState(false);
+
   const totalSubscriptions = userChannels.reduce((sum, c) => sum + (c.subscriptions || 0), 0);
   const totalRevenue = userChannels.reduce((sum, c) => sum + (c.revenue || 0), 0);
 
   const proStats = {
     successRate: userChannels.length > 0 ? 
       userChannels.reduce((sum, c) => sum + (c.performance?.accuracy || 0), 0) / userChannels.length : 0,
-    habilitationLevel: user?.isPro ? 4 : 0,
+    habilitationLevel: user?.isPro || user?.accountType === 'tipster' ? 4 : 0,
     totalPredictions: userChannels.reduce((sum, c) => sum + (c.topContent?.length || 0), 0),
     totalEarnings: totalRevenue,
     averageOdds: 1.85,
@@ -24,23 +27,101 @@ export const ProDashboard: React.FC<ProDashboardProps> = ({ user, userChannels }
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-emerald-400">
-            Tableau de bord Pro
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-amber-300">
+            Tableau de bord Tipster
           </h2>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Aperçu de vos performances et revenus</p>
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">Aperçu de vos performances et revenus</p>
         </div>
-        <div className="bg-white/40 dark:bg-gray-800/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20 dark:border-gray-700/30 shadow-sm flex items-center gap-3">
-          <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Niveau d'habilitation</span>
+        
+        <div className="self-start sm:self-auto bg-white/40 dark:bg-gray-800/40 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/20 dark:border-gray-700/30 shadow-sm flex items-center gap-3 relative">
+          <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
+            Niveau d'habilitation
+            <button
+              onClick={() => setShowHabilitationInfo(!showHabilitationInfo)}
+              className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 hover:bg-emerald-500 hover:text-white text-slate-600 dark:text-slate-300 text-[10px] font-bold flex items-center justify-center transition-colors cursor-pointer"
+              title="Qu'est-ce que le niveau d'habilitation ?"
+            >
+              ℹ️
+            </button>
+          </span>
           <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map((level) => (
               <div 
                 key={level} 
-                className={`w-2 h-6 rounded-full transition-all duration-500 ${level <= proStats.habilitationLevel ? 'bg-gradient-to-t from-green-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-gray-200 dark:bg-gray-700'}`}
+                className={`w-2 h-5 sm:h-6 rounded-full transition-all duration-500 ${level <= proStats.habilitationLevel ? 'bg-gradient-to-t from-green-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-gray-200 dark:bg-gray-700'}`}
               />
             ))}
           </div>
+
+          {/* Habilitation Info Modal using React Portal to escape all stacking contexts */}
+          {showHabilitationInfo && createPortal(
+            <div 
+              className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-fade-in"
+              onClick={() => setShowHabilitationInfo(false)}
+            >
+              <div 
+                className="bg-slate-900 border border-emerald-500/50 text-white p-5 sm:p-6 rounded-3xl max-w-md w-full max-h-[85vh] overflow-y-auto shadow-2xl space-y-4 relative text-left"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md pt-1 pb-3 flex justify-between items-center border-b border-slate-800 z-10">
+                  <h3 className="font-extrabold text-sm sm:text-base text-emerald-400 flex items-center gap-2">
+                    <span>🛡️</span> Niveau d'Habilitation ({proStats.habilitationLevel}/5)
+                  </h3>
+                  <button 
+                    onClick={() => setShowHabilitationInfo(false)} 
+                    className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold transition-colors cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  Le <strong className="text-white font-bold">Niveau d'Habilitation</strong> mesure la confiance, la régularité et la précision de vos pronostics certifiés sur PronosBox.
+                </p>
+
+                <div className="space-y-3 pt-1">
+                  <div className="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700/60 text-left">
+                    <div className="font-bold text-xs text-emerald-400 mb-1 flex items-center gap-1.5">
+                      <span>🌱</span> Niveau 1 - 2 (Tipster Initial)
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Accès standard : 1 canal gratuit + 1 canal premium. Limité à 3 débats / 24h.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700/60 text-left">
+                    <div className="font-bold text-xs text-emerald-400 mb-1 flex items-center gap-1.5">
+                      <span>⭐</span> Niveau 3 - 4 (Tipster Vérifié)
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Badge Tipster vérifié certifié + retraits prioritaires de revenus d'abonnements.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700/60 text-left">
+                    <div className="font-bold text-xs text-emerald-400 mb-1 flex items-center gap-1.5">
+                      <span>👑</span> Niveau 5 (Tipster Master / Partenaire)
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Mise en avant sur la page d'accueil (Top pronostiqueurs), canaux illimités et support VIP.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 sticky bottom-0 bg-slate-900/95 backdrop-blur-md pb-1">
+                  <button
+                    onClick={() => setShowHabilitationInfo(false)}
+                    className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-lg shadow-emerald-500/20"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
         </div>
       </div>
 

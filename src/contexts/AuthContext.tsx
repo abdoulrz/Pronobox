@@ -11,6 +11,7 @@ export type User = {
   email: string;
   username: string;
   role: 'admin' | 'user';
+  accountType?: 'standard' | 'tipster';
   isPro: boolean;
   avatar: string;
   walletBalance?: number;
@@ -35,11 +36,13 @@ type AuthContextType = {
   isAuthenticated: boolean;
   isAdmin: boolean;
   isPro: boolean;
+  isTipster: boolean;
   login: (credentials: {email: string;password: string;}) => Promise<void>;
   register: (userData: {
     username: string;
     email: string;
     password: string;
+    accountType?: 'standard' | 'tipster';
   }) => Promise<User | void>;
   loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
@@ -263,6 +266,7 @@ export const AuthProvider: React.FC<{
   const isAuthenticated = !!user;
   const isAdmin = user?.role === 'admin';
   const isPro = user?.isPro === true;
+  const isTipster = user?.accountType === 'tipster' || user?.isPro === true;
   return (
     <AuthContext.Provider
       value={{
@@ -270,6 +274,7 @@ export const AuthProvider: React.FC<{
         isAuthenticated,
         isAdmin,
         isPro,
+        isTipster,
         login,
         register,
         loginWithGoogle,

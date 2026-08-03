@@ -94,7 +94,9 @@ const Channels = () => {
   const [showChannelUsers, setShowChannelUsers] = useState(false);
   const [selectedChannelId, setSelectedChannelId] = useState<string | number | null>(null);
   // Fonctions spécifiques en fonction du type d'utilisateur
-  const isProUser = user?.isPro || false;
+  const { isTipster: isTipsterAuth } = useAuth();
+  const isTipsterUser = isTipsterAuth || user?.accountType === 'tipster' || user?.isPro || false;
+  const isProUser = isTipsterUser;
   const isAdminUser = user?.role === 'admin' || false;
   // Liste de noms d'utilisateurs simulés pour les canaux
   const mockUserNames = [

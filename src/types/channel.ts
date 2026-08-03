@@ -24,6 +24,7 @@ export interface Channel {
   pinned?: boolean;
   messages?: any[];
   category?: string;
+  allowVoiceMessages?: boolean;
   owner?: { id: string; username?: string; name?: string; avatar: string };
 }
 

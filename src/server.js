@@ -1618,6 +1618,27 @@ app.put('/api/users/me', authenticateToken, async (req, res) => {
     // Don't allow updating sensitive fields
     delete updates.password;
     delete updates.role;
+
+    if (updates.email || updates.username) {
+      const query = [];
+      if (updates.email) query.push({ email: updates.email });
+      if (updates.username) query.push({ username: updates.username });
+
+      const existingUser = await User.findOne({
+        _id: { $ne: req.user.id },
+        $or: query
+      });
+
+      if (existingUser) {
+        if (updates.email && existingUser.email === updates.email) {
+          return res.status(400).json({ message: 'Cet email est déjà associé à un autre compte.' });
+        }
+        if (updates.username && existingUser.username === updates.username) {
+          return res.status(400).json({ message: 'Ce nom d\'utilisateur est déjà pris.' });
+        }
+      }
+    }
+
     const user = await User.findByIdAndUpdate(
       req.user.id,
       { $set: updates },
@@ -1626,6 +1647,9 @@ app.put('/api/users/me', authenticateToken, async (req, res) => {
     res.json(user);
   } catch (error) {
     console.error('Update user error:', error);
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'Un compte avec ces informations existe déjà.' });
+    }
     res.status(500).json({ message: error.message });
   }
 });
@@ -1757,16 +1781,39 @@ app.get('/api/transactions', authenticateToken, async (req, res) => {
 // Channel routes
 app.post('/api/channels', authenticateToken, async (req, res) => {
   try {
+    const user = await User.findById(req.user.id);
+    const isTipster = user && (user.role === 'admin' || user.isPro || user.accountType === 'tipster');
+    const isAdmin = user && user.role === 'admin';
+
+    if (!isTipster) {
+      return res.status(403).json({ message: 'La création de canal est réservée aux Tipsters.' });
+    }
+
     const { name, description, premium, allowComments, subscriptionPrice, avatar } = req.body;
+    const isPremium = !!premium;
+
+    if (!isAdmin) {
+      const ownedChannels = await Channel.find({ owner: req.user.id });
+      const freeCount = ownedChannels.filter(c => !c.premium).length;
+      const premiumCount = ownedChannels.filter(c => c.premium).length;
+
+      if (isPremium && premiumCount >= 1) {
+        return res.status(400).json({ message: 'Vous possédez déjà 1 canal Premium (limite de 1 canal premium par Tipster).' });
+      }
+      if (!isPremium && freeCount >= 1) {
+        return res.status(400).json({ message: 'Vous possédez déjà 1 canal Gratuit (limite de 1 canal gratuit par Tipster).' });
+      }
+    }
+
     const channel = new Channel({
       name,
       description,
-      premium: premium || false,
+      premium: isPremium,
       adminOnly: false,
       allowComments: allowComments !== false,
       owner: req.user.id,
       members: [req.user.id],
-      subscriptionPrice: premium ? (subscriptionPrice || 0) : 0,
+      subscriptionPrice: isPremium ? (subscriptionPrice || 0) : 0,
       shareLink: `https://pronosbox.com/canal/${Math.floor(Math.random() * 1000) + 100}`,
       ...(avatar ? { avatar } : {})
     });
@@ -1929,26 +1976,24 @@ app.post('/api/channels/:id/messages', authenticateToken, async (req, res) => {
 });
 
 // Debate routes
-app.post('/api/debates', authenticateToken, requireProOrAdmin, async (req, res) => {
+app.post('/api/debates', authenticateToken, async (req, res) => {
   try {
-    const isChannelOwner = await Channel.exists({ owner: req.user.id });
-    const isPro = req.user.isPro;
-    const isAdmin = req.user.role === 'admin';
+    const dbUser = await User.findById(req.user.id);
+    const isTipster = dbUser && (dbUser.role === 'admin' || dbUser.isPro || dbUser.accountType === 'tipster');
+    const isAdmin = dbUser && dbUser.role === 'admin';
 
-    if (!isChannelOwner && !isAdmin && !isPro) {
-      return res.status(403).json({ message: 'Seuls les administrateurs, abonnés Pro ou propriétaires de canaux peuvent créer un débat' });
+    if (!isTipster) {
+      return res.status(403).json({ message: 'Seuls les Tipsters et Administrateurs peuvent lancer un débat' });
     }
 
-    if (isPro && !isAdmin) {
-      const activeDebateCount = await Debate.countDocuments({
+    if (!isAdmin) {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const debatesInLast24h = await Debate.countDocuments({
         author: req.user.id,
-        $or: [
-          { expiresAt: { $gt: new Date() } },
-          { expiresAt: null }
-        ]
+        createdAt: { $gte: twentyFourHoursAgo }
       });
-      if (activeDebateCount >= 1) {
-        return res.status(403).json({ message: 'Les abonnés Pro sont limités à 1 débat actif à la fois.' });
+      if (debatesInLast24h >= 3) {
+        return res.status(403).json({ message: 'Limite atteinte : vous avez déjà lancé 3 débats au cours des dernières 24 heures (limite de 3 débats par jour par Tipster).' });
       }
     }
 

@@ -15,6 +15,7 @@ const Auth = () => {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [accountType, setAccountType] = useState<'standard' | 'tipster'>('standard');
   
   // UI States
   const [showPassword, setShowPassword] = useState(false);
@@ -56,7 +57,7 @@ const Auth = () => {
         navigate(redirectParam);
       } else {
         // Registration logic
-        await register({ username, email, password });
+        await register({ username, email, password, accountType });
         navigate(redirectParam);
       }
     } catch (err: any) {
@@ -217,6 +218,43 @@ const Auth = () => {
                 </button>
               </div>
             </div>
+
+            {!isLogin && (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Choisissez votre type de compte
+                </label>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setAccountType('standard')}
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center text-left transition-all ${
+                      accountType === 'standard'
+                        ? 'bg-green-500/20 border-green-500 text-white shadow-lg shadow-green-500/10'
+                        : 'bg-slate-800/40 border-slate-700/60 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >
+                    <span className="text-2xl mb-1">⚽</span>
+                    <span className="font-bold text-xs">Utilisateur Normal</span>
+                    <span className="text-[10px] text-slate-400 mt-1 text-center leading-tight">Consulter les matchs, suivre & participer</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAccountType('tipster')}
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center text-left transition-all ${
+                      accountType === 'tipster'
+                        ? 'bg-amber-500/20 border-amber-500 text-white shadow-lg shadow-amber-500/10'
+                        : 'bg-slate-800/40 border-slate-700/60 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >
+                    <span className="text-2xl mb-1">🎯</span>
+                    <span className="font-bold text-xs">Tipster</span>
+                    <span className="text-[10px] text-slate-400 mt-1 text-center leading-tight">Publier des pronos & animer des canaux</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {!isLogin && (
               <div>

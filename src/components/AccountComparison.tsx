@@ -148,7 +148,7 @@ const AccountComparison: React.FC = () => {
                 className={`p-2 flex flex-col items-center ${isUserPro ? 'bg-green-50 dark:bg-green-900/20' : ''}`}>
 
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    Pro
+                    Tipster
                   </span>
                   {feature.proUser ?
                 <Check size={18} className="text-green-500" /> :
@@ -176,7 +176,7 @@ const AccountComparison: React.FC = () => {
                 scope="col"
                 className={`px-6 py-3 text-center text-xs font-medium uppercase tracking-wider w-32 ${!isUserPro ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
 
-                Standard
+                Utilisateur Normal
                 {!isUserPro &&
                 <span className="ml-2 text-xs font-normal text-blue-600 dark:text-blue-400">
                     (actuel)
@@ -185,11 +185,11 @@ const AccountComparison: React.FC = () => {
               </th>
               <th
                 scope="col"
-                className={`px-6 py-3 text-center text-xs font-medium uppercase tracking-wider w-32 ${isUserPro ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                className={`px-6 py-3 text-center text-xs font-medium uppercase tracking-wider w-32 ${isUserPro ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'}`}>
 
-                Pro
+                Tipster
                 {isUserPro &&
-                <span className="ml-2 text-xs font-normal text-green-600 dark:text-green-400">
+                <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
                     (actuel)
                   </span>
                 }

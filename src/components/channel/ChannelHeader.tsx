@@ -15,7 +15,7 @@ export const ChannelHeader: React.FC<ChannelHeaderProps> = ({
   onBack,
   userFunctions,
   onOpenSettings,
-  onOpenMonetization,
+  onOpenMonetization: _onOpenMonetization,
   currentUserId
 }) => {
   const [showEnlargedAvatar, setShowEnlargedAvatar] = React.useState(false);

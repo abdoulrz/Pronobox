@@ -9,6 +9,7 @@ export interface User {
   email: string;
   username: string;
   role: 'user' | 'admin';
+  accountType?: 'standard' | 'tipster';
   isPro: boolean;
   walletBalance: number;
   avatar: string;
@@ -177,7 +178,8 @@ export const register = async (userData: any) => {
         id: Date.now().toString(),
         ...userData,
         role: 'user',
-        isPro: false,
+        accountType: userData.accountType || 'standard',
+        isPro: userData.accountType === 'tipster',
         walletBalance: 0,
         avatar: ''
       };

@@ -23,6 +23,11 @@ const UserSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user'
   },
+  accountType: {
+    type: String,
+    enum: ['standard', 'tipster'],
+    default: 'standard'
+  },
   isPro: {
     type: Boolean,
     default: false

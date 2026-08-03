@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useChannelData } from '../../../contexts/ChannelContext';
 
 interface ProChannelManagerProps {
@@ -6,55 +7,69 @@ interface ProChannelManagerProps {
   userChannels: any[];
 }
 
-export const ProChannelManager: React.FC<ProChannelManagerProps> = ({ user, userChannels }) => {
-  const { addChannel } = useChannelData();
+export const ProChannelManager: React.FC<ProChannelManagerProps> = ({ user: _user, userChannels }) => {
+  const navigate = useNavigate();
+  const { addChannel, navigateToChannel } = useChannelData();
   const [showCreateChannelModal, setShowCreateChannelModal] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDescription, setNewChannelDescription] = useState('');
   const [newChannelIsPremium, setNewChannelIsPremium] = useState(false);
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
+  const [modalError, setModalError] = useState('');
   const [editingChannel, setEditingChannel] = useState<any | null>(null);
+
+  // Success Notification state with direct open link
+  const [createdNotification, setCreatedNotification] = useState<{ id: string; name: string } | null>(null);
+
+  // Auto-dismiss notification toast after 10 seconds
+  useEffect(() => {
+    if (createdNotification) {
+      const timer = setTimeout(() => {
+        setCreatedNotification(null);
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [createdNotification]);
 
   const handleCreateChannel = async () => {
     if (!newChannelName.trim()) {
-      alert('Veuillez entrer un nom pour le canal');
+      setModalError('Veuillez entrer un nom pour le canal.');
       return;
     }
     setIsCreatingChannel(true);
-    
-    const newChannelId = `channel-${Date.now()}`;
-    const globalChannel = {
-      id: newChannelId,
-      name: newChannelName.trim(),
-      description: newChannelDescription.trim(),
-      premium: newChannelIsPremium,
-      members: 1,
-      views: 0,
-      image: 'https://images.unsplash.com/photo-1575361204480-aadea25e6e68?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
-      owner: { id: user?.id, username: user?.username },
-      posts: [
-        {
-          id: `post-${Date.now()}`,
-          title: `Bienvenue sur ${newChannelName.trim()}!`,
-          content: newChannelDescription.trim() || 'Canal créé avec PronosBox.'
-        }
-      ]
-    };
+    setModalError('');
 
-    if (addChannel) {
-      addChannel(globalChannel);
+    try {
+      const channelName = newChannelName.trim();
+      const createdId = await addChannel({
+        name: channelName,
+        description: newChannelDescription.trim(),
+        premium: newChannelIsPremium,
+        subscriptionPrice: newChannelIsPremium ? 9.99 : 0
+      });
+
+      // 1. VANISH MODAL IMMEDIATELY
+      setShowCreateChannelModal(false);
+      setNewChannelName('');
+      setNewChannelDescription('');
+      setNewChannelIsPremium(false);
+      setModalError('');
+
+      // 2. SHOW PLATFORM-ADAPTED TOAST WITH DIRECT OPEN LINK
+      setCreatedNotification({
+        id: createdId,
+        name: channelName
+      });
+    } catch (err: any) {
+      setModalError(err.message || 'Erreur lors de la création du canal.');
+    } finally {
+      setIsCreatingChannel(false);
     }
-
-    setNewChannelName('');
-    setNewChannelDescription('');
-    setNewChannelIsPremium(false);
-    setIsCreatingChannel(false);
-    setShowCreateChannelModal(false);
-    alert('Canal créé avec succès!');
   };
 
   const handleEditChannelClick = (channel: any) => {
     setEditingChannel(channel);
+    setModalError('');
     setNewChannelName(channel.name);
     setNewChannelDescription(channel.description || '');
     setNewChannelIsPremium(channel.subscriptions !== undefined && channel.subscriptions > 0);
@@ -69,9 +84,9 @@ export const ProChannelManager: React.FC<ProChannelManagerProps> = ({ user, user
     setEditingChannel(null);
     setNewChannelName('');
     setNewChannelDescription('');
+    setModalError('');
     setIsCreatingChannel(false);
     setShowCreateChannelModal(false);
-    alert('Canal mis à jour avec succès!');
   };
 
   return (
@@ -154,6 +169,11 @@ export const ProChannelManager: React.FC<ProChannelManagerProps> = ({ user, user
               {editingChannel ? 'Modifier le canal' : 'Nouveau canal Pro'}
             </h3>
             <div className="space-y-5">
+              {modalError && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-semibold text-center">
+                  {modalError}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nom du canal</label>
                 <input
@@ -204,7 +224,10 @@ export const ProChannelManager: React.FC<ProChannelManagerProps> = ({ user, user
               </div>
               <div className="flex gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">
                 <button
-                  onClick={() => setShowCreateChannelModal(false)}
+                  onClick={() => {
+                    setShowCreateChannelModal(false);
+                    setModalError('');
+                  }}
                   className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-medium transition-colors"
                 >
                   Annuler
@@ -219,6 +242,51 @@ export const ProChannelManager: React.FC<ProChannelManagerProps> = ({ user, user
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Platform Toast Notification for New Channel Creation */}
+      {createdNotification && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md bg-slate-900/95 border border-emerald-500/50 text-white rounded-2xl p-5 shadow-2xl backdrop-blur-xl animate-fade-in flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-green-400 text-white flex items-center justify-center text-xl flex-shrink-0 shadow-lg shadow-emerald-500/20">
+            🎉
+          </div>
+          <div className="flex-1 pr-2">
+            <h4 className="font-bold text-sm text-white mb-1">
+              Canal créé avec succès !
+            </h4>
+            <p className="text-xs text-slate-300 mb-3 leading-relaxed">
+              Votre canal <span className="font-bold text-emerald-400">"{createdNotification.name}"</span> est prêt. Souhaitez-vous l'ouvrir maintenant ?
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const targetId = createdNotification.id;
+                  setCreatedNotification(null);
+                  if (targetId) {
+                    navigateToChannel(targetId, navigate);
+                  } else {
+                    navigate('/channels');
+                  }
+                }}
+                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 hover:to-green-400 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 transform active:scale-95 cursor-pointer"
+              >
+                <span>🚀</span> Ouvrir le canal
+              </button>
+              <button
+                onClick={() => setCreatedNotification(null)}
+                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl transition-colors cursor-pointer"
+              >
+                Ignorer
+              </button>
+            </div>
+          </div>
+          <button
+            onClick={() => setCreatedNotification(null)}
+            className="text-slate-400 hover:text-white text-sm p-1 rounded-lg hover:bg-slate-800 transition-colors"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>

@@ -186,11 +186,11 @@ const Matches = () => {
   };
 
   const todayStr = getLocalDateString(new Date().toISOString());
-  const isPastDate = selectedDate < todayStr;
+  const isPastDate = !!selectedDate && selectedDate < todayStr;
 
   const filteredMatches = matches.filter((m) => {
     // Focus strictly on the day selected (local browser timezone)
-    const matchesDate = getLocalDateString(m.date) === selectedDate;
+    const matchesDate = !!selectedDate && getLocalDateString(m.date) === selectedDate;
     if (!matchesDate) return false;
 
     // Filter out finished matches for today and future days

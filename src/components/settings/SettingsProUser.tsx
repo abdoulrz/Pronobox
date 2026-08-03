@@ -98,7 +98,7 @@ const SettingsProUser: React.FC = () => {
             <img src={user?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde'} alt="Profile" className="w-16 h-16 rounded-full border-2 border-green-500 shadow-lg object-cover" />
             <div>
               <h1 className="text-3xl font-black tracking-tight">{user?.username}</h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-yellow-400 to-yellow-500 text-yellow-900 shadow-sm">Compte Pro</span>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 shadow-sm">Tipster</span>
             </div>
           </div>
           <div className="text-right hidden sm:block">
