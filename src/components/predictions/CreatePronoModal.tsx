@@ -4,7 +4,7 @@ export interface PronoSubmissionData {
   match: string;
   market: string;
   pick: string;
-  odds: number;
+  odds?: number;
   confidence: number;
   analysis?: string;
   formattedTitle: string;
@@ -29,21 +29,76 @@ const DEFAULT_MATCHES = [
   'Lille vs Rennes'
 ];
 
-const MARKETS = [
-  { id: '1x2', label: 'Résultat du match (1X2)' },
-  { id: 'btts', label: 'Les 2 équipes marquent (BTTS)' },
-  { id: 'over_under', label: 'Plus/Moins de buts' },
-  { id: 'corners', label: 'Corners' },
-  { id: 'cards', label: 'Cartons' }
-];
+export interface PronoOption {
+  id: string;
+  code: string;
+  badge: string;
+  title: string;
+  fullPick: string;
+  description: string;
+}
 
-const SUGGESTED_PICKS: Record<string, string[]> = {
-  '1x2': ['Victoire Domicile (1)', 'Match Nul (N)', 'Victoire Extérieur (2)'],
-  btts: ['Oui (Les 2 marquent)', 'Non'],
-  over_under: ['Plus de 2.5 buts', 'Moins de 2.5 buts', 'Plus de 1.5 buts'],
-  corners: ['Plus de 8.5 corners', 'Plus de 10.5 corners', 'Plus de 4.5 corners'],
-  cards: ['Plus de 3.5 cartons', 'Plus de 4.5 cartons', 'Plus de 2.5 cartons']
-};
+export function getProno6Options(matchString: string): PronoOption[] {
+  let homeTeam = 'Équipe 1';
+  let awayTeam = 'Équipe 2';
+
+  if (matchString && matchString.includes(' vs ')) {
+    const parts = matchString.split(' vs ');
+    if (parts[0]) homeTeam = parts[0].trim();
+    if (parts[1]) awayTeam = parts[1].trim();
+  }
+
+  return [
+    {
+      id: 'V1',
+      code: 'V1',
+      badge: 'V1',
+      title: `Victoire ${homeTeam}`,
+      fullPick: `V1 - Victoire ${homeTeam}`,
+      description: `Gagné si ${homeTeam} gagne`
+    },
+    {
+      id: '1X',
+      code: '1X',
+      badge: '1X',
+      title: `${homeTeam} ou Nul`,
+      fullPick: `1X - ${homeTeam} ou Nul`,
+      description: `Gagné si ${homeTeam} gagne ou Nul`
+    },
+    {
+      id: 'X',
+      code: 'X',
+      badge: 'X',
+      title: 'Match Nul',
+      fullPick: 'X - Match Nul',
+      description: 'Gagné s\'il y a Match Nul'
+    },
+    {
+      id: '2X',
+      code: '2X',
+      badge: '2X',
+      title: `${awayTeam} ou Nul`,
+      fullPick: `2X - ${awayTeam} ou Nul`,
+      description: `Gagné si ${awayTeam} gagne ou Nul`
+    },
+    {
+      id: 'V2',
+      code: 'V2',
+      badge: 'V2',
+      title: `Victoire ${awayTeam}`,
+      fullPick: `V2 - Victoire ${awayTeam}`,
+      description: `Gagné si ${awayTeam} gagne`
+    },
+    {
+      id: '12',
+      code: '12',
+      badge: '12',
+      title: `Victoire ${homeTeam} ou ${awayTeam}`,
+      fullPick: `12 - ${homeTeam} ou ${awayTeam}`,
+      description: `Gagné si une équipe gagne (Pas de Nul)`
+    }
+  ];
+}
 
 const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, onSubmit }) => {
   const [matchList, setMatchList] = useState<string[]>(DEFAULT_MATCHES);
@@ -52,9 +107,8 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
   const [showDropdown, setShowDropdown] = useState(false);
   const [loadingMatches, setLoadingMatches] = useState(false);
 
-  const [selectedMarket, setSelectedMarket] = useState('1x2');
-  const [pick, setPick] = useState(SUGGESTED_PICKS['1x2'][0]);
-  const [odds, setOdds] = useState('1.75');
+  const [selectedOptionId, setSelectedOptionId] = useState('V1');
+  const [pick, setPick] = useState('');
   const [confidence, setConfidence] = useState(4);
   const [analysis, setAnalysis] = useState('');
 
@@ -105,29 +159,37 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
     m.toLowerCase().includes(matchQuery.toLowerCase())
   );
 
+  const currentMatch = selectedMatch || matchQuery;
+  const options6 = getProno6Options(currentMatch);
+
   const handleSelectMatch = (matchName: string) => {
     setSelectedMatch(matchName);
     setMatchQuery(matchName);
     setShowDropdown(false);
+    
+    // Auto-update pick option based on newly selected match
+    const opts = getProno6Options(matchName);
+    const matchedOpt = opts.find(o => o.id === selectedOptionId) || opts[0];
+    if (matchedOpt) {
+      setPick(matchedOpt.fullPick);
+    }
   };
 
-  const handleMarketChange = (marketId: string) => {
-    setSelectedMarket(marketId);
-    const suggestions = SUGGESTED_PICKS[marketId] || [];
-    setPick(suggestions[0] || '');
+  const handleSelectOption = (opt: PronoOption) => {
+    setSelectedOptionId(opt.id);
+    setPick(opt.fullPick);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const finalMatch = selectedMatch || matchQuery || 'Match Football';
-    const numericOdds = parseFloat(odds) || 1.75;
-    const formattedTitle = `${finalMatch} — ${pick} (⏳ en attente)`;
+    const finalPick = pick || (options6[0]?.fullPick || 'V1');
+    const formattedTitle = `${finalMatch} — ${finalPick} (⏳ en attente)`;
 
     onSubmit({
       match: finalMatch,
-      market: selectedMarket,
-      pick,
-      odds: numericOdds,
+      market: selectedOptionId,
+      pick: finalPick,
       confidence,
       analysis,
       formattedTitle
@@ -229,95 +291,81 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
             )}
           </div>
 
-          {/* 2. Market selector */}
+          {/* 2. Simplified 6-Option Pronostics Grid */}
           <div>
-            <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">
-              2. Sélection du marché
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {MARKETS.map((m) => (
-                <button
-                  type="button"
-                  key={m.id}
-                  onClick={() => handleMarketChange(m.id)}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all text-center border ${
-                    selectedMarket === m.id
-                      ? 'bg-brand-green text-white border-brand-green shadow-md shadow-green-500/20'
-                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-750'
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 3. Flexible Custom Pick Input + Suggestion Pills */}
-          <div>
-            <div className="flex justify-between items-center mb-1.5">
+            <div className="flex justify-between items-center mb-2">
               <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
-                3. Issue pronostiquée (Pick libre)
+                2. Issue Pronostiquée (6 Choix Automatisés)
               </label>
-              <span className="text-[10px] text-amber-400 font-semibold">Liberté totale</span>
+              <span className="text-[10px] text-brand-green font-bold bg-brand-green/10 px-2 py-0.5 rounded border border-brand-green/20">
+                100% Vérifiable
+              </span>
             </div>
 
-            {/* Quick suggested pills */}
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {(SUGGESTED_PICKS[selectedMarket] || []).map((suggestion) => (
-                <button
-                  type="button"
-                  key={suggestion}
-                  onClick={() => setPick(suggestion)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
-                    pick === suggestion
-                      ? 'bg-emerald-500/20 text-brand-green border-brand-green/40'
-                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
-                  }`}
-                >
-                  {suggestion}
-                </button>
-              ))}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-3">
+              {options6.map((opt) => {
+                const isSelected = selectedOptionId === opt.id || pick === opt.fullPick;
+                return (
+                  <button
+                    type="button"
+                    key={opt.id}
+                    onClick={() => handleSelectOption(opt)}
+                    className={`p-3 rounded-2xl text-left border transition-all flex flex-col justify-between group ${
+                      isSelected
+                        ? 'bg-brand-green/15 border-brand-green shadow-lg shadow-green-500/10'
+                        : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`px-2 py-0.5 rounded-md text-xs font-black tracking-wider ${
+                        isSelected ? 'bg-brand-green text-white' : 'bg-slate-700 text-slate-300'
+                      }`}>
+                        {opt.badge}
+                      </span>
+                      {isSelected && <span className="text-brand-green font-black text-xs">✓</span>}
+                    </div>
+                    <div>
+                      <div className={`text-xs font-bold leading-snug ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                        {opt.title}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 font-medium leading-tight">
+                        {opt.description}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Editable Pick text field */}
-            <input
-              type="text"
-              value={pick}
-              onChange={(e) => setPick(e.target.value)}
-              placeholder="Taper l'issue (ex. Plus de 3.5 corners, Buteur: Mbappe...)"
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-bold text-white focus:outline-none focus:border-brand-green"
-              required
-            />
-          </div>
-
-          {/* 4. Odds & Confidence */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">
-                Cote (ex. 1.85)
+            {/* Editable Pick Text Field */}
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                Intitulé exact du pronostic
               </label>
               <input
-                type="number"
-                step="0.01"
-                min="1.01"
-                max="50"
-                value={odds}
-                onChange={(e) => setOdds(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-bold text-brand-green focus:outline-none focus:border-brand-green"
+                type="text"
+                value={pick}
+                onChange={(e) => setPick(e.target.value)}
+                placeholder="Ex. V1 - Victoire Barça"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-bold text-white focus:outline-none focus:border-brand-green"
+                required
               />
             </div>
+          </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">
-                Confiance ({confidence}/5)
-              </label>
-              <div className="flex gap-1 pt-1.5">
+          {/* 4. Confidence */}
+          <div>
+            <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">
+              4. Confiance ({confidence}/5 ★)
+            </label>
+            <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5">
+              <div className="flex gap-1.5">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     type="button"
                     key={star}
                     onClick={() => setConfidence(star)}
-                    className={`text-xl transition-transform ${
+                    className={`text-2xl transition-transform hover:scale-125 ${
                       star <= confidence ? 'text-amber-400 scale-110' : 'text-slate-600'
                     }`}
                   >
@@ -325,6 +373,9 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
                   </button>
                 ))}
               </div>
+              <span className="ml-auto text-xs font-bold text-brand-green bg-brand-green/10 px-2.5 py-1 rounded-lg">
+                {confidence * 20}%
+              </span>
             </div>
           </div>
 

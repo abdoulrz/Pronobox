@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useChannelData } from '../contexts/ChannelContext';
 import MarkdownEditor from './MarkdownEditor';
 import { markdownToHtml } from '../utils/markdownToHtml';
+import { getProno6Options } from './predictions/CreatePronoModal';
 const parseErrorResponse = async (res: Response): Promise<{ error: string; details?: string }> => {
   try {
     const errorData = await res.json();
@@ -1466,6 +1467,7 @@ const PronosManagement = () => {
   const [pronos, setPronos] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedOptionId, setSelectedOptionId] = useState('V1');
   const [formData, setFormData] = useState({
     matchId: '',
     homeTeamName: '',
@@ -1843,24 +1845,124 @@ const PronosManagement = () => {
             </div>
           </div>
           
-          <div className="p-4 bg-slate-50 dark:bg-brand-navy-3 rounded-2xl border border-slate-100 dark:border-brand-slate/50">
-            <h4 className="text-xs font-black uppercase tracking-widest text-brand-green mb-4 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-brand-green"></span>
-              Section GRATUIT
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <div className="space-y-1.5">
-                <label htmlFor="prono-freeExpectedResult" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Résultat Attendu</label>
-                <input id="prono-freeExpectedResult" type="text" placeholder="Ex: Victoire Real Madrid ou Nul" value={formData.freeExpectedResult} onChange={e => setFormData({...formData, freeExpectedResult: e.target.value})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all" />
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor="prono-freeConfidence" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Confiance (%)</label>
-                <input id="prono-freeConfidence" type="number" min="0" max="100" value={formData.freeConfidence} onChange={e => setFormData({...formData, freeConfidence: parseInt(e.target.value) || 0})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all" />
+          <div className="p-4 bg-slate-50 dark:bg-brand-navy-3 rounded-2xl border border-slate-100 dark:border-brand-slate/50 space-y-4">
+            <div className="flex justify-between items-center">
+              <h4 className="text-xs font-black uppercase tracking-widest text-brand-green flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-brand-green"></span>
+                Section GRATUIT
+              </h4>
+              <span className="text-[10px] text-brand-green font-bold bg-brand-green/10 px-2 py-0.5 rounded border border-brand-green/20">
+                6 Choix Automatisés (100% Vérifiables)
+              </span>
+            </div>
+
+            {/* 1. 6-Option Selection Grid */}
+            <div>
+              <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1 mb-2">
+                Sélection du pronostic
+              </label>
+              {(() => {
+                const currentMatchTitle = (formData.homeTeamName && formData.awayTeamName) 
+                  ? `${formData.homeTeamName} vs ${formData.awayTeamName}` 
+                  : 'Équipe 1 vs Équipe 2';
+                const opts6 = getProno6Options(currentMatchTitle);
+
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 mb-3">
+                    {opts6.map((opt) => {
+                      const isSelected = selectedOptionId === opt.id || formData.freeExpectedResult === opt.fullPick;
+                      return (
+                        <button
+                          type="button"
+                          key={opt.id}
+                          onClick={() => {
+                            setSelectedOptionId(opt.id);
+                            setFormData(prev => ({ ...prev, freeExpectedResult: opt.fullPick }));
+                          }}
+                          className={`p-2.5 rounded-xl text-left border transition-all flex flex-col justify-between ${
+                            isSelected
+                              ? 'bg-brand-green/15 border-brand-green shadow-sm'
+                              : 'bg-white dark:bg-brand-navy-2 border-slate-200 dark:border-brand-slate/50 hover:border-brand-green/50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-black tracking-wider ${
+                              isSelected ? 'bg-brand-green text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                            }`}>
+                              {opt.badge}
+                            </span>
+                            {isSelected && <span className="text-brand-green font-black text-xs">✓</span>}
+                          </div>
+                          <div className="text-[11px] font-bold leading-tight text-slate-800 dark:text-white truncate">
+                            {opt.title}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              <div className="space-y-1">
+                <label htmlFor="prono-freeExpectedResult" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">
+                  Intitulé du pronostic
+                </label>
+                <input
+                  id="prono-freeExpectedResult"
+                  type="text"
+                  placeholder="Ex: V1 - Victoire Real Madrid"
+                  value={formData.freeExpectedResult}
+                  onChange={e => setFormData({ ...formData, freeExpectedResult: e.target.value })}
+                  className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all font-semibold text-slate-800 dark:text-white"
+                />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <label htmlFor="prono-freeObservation" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Courte Observation</label>
-              <textarea id="prono-freeObservation" rows={2} placeholder="Courte description pour le public gratuit..." value={formData.freeObservation} onChange={e => setFormData({...formData, freeObservation: e.target.value})} className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all"></textarea>
+
+            {/* 2. Confiance (Stars + %) & Observation */}
+
+            {/* 3. Confiance (Stars + %) & Observation */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">
+                  Confiance ({formData.freeConfidence <= 5 ? (formData.freeConfidence || 4) : Math.round(formData.freeConfidence / 20)}/5 ★ &nbsp;|&nbsp; {formData.freeConfidence <= 5 ? (formData.freeConfidence || 4) * 20 : formData.freeConfidence}%)
+                </label>
+                <div className="flex items-center gap-1.5 p-2.5 bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl">
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    const currentStars = formData.freeConfidence <= 5 
+                      ? (formData.freeConfidence || 4)
+                      : Math.round(formData.freeConfidence / 20);
+                    return (
+                      <button
+                        type="button"
+                        key={star}
+                        onClick={() => setFormData({ ...formData, freeConfidence: star * 20 })}
+                        className={`text-2xl transition-transform hover:scale-125 ${
+                          star <= currentStars ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'
+                        }`}
+                      >
+                        ★
+                      </button>
+                    );
+                  })}
+                  <span className="ml-auto text-xs font-black text-brand-green px-2.5 py-1 rounded-lg bg-brand-green/10">
+                    {formData.freeConfidence <= 5 ? (formData.freeConfidence || 4) * 20 : formData.freeConfidence}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="prono-freeObservation" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">
+                  Courte Observation
+                </label>
+                <textarea
+                  id="prono-freeObservation"
+                  rows={2}
+                  placeholder="Courte description pour le public gratuit..."
+                  value={formData.freeObservation}
+                  onChange={e => setFormData({ ...formData, freeObservation: e.target.value })}
+                  className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all resize-none text-slate-800 dark:text-white"
+                />
+              </div>
             </div>
           </div>
 

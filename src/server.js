@@ -1309,45 +1309,62 @@ app.post('/api/pronos/:id/react', authenticateToken, async (req, res) => {
 function determinePronoResult(prediction, homeGoals, awayGoals, homeTeam, awayTeam) {
   if (!prediction || homeGoals == null || awayGoals == null) return null;
   const pred = prediction.toLowerCase().trim();
-  const homeTeamLower = homeTeam.toLowerCase();
-  const awayTeamLower = awayTeam.toLowerCase();
+  const homeTeamLower = (homeTeam || '').toLowerCase().trim();
+  const awayTeamLower = (awayTeam || '').toLowerCase().trim();
 
-  // --- Double chance patterns (check BEFORE single outcome to avoid partial matches) ---
-  // "Victoire X ou Nul" / "1X" / "X ou nul"
+  // --- 1. Standard 6-Option Explicit Pattern Matcher ---
+  // Option 1X: Home Win or Draw (HomeGoals >= AwayGoals)
   if (
-    (pred.includes('victoire') && pred.includes('nul') && pred.includes(homeTeamLower)) ||
-    pred === '1x' || pred === '1 ou nul' || pred === '1 ou x'
+    pred.startsWith('1x') || pred === '1x' || pred === '1 ou nul' ||
+    (pred.includes('1x') && !pred.includes('2x')) ||
+    (pred.includes('ou nul') && homeTeamLower && pred.includes(homeTeamLower))
   ) {
     return homeGoals >= awayGoals ? 'won' : 'lost';
   }
+
+  // Option 2X / X2: Away Win or Draw (AwayGoals >= HomeGoals)
   if (
-    (pred.includes('victoire') && pred.includes('nul') && pred.includes(awayTeamLower)) ||
-    pred === 'x2' || pred === '2 ou nul' || pred === 'x ou 2'
+    pred.startsWith('2x') || pred.startsWith('x2') || pred === '2x' || pred === 'x2' || pred === '2 ou nul' ||
+    pred.includes('2x') || pred.includes('x2') ||
+    (pred.includes('ou nul') && awayTeamLower && pred.includes(awayTeamLower))
   ) {
     return awayGoals >= homeGoals ? 'won' : 'lost';
   }
-  if (pred === '12' || pred === '1 ou 2' || pred.includes('pas de nul')) {
+
+  // Option 12: Either Team Wins / No Draw (HomeGoals !== AwayGoals)
+  if (
+    pred.startsWith('12') || pred === '12' || pred === '1 ou 2' || pred.includes('12 -') || pred.includes('pas de nul')
+  ) {
     return homeGoals !== awayGoals ? 'won' : 'lost';
   }
 
-  // --- Single outcome 1X2 ---
+  // Option V1: Home Win (HomeGoals > AwayGoals)
   if (
-    (pred.includes('victoire') && pred.includes(homeTeamLower) && !pred.includes('nul')) ||
-    pred === '1' || pred === 'victoire domicile'
+    pred.startsWith('v1') || pred === 'v1' || pred === '1' || pred === 'victoire domicile' ||
+    (pred.includes('v1') && !pred.includes('v2')) ||
+    (pred.includes('victoire') && homeTeamLower && pred.includes(homeTeamLower) && !pred.includes('nul'))
   ) {
     return homeGoals > awayGoals ? 'won' : 'lost';
   }
+
+  // Option V2: Away Win (AwayGoals > HomeGoals)
   if (
-    (pred.includes('victoire') && pred.includes(awayTeamLower) && !pred.includes('nul')) ||
-    pred === '2' || pred === 'victoire extérieur' || pred === 'victoire exterieur'
+    pred.startsWith('v2') || pred === 'v2' || pred === '2' || pred === 'victoire extérieur' || pred === 'victoire exterieur' ||
+    pred.includes('v2') ||
+    (pred.includes('victoire') && awayTeamLower && pred.includes(awayTeamLower) && !pred.includes('nul'))
   ) {
     return awayGoals > homeGoals ? 'won' : 'lost';
   }
-  if (pred === 'x' || pred === 'nul' || pred.includes('match nul')) {
+
+  // Option X: Draw (HomeGoals === AwayGoals)
+  if (
+    pred.startsWith('x -') || pred === 'x' || pred === 'nul' || pred.includes('match nul')
+  ) {
     return homeGoals === awayGoals ? 'won' : 'lost';
   }
 
-  // --- Over/Under ---
+  // --- Fallback Patterns ---
+  // Over/Under
   const overMatch = pred.match(/(?:\+|plus de\s*)(\d+[,.]\d*)\s*buts?/i);
   if (overMatch) {
     return (homeGoals + awayGoals) > parseFloat(overMatch[1].replace(',', '.')) ? 'won' : 'lost';
@@ -1357,18 +1374,17 @@ function determinePronoResult(prediction, homeGoals, awayGoals, homeTeam, awayTe
     return (homeGoals + awayGoals) < parseFloat(underMatch[1].replace(',', '.')) ? 'won' : 'lost';
   }
 
-  // --- Both Teams To Score (BTTS) ---
+  // Both Teams To Score (BTTS)
   if (pred.includes('les deux équipes marquent') || pred.includes('les deux equipes marquent') || pred === 'btts') {
     return (homeGoals > 0 && awayGoals > 0) ? 'won' : 'lost';
   }
 
-  // --- Exact score (e.g. "2-1", "3:0") ---
+  // Exact score (e.g. "2-1", "3:0")
   const exactScoreMatch = pred.match(/(\d+)\s*[-–:]\s*(\d+)/);
   if (exactScoreMatch) {
     return (homeGoals === parseInt(exactScoreMatch[1]) && awayGoals === parseInt(exactScoreMatch[2])) ? 'won' : 'lost';
   }
 
-  // Pattern not recognized — needs manual review
   return null;
 }
 
