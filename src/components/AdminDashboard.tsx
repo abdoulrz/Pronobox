@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { WS_EVENTS } from '../services/WebSocketService';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { getUsers, updateUserByAdmin, getAdminTransactions, getAdminWithdrawals, getSupportMessages, updateWithdrawalStatus, sendAdminSupportMessage } from '../services/api';
@@ -31,11 +32,12 @@ const parseErrorResponse = async (res: Response): Promise<{ error: string; detai
 const AdminDashboard = () => {
   const { isAdmin } = useAuth();
   const { refreshChannels } = useChannelData();
-  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('adminDashboardActiveTab') || 'statistics');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'statistics';
 
-  useEffect(() => {
-    localStorage.setItem('adminDashboardActiveTab', activeTab);
-  }, [activeTab]);
+  const setActiveTab = (tabId: string) => {
+    setSearchParams({ tab: tabId });
+  };
 
   const [stats, setStats] = useState<any>(null);
 
