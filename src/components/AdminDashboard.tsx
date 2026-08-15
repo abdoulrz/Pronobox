@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { WS_EVENTS } from '../services/WebSocketService';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { getUsers, updateUserByAdmin, getAdminTransactions, getAdminWithdrawals, getSupportMessages, updateWithdrawalStatus, sendAdminSupportMessage } from '../services/api';
@@ -29,14 +28,28 @@ const parseErrorResponse = async (res: Response): Promise<{ error: string; detai
   }
 };
 
+const VALID_TABS = ['statistics', 'users', 'channels', 'pronos', 'transactions', 'support', 'bet-educ'];
+
+const getTabFromHash = () => {
+  const hash = window.location.hash.replace('#', '');
+  return VALID_TABS.includes(hash) ? hash : 'statistics';
+};
+
 const AdminDashboard = () => {
   const { isAdmin } = useAuth();
   const { refreshChannels } = useChannelData();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') || 'statistics';
+  const [activeTab, setActiveTabState] = useState(getTabFromHash);
+
+  // Sync tab state when browser back/forward buttons are used
+  useEffect(() => {
+    const onHashChange = () => setActiveTabState(getTabFromHash());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   const setActiveTab = (tabId: string) => {
-    setSearchParams({ tab: tabId });
+    window.location.hash = tabId;
+    setActiveTabState(tabId);
   };
 
   const [stats, setStats] = useState<any>(null);
