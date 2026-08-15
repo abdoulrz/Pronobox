@@ -1,4 +1,5 @@
 /* eslint-env node */
+import './instrument.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -44,6 +45,10 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage, limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB limit
 const app = express();
+
+app.get("/debug-sentry", function mainHandler(req, res) {
+  throw new Error("My first Sentry error!");
+});
 
 // Secure backend with Helmet (Security Headers)
 app.use(helmet({
@@ -1388,23 +1393,18 @@ function determinePronoResult(prediction, homeGoals, awayGoals, homeTeam, awayTe
   return null;
 }
 
-// Batch-verify all pending pronostics (grouped by date to minimize API calls)
-app.post('/api/pronos/verify-all', authenticateToken, requireAdmin, async (req, res) => {
+async function runBatchVerification() {
   try {
     const bufferTime = new Date();
     bufferTime.setHours(bufferTime.getHours() - 2.5);
 
     const pendingPronos = await Prono.find({ 
-      $or: [
-        { status: 'pending' },
-        { freeStatus: 'pending' },
-        { premiumStatus: 'pending' }
-      ],
+      status: 'pending',
       matchDate: { $lt: bufferTime }
     });
 
     if (pendingPronos.length === 0) {
-      return res.json({ message: 'No pending pronostics to verify', results: [] });
+      return { message: 'No pending pronostics to verify', results: [] };
     }
 
     // Deduplicate by matchId so we only fetch each fixture once
@@ -1480,15 +1480,36 @@ app.post('/api/pronos/verify-all', authenticateToken, requireAdmin, async (req, 
       }
     }
 
-    res.json({ 
+    return { 
       message: `Vérification terminée : ${results.filter(r => r.status === 'won' || r.status === 'lost').length} vérifiés, ${results.filter(r => r.status === 'manual_review').length} à vérifier manuellement`,
       results 
-    });
+    };
   } catch (err) {
     console.error('Error batch-verifying pronos:', err);
+    throw err;
+  }
+}
+
+// Batch-verify all pending pronostics (grouped by date to minimize API calls)
+app.post('/api/pronos/verify-all', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await runBatchVerification();
+    res.json(result);
+  } catch (err) {
     res.status(500).json({ error: 'Failed to batch verify' });
   }
 });
+
+// Run batch verification automatically every 24 hours
+setInterval(async () => {
+  console.log('[Auto-Verify] Running scheduled pronostic verification...');
+  try {
+    const res = await runBatchVerification();
+    console.log('[Auto-Verify] Result:', res.message);
+  } catch (err) {
+    console.error('[Auto-Verify] Error:', err.message);
+  }
+}, 24 * 60 * 60 * 1000);
 
 // Verify a single pronostic by fetching the match result from API-Sports
 app.post('/api/pronos/:id/verify', authenticateToken, requireAdmin, async (req, res) => {
@@ -2617,6 +2638,9 @@ const initializeMockData = async () => {
 };
 
 // Global error handling middleware
+import * as Sentry from '@sentry/node';
+Sentry.setupExpressErrorHandler(app);
+
 app.use((err, req, res, next) => {
   console.error('Global unhandled error:', err);
   res.status(500).json({

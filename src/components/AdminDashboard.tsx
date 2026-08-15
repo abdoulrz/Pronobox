@@ -31,7 +31,13 @@ const parseErrorResponse = async (res: Response): Promise<{ error: string; detai
 const AdminDashboard = () => {
   const { isAdmin } = useAuth();
   const { refreshChannels } = useChannelData();
-  const [activeTab, setActiveTab] = useState('statistics');
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('adminDashboardActiveTab') || 'statistics');
+
+  useEffect(() => {
+    localStorage.setItem('adminDashboardActiveTab', activeTab);
+  }, [activeTab]);
+
+  const [stats, setStats] = useState<any>(null);
 
   const { connected, subscribe } = useWebSocket();
   const [userSearchQuery, setUserSearchQuery] = useState('');

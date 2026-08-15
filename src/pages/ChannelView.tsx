@@ -167,7 +167,7 @@ const ChannelView = () => {
       const isPremium = Boolean(channel.premium);
 
       await api.post('/pronos', {
-        matchId: Date.now(),
+        matchId: data.matchId || Date.now(),
         homeTeamName,
         awayTeamName,
         league: channel.name ? `Canal ${channel.name}` : 'PronosBox Channel',

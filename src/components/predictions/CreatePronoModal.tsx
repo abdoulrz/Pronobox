@@ -8,6 +8,7 @@ export interface PronoSubmissionData {
   confidence: number;
   analysis?: string;
   formattedTitle: string;
+  matchId?: string | number;
 }
 
 interface CreatePronoModalProps {
@@ -101,9 +102,10 @@ export function getProno6Options(matchString: string): PronoOption[] {
 }
 
 const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, onSubmit }) => {
-  const [matchList, setMatchList] = useState<string[]>(DEFAULT_MATCHES);
+  const defaultMatchObjects = DEFAULT_MATCHES.map((name, i) => ({ id: `default-${i}`, name }));
+  const [matchList, setMatchList] = useState<{ id: string | number; name: string }[]>(defaultMatchObjects);
   const [matchQuery, setMatchQuery] = useState('');
-  const [selectedMatch, setSelectedMatch] = useState('');
+  const [selectedMatch, setSelectedMatch] = useState<{ id: string | number; name: string } | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loadingMatches, setLoadingMatches] = useState(false);
 
@@ -127,10 +129,14 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
             const formattedDbMatches = data.response.map((item: any) => {
               const home = item.teams?.home?.name || 'Équipe 1';
               const away = item.teams?.away?.name || 'Équipe 2';
-              return `${home} vs ${away}`;
+              return { id: item.fixture?.id || Date.now(), name: `${home} vs ${away}` };
             });
-            const combined = Array.from(new Set([...formattedDbMatches, ...DEFAULT_MATCHES]));
-            setMatchList(combined);
+            
+            // Deduplicate by name
+            const allMatches = [...formattedDbMatches, ...defaultMatchObjects];
+            const uniqueMatches = Array.from(new Map(allMatches.map(m => [m.name, m])).values());
+            
+            setMatchList(uniqueMatches);
           }
         })
         .catch((err) => {
@@ -156,19 +162,19 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
   if (!isOpen) return null;
 
   const filteredMatches = matchList.filter((m) =>
-    m.toLowerCase().includes(matchQuery.toLowerCase())
+    m.name.toLowerCase().includes(matchQuery.toLowerCase())
   );
 
-  const currentMatch = selectedMatch || matchQuery;
-  const options6 = getProno6Options(currentMatch);
+  const currentMatchName = selectedMatch ? selectedMatch.name : matchQuery;
+  const options6 = getProno6Options(currentMatchName);
 
-  const handleSelectMatch = (matchName: string) => {
-    setSelectedMatch(matchName);
-    setMatchQuery(matchName);
+  const handleSelectMatch = (match: { id: string | number; name: string }) => {
+    setSelectedMatch(match);
+    setMatchQuery(match.name);
     setShowDropdown(false);
     
     // Auto-update pick option based on newly selected match
-    const opts = getProno6Options(matchName);
+    const opts = getProno6Options(match.name);
     const matchedOpt = opts.find(o => o.id === selectedOptionId) || opts[0];
     if (matchedOpt) {
       setPick(matchedOpt.fullPick);
@@ -182,7 +188,9 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalMatch = selectedMatch || matchQuery || 'Match Football';
+    const finalMatch = selectedMatch ? selectedMatch.name : (matchQuery || 'Match Football');
+    const finalMatchId = selectedMatch && typeof selectedMatch.id === 'number' ? selectedMatch.id : undefined;
+    
     const finalPick = pick || (options6[0]?.fullPick || 'V1');
     const formattedTitle = `${finalMatch} — ${finalPick} (⏳ en attente)`;
 
@@ -192,7 +200,8 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
       pick: finalPick,
       confidence,
       analysis,
-      formattedTitle
+      formattedTitle,
+      matchId: finalMatchId
     });
 
     onClose();
@@ -242,7 +251,7 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
                 onFocus={() => setShowDropdown(true)}
                 onChange={(e) => {
                   setMatchQuery(e.target.value);
-                  setSelectedMatch(e.target.value);
+                  setSelectedMatch(null);
                   setShowDropdown(true);
                 }}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white placeholder-slate-400 focus:outline-none focus:border-brand-green"
@@ -270,16 +279,16 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
                   filteredMatches.map((m) => (
                     <button
                       type="button"
-                      key={m}
+                      key={m.id}
                       onClick={() => handleSelectMatch(m)}
                       className={`w-full text-left px-3.5 py-2 text-xs font-semibold transition-colors flex items-center justify-between ${
-                        selectedMatch === m
+                        selectedMatch?.id === m.id
                           ? 'bg-brand-green/20 text-brand-green font-bold'
                           : 'text-slate-200 hover:bg-slate-700/80 hover:text-white'
                       }`}
                     >
-                      <span>⚽ {m}</span>
-                      {selectedMatch === m && <span>✓</span>}
+                      <span>⚽ {m.name}</span>
+                      {selectedMatch?.id === m.id && <span>✓</span>}
                     </button>
                   ))
                 ) : (
