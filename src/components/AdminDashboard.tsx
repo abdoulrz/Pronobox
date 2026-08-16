@@ -30,25 +30,46 @@ const parseErrorResponse = async (res: Response): Promise<{ error: string; detai
 
 const VALID_TABS = ['statistics', 'users', 'channels', 'pronos', 'transactions', 'support', 'bet-educ'];
 
-const getTabFromHash = () => {
+const getPersistedTab = (): string => {
+  // 1. Try hash first
   const hash = window.location.hash.replace('#', '');
-  return VALID_TABS.includes(hash) ? hash : 'statistics';
+  if (VALID_TABS.includes(hash)) {
+    console.log('[AdminDashboard] Restored tab from hash:', hash);
+    return hash;
+  }
+  // 2. Fallback to sessionStorage
+  const stored = sessionStorage.getItem('adminTab');
+  if (stored && VALID_TABS.includes(stored)) {
+    console.log('[AdminDashboard] Restored tab from sessionStorage:', stored);
+    // Re-apply the hash so the URL stays in sync
+    window.location.hash = stored;
+    return stored;
+  }
+  console.log('[AdminDashboard] No persisted tab found, defaulting to statistics. Hash was:', window.location.hash);
+  return 'statistics';
 };
 
 const AdminDashboard = () => {
   const { isAdmin } = useAuth();
   const { refreshChannels } = useChannelData();
-  const [activeTab, setActiveTabState] = useState(getTabFromHash);
+  const [activeTab, setActiveTabState] = useState(getPersistedTab);
 
   // Sync tab state when browser back/forward buttons are used
   useEffect(() => {
-    const onHashChange = () => setActiveTabState(getTabFromHash());
+    const onHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (VALID_TABS.includes(hash)) {
+        setActiveTabState(hash);
+        sessionStorage.setItem('adminTab', hash);
+      }
+    };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
   const setActiveTab = (tabId: string) => {
     window.location.hash = tabId;
+    sessionStorage.setItem('adminTab', tabId);
     setActiveTabState(tabId);
   };
 
