@@ -51,6 +51,11 @@ const Pronos = () => {
         if (Array.isArray(data) && data.length > 0) {
           const hasCaracas = data.some(p => String(p.homeTeamName || '').toLowerCase().includes('caracas'));
           const merged = hasCaracas ? data : [...DEFAULT_CHANNEL_PRONOS, ...data];
+          merged.sort((a, b) => {
+            const timeA = new Date(a.matchDate || a.createdAt || 0).getTime();
+            const timeB = new Date(b.matchDate || b.createdAt || 0).getTime();
+            return (Number.isNaN(timeB) ? 0 : timeB) - (Number.isNaN(timeA) ? 0 : timeA);
+          });
           setPronos(merged);
         } else {
           setPronos(DEFAULT_CHANNEL_PRONOS);

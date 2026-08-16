@@ -1731,11 +1731,50 @@ const PronosManagement = () => {
     }
   };
 
+  const [fixingIds, setFixingIds] = useState(false);
+
+  const handleFixMatchIds = async () => {
+    setFixingIds(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/pronos/fix-match-ids', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message);
+        setVerifyResults(data.results || []);
+        fetchPronos();
+      } else {
+        const errorData = await parseErrorResponse(res);
+        alert(`Erreur : ${errorData.error}${errorData.details ? ' (' + errorData.details + ')' : ''}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erreur de connexion');
+    } finally {
+      setFixingIds(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Gestion des Pronostics</h3>
         <div className="flex gap-2 w-full sm:w-auto">
+          <button 
+            onClick={handleFixMatchIds}
+            disabled={fixingIds}
+            className={`py-2.5 px-4 text-sm font-bold rounded-xl transition-all shadow-lg ${
+              fixingIds 
+                ? 'bg-slate-300 dark:bg-slate-600 text-slate-500 cursor-not-allowed' 
+                : 'bg-blue-500 hover:bg-blue-600 text-white shadow-blue-500/20'
+            }`}
+            title="Rechercher et corriger les IDs de match invalides via l'API"
+          >
+            {fixingIds ? '🔧 Réparation...' : '🔧 Réparer IDs'}
+          </button>
           <button 
             onClick={handleVerifyAll}
             disabled={verifyingAll}

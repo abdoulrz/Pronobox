@@ -42,6 +42,19 @@ const MessageSchema = new mongoose.Schema({
   time: {
     type: Date,
     default: Date.now
+  },
+  pronoMatchId: {
+    type: Number,
+    required: false
+  },
+  pronoStatus: {
+    type: String,
+    enum: ['pending', 'won', 'lost', 'partial', ''],
+    default: ''
+  },
+  pronoActualResult: {
+    type: String,
+    default: ''
   }
 });
 const ChannelSchema = new mongoose.Schema({

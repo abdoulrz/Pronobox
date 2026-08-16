@@ -1100,14 +1100,14 @@ app.get('/api/pronos', async (req, res) => {
   try {
     let dbPronos = [];
     try {
-      dbPronos = await Prono.find().sort({ createdAt: -1 });
+      dbPronos = await Prono.find().sort({ createdAt: -1 }).lean();
     } catch (e) {
       console.warn('Could not query Prono collection:', e);
     }
 
     const channelPronos = [];
     try {
-      const channels = await Channel.find({});
+      const channels = await Channel.find({}).lean();
       channels.forEach(ch => {
         (ch.messages || []).forEach(msg => {
           const text = String(msg.text || '');
@@ -1145,7 +1145,7 @@ app.get('/api/pronos', async (req, res) => {
 
             channelPronos.push({
               _id: `ch_msg_${msg._id || msg.id || Date.now()}`,
-              matchId: msg._id || msg.id || Date.now(),
+              matchId: msg.pronoMatchId || msg._id || msg.id || Date.now(),
               homeTeamName,
               awayTeamName,
               league: `Canal ${ch.name}`,
@@ -1157,9 +1157,12 @@ app.get('/api/pronos', async (req, res) => {
               premiumOdds: isPremium ? 1.75 : 0,
               premiumConfidence: isPremium ? 80 : 0,
               premiumObservation: isPremium ? (analysisText || 'Publication Canal') : '',
-              status: 'pending',
-              freeStatus: 'pending',
-              premiumStatus: 'pending',
+              status: msg.pronoStatus || 'pending',
+              freeStatus: msg.pronoStatus || 'pending',
+              premiumStatus: msg.pronoStatus || 'pending',
+              actualResult: msg.pronoActualResult || '',
+              channelId: ch._id,
+              messageId: msg._id,
               createdAt: msgDate
             });
           }
@@ -1170,6 +1173,19 @@ app.get('/api/pronos', async (req, res) => {
     }
 
     const allPronos = [...channelPronos, ...dbPronos];
+    
+    // Sort globally by matchDate descending, fallback to createdAt (newest first)
+    allPronos.sort((a, b) => {
+      // For Mongoose documents, use .get() if available, else direct property
+      const aDate = (a.matchDate || a.createdAt) || 0;
+      const bDate = (b.matchDate || b.createdAt) || 0;
+      const timeA = new Date(aDate).getTime();
+      const timeB = new Date(bDate).getTime();
+      
+      // Fallback for invalid dates to avoid NaN breaking the sort
+      return (Number.isNaN(timeB) ? 0 : timeB) - (Number.isNaN(timeA) ? 0 : timeA);
+    });
+
     if (allPronos.length > 0) {
       cachedPronosList = allPronos;
     }
@@ -1510,6 +1526,204 @@ setInterval(async () => {
     console.error('[Auto-Verify] Error:', err.message);
   }
 }, 24 * 60 * 60 * 1000);
+
+// One-time fix: find pending pronos with invalid matchIds, look up real fixture IDs by team names, patch & verify
+app.post('/api/pronos/fix-match-ids', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const pendingPronos = await Prono.find({ status: 'pending' });
+    
+    // Filter to only those with invalid matchIds
+    let brokenPronos = pendingPronos.filter(p => {
+      const id = Number(p.matchId);
+      return !id || isNaN(id) || id > 100000000;
+    });
+
+    // Also look for virtual channel pronos that need fixing/verification
+    const channels = await Channel.find({});
+    channels.forEach(ch => {
+      (ch.messages || []).forEach(msg => {
+        const text = String(msg.text || '');
+        if (text.includes(' vs ') && (text.includes('-') || text.includes('—') || text.includes('Analyse:'))) {
+          // Skip if already verified
+          if (msg.pronoStatus === 'won' || msg.pronoStatus === 'lost') return;
+          
+          let mainLine = text;
+          const analyseIdx = text.indexOf('Analyse:');
+          if (analyseIdx !== -1) {
+            mainLine = text.substring(0, analyseIdx).trim();
+            mainLine = mainLine.replace(/💡\s*$/, '').trim();
+          }
+
+          let parts = mainLine.split(' — ');
+          if (parts.length < 2) parts = mainLine.split(' - ');
+          
+          const matchPart = parts[0] ? parts[0].trim() : '';
+          const teams = matchPart.split(' vs ');
+          
+          const expectedPick = String(parts[1] || '').split('(⏳')[0].split('(?')[0].split('(✅')[0].split('(❌')[0].trim() || mainLine;
+          
+          const msgDate = msg.time ? new Date(msg.time) : (msg.createdAt ? new Date(msg.createdAt) : new Date());
+
+          brokenPronos.push({
+            isChannelProno: true,
+            channelId: ch._id,
+            messageId: msg._id,
+            _id: msg._id,
+            matchId: msg.pronoMatchId || msg._id || Date.now(),
+            homeTeamName: teams[0] ? teams[0].trim() : '',
+            awayTeamName: teams[1] ? teams[1].trim() : '',
+            matchDate: msgDate,
+            freeExpectedResult: ch.premium ? '' : expectedPick,
+            premiumExpectedResult: ch.premium ? expectedPick : '',
+            freeStatus: msg.pronoStatus || 'pending',
+            premiumStatus: msg.pronoStatus || 'pending',
+            status: msg.pronoStatus || 'pending'
+          });
+        }
+      });
+    });
+
+    if (brokenPronos.length === 0) {
+      return res.json({ message: 'No pronostics with broken match IDs found', fixed: 0, results: [] });
+    }
+
+    const results = [];
+
+    for (const prono of brokenPronos) {
+      const homeTeam = (prono.homeTeamName || '').trim();
+      const awayTeam = (prono.awayTeamName || '').trim();
+      
+      if (!homeTeam || !awayTeam) {
+        results.push({ id: prono._id, match: `${homeTeam} vs ${awayTeam}`, status: 'skipped', reason: 'Missing team names' });
+        continue;
+      }
+
+      try {
+        const matchDate = prono.matchDate ? new Date(prono.matchDate).toISOString().split('T')[0] : null;
+        let fixture = null;
+
+        // Strategy 1: Search by exact date
+        if (matchDate) {
+          const dateResponse = await axios.get('https://v3.football.api-sports.io/fixtures', {
+            params: { date: matchDate },
+            headers: { 'x-apisports-key': '9a068a21856b2e7f20dedff6b4322352' }
+          });
+          const fixtures = dateResponse.data?.response || [];
+          fixture = fixtures.find(f => {
+            const apiHome = (f.teams?.home?.name || '').toLowerCase();
+            const apiAway = (f.teams?.away?.name || '').toLowerCase();
+            const dbHome = homeTeam.toLowerCase();
+            const dbAway = awayTeam.toLowerCase();
+            return (apiHome.includes(dbHome) || dbHome.includes(apiHome)) &&
+                   (apiAway.includes(dbAway) || dbAway.includes(apiAway));
+          });
+        }
+
+        // Strategy 2: Search ±1 day
+        if (!fixture && matchDate) {
+          const prevDay = new Date(new Date(matchDate).getTime() - 86400000).toISOString().split('T')[0];
+          const nextDay = new Date(new Date(matchDate).getTime() + 86400000).toISOString().split('T')[0];
+          const rangeResponse = await axios.get('https://v3.football.api-sports.io/fixtures', {
+            params: { from: prevDay, to: nextDay },
+            headers: { 'x-apisports-key': '9a068a21856b2e7f20dedff6b4322352' }
+          });
+          const fixtures = rangeResponse.data?.response || [];
+          fixture = fixtures.find(f => {
+            const apiHome = (f.teams?.home?.name || '').toLowerCase();
+            const apiAway = (f.teams?.away?.name || '').toLowerCase();
+            const dbHome = homeTeam.toLowerCase();
+            const dbAway = awayTeam.toLowerCase();
+            return (apiHome.includes(dbHome) || dbHome.includes(apiHome)) &&
+                   (apiAway.includes(dbAway) || dbAway.includes(apiAway));
+          });
+        }
+
+        if (!fixture) {
+          results.push({ id: prono._id, match: `${homeTeam} vs ${awayTeam}`, status: 'not_found', reason: 'Could not find fixture in API' });
+          continue;
+        }
+
+        // Step 1: Fix the matchId
+        const realId = fixture.fixture.id;
+        prono.matchId = realId;
+
+        // Step 2: Verify inline if match is finished
+        const matchStatus = fixture.fixture?.status?.short;
+        const finishedStatuses = ['FT', 'AET', 'PEN'];
+
+        if (!finishedStatuses.includes(matchStatus)) {
+          if (prono.isChannelProno) {
+            await Channel.updateOne(
+              { _id: prono.channelId, "messages._id": prono.messageId },
+              { $set: { "messages.$.pronoMatchId": realId } }
+            );
+          } else {
+            await prono.save();
+          }
+          results.push({ id: prono._id, match: `${homeTeam} vs ${awayTeam}`, status: 'id_fixed', reason: `Match not finished yet (${fixture.fixture?.status?.long || matchStatus})`, newMatchId: realId });
+          continue;
+        }
+
+        const homeGoals = fixture.goals?.home ?? null;
+        const awayGoals = fixture.goals?.away ?? null;
+        const actualResult = `${homeGoals}-${awayGoals}`;
+
+        if (prono.freeExpectedResult && prono.freeStatus === 'pending') {
+          const freeResult = determinePronoResult(prono.freeExpectedResult, homeGoals, awayGoals, prono.homeTeamName, prono.awayTeamName);
+          if (freeResult) prono.freeStatus = freeResult;
+        }
+        
+        if (prono.premiumExpectedResult && prono.premiumStatus === 'pending') {
+          const premiumResult = determinePronoResult(prono.premiumExpectedResult, homeGoals, awayGoals, prono.homeTeamName, prono.awayTeamName);
+          if (premiumResult) prono.premiumStatus = premiumResult;
+        }
+
+        prono.actualResult = actualResult;
+
+        const freeNeedsReview = (prono.freeExpectedResult && prono.freeStatus === 'pending');
+        const premiumNeedsReview = (prono.premiumExpectedResult && prono.premiumStatus === 'pending');
+
+        const finalStatus = (freeNeedsReview || premiumNeedsReview) ? 'pending' : (prono.premiumExpectedResult ? prono.premiumStatus : prono.freeStatus) || 'won';
+
+        if (prono.isChannelProno) {
+          await Channel.updateOne(
+            { _id: prono.channelId, "messages._id": prono.messageId },
+            { $set: { 
+              "messages.$.pronoMatchId": realId,
+              "messages.$.pronoStatus": finalStatus,
+              "messages.$.pronoActualResult": actualResult
+            }}
+          );
+        } else {
+          prono.status = finalStatus;
+          prono.verifiedAt = new Date();
+          await prono.save();
+        }
+
+        results.push({ 
+          id: prono._id, 
+          match: `${homeTeam} vs ${awayTeam}`, 
+          status: (freeNeedsReview || premiumNeedsReview) ? 'manual_review' : finalStatus, 
+          actualResult, 
+          newMatchId: realId 
+        });
+      } catch (apiErr) {
+        results.push({ id: prono._id, match: `${homeTeam} vs ${awayTeam}`, status: 'error', reason: apiErr.message });
+      }
+    }
+
+    const fixedCount = results.filter(r => ['won', 'lost', 'id_fixed'].includes(r.status)).length;
+    const verifiedCount = results.filter(r => r.status === 'won' || r.status === 'lost').length;
+
+    res.json({ 
+      message: `Réparé ${fixedCount}/${brokenPronos.length} IDs. ${verifiedCount} vérifiés automatiquement.`,
+      results
+    });
+  } catch (err) {
+    console.error('Error fixing match IDs:', err);
+    res.status(500).json({ error: 'Failed to fix match IDs', details: err.message });
+  }
+});
 
 // Verify a single pronostic by fetching the match result from API-Sports
 app.post('/api/pronos/:id/verify', authenticateToken, requireAdmin, async (req, res) => {
