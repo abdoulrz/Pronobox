@@ -143,7 +143,9 @@ const ChannelView = () => {
       },
       timestamp: new Date(),
       likes: 0,
-      likedBy: []
+      likedBy: [],
+      pronoMatchId: typeof data.matchId === 'number' ? data.matchId : undefined,
+      pronoStatus: 'pending'
     };
 
     setChannel(prev => {
@@ -165,13 +167,15 @@ const ChannelView = () => {
       const homeTeamName = teams[0] ? teams[0].trim() : 'Équipe 1';
       const awayTeamName = teams[1] ? teams[1].trim() : 'Équipe 2';
       const isPremium = Boolean(channel.premium);
+      const pronoMatchDate = data.matchDate ? new Date(data.matchDate) : new Date();
 
       await api.post('/pronos', {
         matchId: data.matchId || Date.now(),
         homeTeamName,
         awayTeamName,
         league: channel.name ? `Canal ${channel.name}` : 'PronosBox Channel',
-        matchDate: new Date(),
+        matchDate: pronoMatchDate,
+        channelId: channel.id,
         freeExpectedResult: isPremium ? '' : data.pick,
         freeConfidence: isPremium ? 0 : (data.confidence || 4),
         freeObservation: isPremium ? '' : (data.analysis || 'Publication Canal'),
@@ -295,7 +299,10 @@ const ChannelView = () => {
           replyTo: m.replyTo,
           timestamp: new Date(m.time || m.createdAt || Date.now()),
           likes: m.likes || 0,
-          reactions: m.reactions || []
+          reactions: m.reactions || [],
+          pronoMatchId: m.pronoMatchId,
+          pronoStatus: m.pronoStatus,
+          pronoActualResult: m.pronoActualResult
         }));
 
         const existingTexts = new Set(serverMessages.map((m: any) => m.text));

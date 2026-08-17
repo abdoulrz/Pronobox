@@ -25,6 +25,9 @@ export interface Message {
     username: string;
   };
   reactions?: { emoji: string; count: number; users: (number | string)[] }[];
+  pronoMatchId?: number;
+  pronoStatus?: string;
+  pronoActualResult?: string;
 }
 
 export interface Channel {

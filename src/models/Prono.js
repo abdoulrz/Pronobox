@@ -9,6 +9,8 @@ const PronoSchema = new mongoose.Schema({
   
   league: { type: String, default: '' },
   matchDate: { type: Date },
+  channelId: { type: mongoose.Schema.Types.ObjectId, ref: 'Channel' },
+  messageId: { type: String },
 
   // Free Section
   freeExpectedResult: { type: String, default: '' },

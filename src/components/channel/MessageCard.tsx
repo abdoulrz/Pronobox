@@ -265,6 +265,8 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                 const isProno = message.text.includes('⏳ en attente') ||
                                 message.text.includes('✅ gagné') ||
                                 message.text.includes('❌ perdu') ||
+                                message.pronoStatus === 'won' ||
+                                message.pronoStatus === 'lost' ||
                                 message.text.startsWith('🎯') ||
                                 (message.text.includes(' — ') && message.text.includes('vs'));
 
@@ -280,18 +282,18 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                   let statusBadge = '⏳ EN ATTENTE';
                   let statusStyle = 'bg-amber-500/20 text-amber-400 border-amber-500/40';
 
-                  if (mainText.includes('✅ gagné') || mainText.includes('gagné')) {
+                  if (message.pronoStatus === 'won' || mainText.includes('✅ gagné') || mainText.toLowerCase().includes('gagné')) {
                     statusBadge = '✅ GAGNÉ';
                     statusStyle = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40';
-                  } else if (mainText.includes('❌ perdu') || mainText.includes('perdu')) {
+                  } else if (message.pronoStatus === 'lost' || mainText.includes('❌ perdu') || mainText.toLowerCase().includes('perdu')) {
                     statusBadge = '❌ PERDU';
                     statusStyle = 'bg-rose-500/20 text-rose-400 border-rose-500/40';
                   }
 
                   let cleanTitle = mainText
-                    .replace(/\(⏳ en attente\)/gi, '')
-                    .replace(/\(✅ gagné\)/gi, '')
-                    .replace(/\(❌ perdu\)/gi, '')
+                    .replace(/\(⏳\s*en\s*attente\)/gi, '')
+                    .replace(/\(✅\s*gagné\)/gi, '')
+                    .replace(/\(❌\s*perdu\)/gi, '')
                     .replace(/🎯/g, '')
                     .trim();
 
@@ -339,6 +341,21 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                           <span>★</span><span>★</span><span>★</span><span>★</span><span className="text-slate-600">★</span>
                         </div>
                       </div>
+
+                      {/* Final Score (if finished/verified) */}
+                      {message.pronoActualResult && (
+                        <div className="bg-slate-950/70 rounded-xl p-2.5 border border-white/10 mb-2.5 flex items-center justify-between">
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Score Final</span>
+                            <span className="text-xs font-black text-white">{message.pronoActualResult}</span>
+                          </div>
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+                            message.pronoStatus === 'won' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                          }`}>
+                            {message.pronoStatus === 'won' ? 'Validé' : 'Non Passé'}
+                          </span>
+                        </div>
+                      )}
 
                       {/* Tactical Analysis */}
                       {analysisText && (

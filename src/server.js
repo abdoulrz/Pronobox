@@ -1105,6 +1105,61 @@ app.get('/api/pronos', async (req, res) => {
       console.warn('Could not query Prono collection:', e);
     }
 
+    const cleanStr = (s) => String(s || '').replace(/[⚽🎯🏆💡]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().trim();
+
+    // Deduplicate dbPronos itself (eliminate any legacy records with hash/invalid IDs if a real one exists)
+    const uniqueDbPronos = [];
+    const seenDbMatchups = new Map();
+
+    for (const p of dbPronos) {
+      const matchIdNum = Number(p.matchId);
+      const hasValidMatchId = matchIdNum && !isNaN(matchIdNum) && matchIdNum < 100000000;
+      const teamKey = (p.homeTeamName && p.awayTeamName) 
+        ? `${cleanStr(p.homeTeamName)}_vs_${cleanStr(p.awayTeamName)}`
+        : `id_${p._id}`;
+
+      if (!seenDbMatchups.has(teamKey)) {
+        seenDbMatchups.set(teamKey, p);
+        uniqueDbPronos.push(p);
+      } else {
+        const existing = seenDbMatchups.get(teamKey);
+        const existingHasValidId = existing.matchId && !isNaN(Number(existing.matchId)) && Number(existing.matchId) < 100000000;
+        
+        // If current item has a valid numeric API ID or is verified, replace the legacy broken one
+        if ((hasValidMatchId && !existingHasValidId) || (p.status !== 'pending' && existing.status === 'pending')) {
+          const idx = uniqueDbPronos.indexOf(existing);
+          if (idx !== -1) uniqueDbPronos[idx] = p;
+          seenDbMatchups.set(teamKey, p);
+        }
+      }
+    }
+    dbPronos = uniqueDbPronos;
+    
+    // Retroactively synchronize all verified pronostics into channels
+    try {
+      const verifiedDbPronos = dbPronos.filter(p => p.status === 'won' || p.status === 'lost');
+      for (const vp of verifiedDbPronos) {
+        await syncPronoStatusToChannels(vp.matchId, vp.status, vp.actualResult, vp.homeTeamName, vp.awayTeamName);
+      }
+    } catch (syncErr) {
+      // Non-blocking
+    }
+
+    // Build set of match identifiers from dbPronos to avoid duplicates
+    const dbMatchKeys = new Set();
+    dbPronos.forEach(p => {
+      if (p.matchId && !isNaN(Number(p.matchId))) {
+        dbMatchKeys.add(String(p.matchId));
+      }
+      if (p.homeTeamName && p.awayTeamName) {
+        const key = `${cleanStr(p.homeTeamName)}_vs_${cleanStr(p.awayTeamName)}`;
+        dbMatchKeys.add(key);
+      }
+      if (p.messageId) {
+        dbMatchKeys.add(String(p.messageId));
+      }
+    });
+
     const channelPronos = [];
     try {
       const channels = await Channel.find({}).lean();
@@ -1128,17 +1183,30 @@ app.get('/api/pronos', async (req, res) => {
             }
 
             const matchPart = parts[0] ? parts[0].trim() : '';
+            const teams = matchPart.split(' vs ');
+            const homeTeamName = teams[0] ? teams[0].replace(/[⚽🎯🏆💡]/g, '').trim() : 'Équipe 1';
+            const awayTeamName = teams[1] ? teams[1].replace(/[⚽🎯🏆💡]/g, '').trim() : 'Équipe 2';
+            const teamKey = `${cleanStr(homeTeamName)}_vs_${cleanStr(awayTeamName)}`;
+            const msgMatchId = String(msg.pronoMatchId || msg._id || '');
+
+            // Skip if this match is already present in dbPronos or earlier in channelPronos
+            if (dbMatchKeys.has(msgMatchId) || dbMatchKeys.has(teamKey) || (msg._id && dbMatchKeys.has(String(msg._id)))) {
+              return;
+            }
+
+            // Register key to prevent duplicate channel messages
+            if (msgMatchId) dbMatchKeys.add(msgMatchId);
+            dbMatchKeys.add(teamKey);
+            if (msg._id) dbMatchKeys.add(String(msg._id));
+
+            const isPremium = Boolean(ch.premium);
+
             let pickPart = String(parts[1] || '')
               .split('(⏳')[0]
               .split('(?')[0]
               .split('(✅')[0]
               .split('(❌')[0]
               .trim();
-
-            const teams = matchPart.split(' vs ');
-            const homeTeamName = teams[0] ? teams[0].trim() : 'Équipe 1';
-            const awayTeamName = teams[1] ? teams[1].trim() : 'Équipe 2';
-            const isPremium = Boolean(ch.premium);
 
             const expectedPick = pickPart || mainLine;
             const msgDate = msg.time ? new Date(msg.time) : (msg.createdAt ? new Date(msg.createdAt) : new Date());
@@ -1176,21 +1244,35 @@ app.get('/api/pronos', async (req, res) => {
     
     // Sort globally by matchDate descending, fallback to createdAt (newest first)
     allPronos.sort((a, b) => {
-      // For Mongoose documents, use .get() if available, else direct property
       const aDate = (a.matchDate || a.createdAt) || 0;
       const bDate = (b.matchDate || b.createdAt) || 0;
       const timeA = new Date(aDate).getTime();
       const timeB = new Date(bDate).getTime();
-      
-      // Fallback for invalid dates to avoid NaN breaking the sort
       return (Number.isNaN(timeB) ? 0 : timeB) - (Number.isNaN(timeA) ? 0 : timeA);
     });
 
-    if (allPronos.length > 0) {
-      cachedPronosList = allPronos;
+    // Final foolproof deduplication pass on all combined pronos
+    const finalPronos = [];
+    const seenFinalKeys = new Set();
+    for (const p of allPronos) {
+      const normKey = `${cleanStr(p.homeTeamName)}_vs_${cleanStr(p.awayTeamName)}`;
+      if (!seenFinalKeys.has(normKey)) {
+        seenFinalKeys.add(normKey);
+        finalPronos.push(p);
+      } else {
+        // If an item already exists, keep the one that has verified status (won/lost) over pending
+        const existingIdx = finalPronos.findIndex(item => `${cleanStr(item.homeTeamName)}_vs_${cleanStr(item.awayTeamName)}` === normKey);
+        if (existingIdx !== -1 && p.status !== 'pending' && finalPronos[existingIdx].status === 'pending') {
+          finalPronos[existingIdx] = p;
+        }
+      }
     }
 
-    res.json(allPronos.length > 0 ? allPronos : cachedPronosList);
+    if (finalPronos.length > 0) {
+      cachedPronosList = finalPronos;
+    }
+
+    res.json(finalPronos.length > 0 ? finalPronos : cachedPronosList);
   } catch (err) {
     console.error('Error fetching pronos stack:', err?.stack || err);
     res.json(cachedPronosList);
@@ -1409,6 +1491,99 @@ function determinePronoResult(prediction, homeGoals, awayGoals, homeTeam, awayTe
   return null;
 }
 
+// Helper to synchronize pronostic status and result into Channel messages
+async function syncPronoStatusToChannels(matchId, status, actualResult, homeTeamName, awayTeamName) {
+  try {
+    if (!status) return;
+    
+    const statusTextTag = status === 'won' ? '(✅ gagné)' : (status === 'lost' ? '(❌ perdu)' : '(⏳ en attente)');
+    const normHome = (homeTeamName || '').toLowerCase().trim();
+    const normAway = (awayTeamName || '').toLowerCase().trim();
+
+    const channels = await Channel.find({});
+    for (const ch of channels) {
+      let modified = false;
+      let matchFoundInChannel = false;
+
+      for (const msg of (ch.messages || [])) {
+        const msgText = String(msg.text || '');
+        const msgMatchId = Number(msg.pronoMatchId || msg._id || 0);
+        
+        let isMatch = false;
+        if (matchId && msgMatchId && Number(matchId) === msgMatchId) {
+          isMatch = true;
+        } else if (normHome && normAway && msgText.toLowerCase().includes(normHome) && msgText.toLowerCase().includes(normAway)) {
+          isMatch = true;
+        }
+
+        if (isMatch) {
+          matchFoundInChannel = true;
+          msg.pronoStatus = status;
+          if (actualResult) msg.pronoActualResult = actualResult;
+          if (matchId && !msg.pronoMatchId && !isNaN(Number(matchId))) msg.pronoMatchId = Number(matchId);
+
+          // Update text by replacing status tag
+          let updatedText = msgText
+            .replace(/\(⏳\s*en\s*attente\)/gi, statusTextTag)
+            .replace(/\(✅\s*gagné\)/gi, statusTextTag)
+            .replace(/\(❌\s*perdu\)/gi, statusTextTag);
+          
+          if (!updatedText.includes(statusTextTag) && (updatedText.includes(' vs ') || updatedText.includes(' — '))) {
+            const lines = updatedText.split('\n');
+            lines[0] = `${lines[0]} ${statusTextTag}`;
+            updatedText = lines.join('\n');
+          }
+
+          msg.text = updatedText;
+          modified = true;
+        }
+      }
+
+      // Also update channel.lastMessage if it references this match
+      if (ch.lastMessage && normHome && normAway && ch.lastMessage.toLowerCase().includes(normHome) && ch.lastMessage.toLowerCase().includes(normAway)) {
+        let updatedLast = ch.lastMessage
+          .replace(/\(⏳\s*en\s*attente\)/gi, statusTextTag)
+          .replace(/\(✅\s*gagné\)/gi, statusTextTag)
+          .replace(/\(❌\s*perdu\)/gi, statusTextTag);
+        ch.lastMessage = updatedLast;
+        modified = true;
+      }
+
+      // If status is verified (won/lost) and this channel had this pronostic, post an automatic notification message
+      if (matchFoundInChannel && (status === 'won' || status === 'lost')) {
+        const announcementHeader = `🎯 RÉSULTAT DU PRONOSTIC : ${homeTeamName} vs ${awayTeamName}`;
+        const alreadyAnnounced = (ch.messages || []).some(m => String(m.text || '').includes(announcementHeader));
+        
+        if (!alreadyAnnounced && ch.owner) {
+          const outcomeEmoji = status === 'won' ? '✅ GAGNÉ 🎉' : '❌ PERDU';
+          const notificationMsg = `${announcementHeader}\n\n⚽ Match : ${homeTeamName} vs ${awayTeamName}\n📊 Score Final : ${actualResult || 'Terminé'}\n🏆 Résultat : ${outcomeEmoji}`;
+          
+          ch.messages.push({
+            user: ch.owner,
+            text: notificationMsg,
+            time: new Date(),
+            isVoiceMessage: false,
+            isImage: false,
+            likes: 0,
+            reactions: []
+          });
+
+          ch.lastMessage = `🎯 ${homeTeamName} vs ${awayTeamName} (${status === 'won' ? '✅ Gagné' : '❌ Perdu'})`;
+          if (ch.statistics) ch.statistics.messagesSent = (ch.statistics.messagesSent || 0) + 1;
+          modified = true;
+        }
+      }
+
+      if (modified) {
+        await ch.save();
+        console.log(`[SyncChannels] Synchronized prono status '${status}' to channel: ${ch.name}`);
+      }
+    }
+  } catch (err) {
+    console.error('[SyncChannels] Error syncing status to channel messages:', err);
+  }
+}
+
 async function runBatchVerification() {
   try {
     const bufferTime = new Date();
@@ -1475,7 +1650,6 @@ async function runBatchVerification() {
       }
 
       // Update global status based on the parsed results
-      // If any pending part couldn't be parsed, it remains pending/partial
       const freeNeedsReview = (prono.freeExpectedResult && prono.freeStatus === 'pending');
       const premiumNeedsReview = (prono.premiumExpectedResult && prono.premiumStatus === 'pending');
       
@@ -1487,11 +1661,13 @@ async function runBatchVerification() {
         await prono.save();
         results.push({ id: prono._id, match: `${prono.homeTeamName} vs ${prono.awayTeamName}`, status: 'manual_review', actualResult });
       } else {
-        // If everything is parsed, consider the overall match verified.
-        // We set global status to 'won' if the premium pick (or free if no premium) won, else 'lost'.
         const mainResult = prono.premiumExpectedResult ? prono.premiumStatus : prono.freeStatus;
         prono.status = mainResult || 'won'; // fallback
         await prono.save();
+
+        // Sync to channel messages immediately
+        await syncPronoStatusToChannels(prono.matchId, prono.status, actualResult, prono.homeTeamName, prono.awayTeamName);
+
         results.push({ id: prono._id, match: `${prono.homeTeamName} vs ${prono.awayTeamName}`, status: prono.status, actualResult });
       }
     }
@@ -1516,16 +1692,39 @@ app.post('/api/pronos/verify-all', authenticateToken, requireAdmin, async (req, 
   }
 });
 
-// Run batch verification automatically every 24 hours
-setInterval(async () => {
-  console.log('[Auto-Verify] Running scheduled pronostic verification...');
-  try {
-    const res = await runBatchVerification();
-    console.log('[Auto-Verify] Result:', res.message);
-  } catch (err) {
-    console.error('[Auto-Verify] Error:', err.message);
-  }
-}, 24 * 60 * 60 * 1000);
+// Run batch verification automatically every day at 12:00 PM UTC (12:00:00 UTC)
+function scheduleDailyVerificationAt12PMUTC() {
+  const scheduleNext = () => {
+    const now = new Date();
+    const next12UTC = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      12, 0, 0, 0
+    ));
+    // If 12:00 UTC already passed today, schedule for tomorrow 12:00 UTC
+    if (now.getTime() >= next12UTC.getTime()) {
+      next12UTC.setUTCDate(next12UTC.getUTCDate() + 1);
+    }
+    const delay = next12UTC.getTime() - now.getTime();
+    console.log(`[Auto-Verify] Next automatic verification scheduled for 12:00 PM UTC in ${(delay / 1000 / 60).toFixed(1)} minutes (${next12UTC.toISOString()})`);
+    
+    setTimeout(async () => {
+      console.log('[Auto-Verify] 12:00 PM UTC reached! Running daily pronostic verification...');
+      try {
+        const res = await runBatchVerification();
+        console.log('[Auto-Verify] Daily verification finished:', res.message);
+      } catch (err) {
+        console.error('[Auto-Verify] Daily verification error:', err.message);
+      }
+      scheduleNext();
+    }, delay);
+  };
+
+  scheduleNext();
+}
+
+scheduleDailyVerificationAt12PMUTC();
 
 // One-time fix: find pending pronos with invalid matchIds, look up real fixture IDs by team names, patch & verify
 app.post('/api/pronos/fix-match-ids', authenticateToken, requireAdmin, async (req, res) => {
@@ -1791,6 +1990,9 @@ app.post('/api/pronos/:id/verify', authenticateToken, requireAdmin, async (req, 
     prono.status = mainResult || 'won';
     await prono.save();
 
+    // Sync to channel messages
+    await syncPronoStatusToChannels(prono.matchId, prono.status, actualResult, prono.homeTeamName, prono.awayTeamName);
+
     res.json({ message: `Prono verified: ${prono.status}`, prono });
   } catch (err) {
     console.error('Error verifying prono:', err);
@@ -1842,6 +2044,16 @@ app.put('/api/pronos/:id/status', authenticateToken, requireAdmin, async (req, r
       updateData,
       { new: true }
     );
+
+    // Sync to channel messages
+    await syncPronoStatusToChannels(
+      prono.matchId,
+      prono.status,
+      prono.actualResult,
+      prono.homeTeamName,
+      prono.awayTeamName
+    );
+
     res.json(prono);
   } catch (err) {
     console.error('Error updating prono status:', err);
@@ -2085,9 +2297,36 @@ app.post('/api/channels', authenticateToken, async (req, res) => {
 
 app.get('/api/channels', async (req, res) => {
   try {
-    const channels = await Channel.find().
-    populate('owner', '_id username avatar').
-    populate('members', '_id username avatar');
+    const channels = await Channel.find()
+      .populate('owner', '_id username avatar')
+      .populate('members', '_id username avatar');
+
+    // Auto-sync channel lastMessage with verified pronos
+    try {
+      const cleanStr = (s) => String(s || '').replace(/[⚽🎯🏆💡]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().trim();
+      const verifiedPronos = await Prono.find({ status: { $in: ['won', 'lost'] } }).lean();
+
+      for (const ch of channels) {
+        if (ch.lastMessage && ch.lastMessage.includes(' vs ')) {
+          for (const vp of verifiedPronos) {
+            const normHome = cleanStr(vp.homeTeamName);
+            const normAway = cleanStr(vp.awayTeamName);
+            if (normHome && normAway && cleanStr(ch.lastMessage).includes(normHome) && cleanStr(ch.lastMessage).includes(normAway)) {
+              const statusTag = vp.status === 'won' ? '(✅ gagné)' : '(❌ perdu)';
+              const updated = ch.lastMessage
+                .replace(/\(⏳\s*en\s*attente\)/gi, statusTag)
+                .replace(/\(✅\s*gagné\)/gi, statusTag)
+                .replace(/\(❌\s*perdu\)/gi, statusTag);
+              if (updated !== ch.lastMessage) {
+                ch.lastMessage = updated;
+                await Channel.updateOne({ _id: ch._id }, { $set: { lastMessage: updated } });
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {}
+
     res.json(channels);
   } catch (error) {
     console.error('Get channels error:', error);
@@ -2097,13 +2336,51 @@ app.get('/api/channels', async (req, res) => {
 
 app.get('/api/channels/:id', async (req, res) => {
   try {
-    const channel = await Channel.findById(req.params.id).
-    populate('owner', '_id username avatar').
-    populate('members', '_id username avatar').
-    populate('messages.user', '_id username avatar role');
+    const channel = await Channel.findById(req.params.id)
+      .populate('owner', '_id username avatar')
+      .populate('members', '_id username avatar')
+      .populate('messages.user', '_id username avatar role');
     if (!channel) {
       return res.status(404).json({ message: 'Channel not found' });
     }
+
+    // Auto-sync pronostic statuses on read
+    try {
+      const cleanStr = (s) => String(s || '').replace(/[⚽🎯🏆💡]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().trim();
+      const verifiedPronos = await Prono.find({ status: { $in: ['won', 'lost'] } }).lean();
+      
+      let modified = false;
+      for (const msg of (channel.messages || [])) {
+        const msgText = String(msg.text || '');
+        if (msgText.includes(' vs ')) {
+          for (const vp of verifiedPronos) {
+            const normHome = cleanStr(vp.homeTeamName);
+            const normAway = cleanStr(vp.awayTeamName);
+            const isMatch = (vp.matchId && msg.pronoMatchId && Number(vp.matchId) === Number(msg.pronoMatchId)) ||
+              (normHome && normAway && cleanStr(msgText).includes(normHome) && cleanStr(msgText).includes(normAway));
+
+            if (isMatch) {
+              if (msg.pronoStatus !== vp.status || msg.pronoActualResult !== vp.actualResult) {
+                msg.pronoStatus = vp.status;
+                msg.pronoActualResult = vp.actualResult;
+                const statusTag = vp.status === 'won' ? '(✅ gagné)' : '(❌ perdu)';
+                msg.text = msgText
+                  .replace(/\(⏳\s*en\s*attente\)/gi, statusTag)
+                  .replace(/\(✅\s*gagné\)/gi, statusTag)
+                  .replace(/\(❌\s*perdu\)/gi, statusTag);
+                modified = true;
+              }
+            }
+          }
+        }
+      }
+      if (modified) {
+        await channel.save();
+      }
+    } catch (e) {
+      console.warn('Channel on-read sync warning:', e);
+    }
+
     res.json(channel);
   } catch (error) {
     console.error('Get channel error:', error);

@@ -49,14 +49,32 @@ const Pronos = () => {
         const res = await fetch('/api/pronos');
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          const hasCaracas = data.some(p => String(p.homeTeamName || '').toLowerCase().includes('caracas'));
-          const merged = hasCaracas ? data : [...DEFAULT_CHANNEL_PRONOS, ...data];
-          merged.sort((a, b) => {
+          const sorted = [...data].sort((a, b) => {
             const timeA = new Date(a.matchDate || a.createdAt || 0).getTime();
             const timeB = new Date(b.matchDate || b.createdAt || 0).getTime();
             return (Number.isNaN(timeB) ? 0 : timeB) - (Number.isNaN(timeA) ? 0 : timeA);
           });
-          setPronos(merged);
+
+          // Client-side deduplication guarantee
+          const clean = (s: string) => String(s || '').replace(/[⚽🎯🏆💡]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().trim();
+          const uniqueList: any[] = [];
+          const seen = new Set<string>();
+
+          for (const item of sorted) {
+            const key = `${clean(item.homeTeamName)}_vs_${clean(item.awayTeamName)}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              uniqueList.push(item);
+            } else {
+              // Prefer verified (won/lost) over pending
+              const idx = uniqueList.findIndex(p => `${clean(p.homeTeamName)}_vs_${clean(p.awayTeamName)}` === key);
+              if (idx !== -1 && item.status !== 'pending' && uniqueList[idx].status === 'pending') {
+                uniqueList[idx] = item;
+              }
+            }
+          }
+
+          setPronos(uniqueList);
         } else {
           setPronos(DEFAULT_CHANNEL_PRONOS);
         }

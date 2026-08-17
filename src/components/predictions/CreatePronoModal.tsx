@@ -9,6 +9,7 @@ export interface PronoSubmissionData {
   analysis?: string;
   formattedTitle: string;
   matchId?: string | number;
+  matchDate?: string | Date;
 }
 
 interface CreatePronoModalProps {
@@ -102,10 +103,11 @@ export function getProno6Options(matchString: string): PronoOption[] {
 }
 
 const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, onSubmit }) => {
-  const defaultMatchObjects = DEFAULT_MATCHES.map((name, i) => ({ id: `default-${i}`, name }));
-  const [matchList, setMatchList] = useState<{ id: string | number; name: string }[]>(defaultMatchObjects);
+  const defaultMatchObjects = DEFAULT_MATCHES.map((name, i) => ({ id: `default-${i}`, name, matchDate: new Date() }));
+  const [matchList, setMatchList] = useState<{ id: string | number; name: string; matchDate?: string | Date; league?: string }[]>(defaultMatchObjects);
   const [matchQuery, setMatchQuery] = useState('');
-  const [selectedMatch, setSelectedMatch] = useState<{ id: string | number; name: string } | null>(null);
+  const [searchDate, setSearchDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedMatch, setSelectedMatch] = useState<{ id: string | number; name: string; matchDate?: string | Date; league?: string } | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loadingMatches, setLoadingMatches] = useState(false);
 
@@ -116,35 +118,44 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Fetch real live matches from /api/football/matches on modal open
+  const fetchMatchesForDate = (dateStr: string) => {
+    if (!dateStr) return;
+    setLoadingMatches(true);
+
+    fetch(`/api/football/matches?date=${dateStr}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.response && Array.isArray(data.response) && data.response.length > 0) {
+          const formattedDbMatches = data.response.map((item: any) => {
+            const home = item.teams?.home?.name || 'Équipe 1';
+            const away = item.teams?.away?.name || 'Équipe 2';
+            return {
+              id: item.fixture?.id || Date.now(),
+              name: `${home} vs ${away}`,
+              matchDate: item.fixture?.date || dateStr,
+              league: item.league?.name || ''
+            };
+          });
+          
+          const uniqueMatches = Array.from(new Map(formattedDbMatches.map(m => [m.name, m])).values());
+          setMatchList(uniqueMatches);
+        } else {
+          setMatchList(defaultMatchObjects);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load live football API matches, using defaults:', err);
+        setMatchList(defaultMatchObjects);
+      })
+      .finally(() => {
+        setLoadingMatches(false);
+      });
+  };
+
+  // Fetch real matches for selected date when modal opens or date changes
   useEffect(() => {
     if (isOpen) {
-      const today = new Date().toISOString().split('T')[0];
-      setLoadingMatches(true);
-
-      fetch(`/api/football/matches?date=${today}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && data.response && Array.isArray(data.response) && data.response.length > 0) {
-            const formattedDbMatches = data.response.map((item: any) => {
-              const home = item.teams?.home?.name || 'Équipe 1';
-              const away = item.teams?.away?.name || 'Équipe 2';
-              return { id: item.fixture?.id || Date.now(), name: `${home} vs ${away}` };
-            });
-            
-            // Deduplicate by name
-            const allMatches = [...formattedDbMatches, ...defaultMatchObjects];
-            const uniqueMatches = Array.from(new Map(allMatches.map(m => [m.name, m])).values());
-            
-            setMatchList(uniqueMatches);
-          }
-        })
-        .catch((err) => {
-          console.warn('Could not load live football API matches, using defaults:', err);
-        })
-        .finally(() => {
-          setLoadingMatches(false);
-        });
+      fetchMatchesForDate(searchDate);
     }
   }, [isOpen]);
 
@@ -168,7 +179,7 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
   const currentMatchName = selectedMatch ? selectedMatch.name : matchQuery;
   const options6 = getProno6Options(currentMatchName);
 
-  const handleSelectMatch = (match: { id: string | number; name: string }) => {
+  const handleSelectMatch = (match: { id: string | number; name: string; matchDate?: string | Date; league?: string }) => {
     setSelectedMatch(match);
     setMatchQuery(match.name);
     setShowDropdown(false);
@@ -190,6 +201,7 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
     e.preventDefault();
     const finalMatch = selectedMatch ? selectedMatch.name : (matchQuery || 'Match Football');
     const finalMatchId = selectedMatch && typeof selectedMatch.id === 'number' ? selectedMatch.id : undefined;
+    const finalMatchDate = selectedMatch?.matchDate || new Date(searchDate);
     
     const finalPick = pick || (options6[0]?.fullPick || 'V1');
     const formattedTitle = `${finalMatch} — ${finalPick} (⏳ en attente)`;
@@ -201,7 +213,8 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
       confidence,
       analysis,
       formattedTitle,
-      matchId: finalMatchId
+      matchId: finalMatchId,
+      matchDate: finalMatchDate
     });
 
     onClose();
@@ -232,7 +245,7 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-5 flex-1">
           
-          {/* 1. Real-time Autocomplete Match Search Engine */}
+          {/* 1. Real-time Autocomplete Match Search Engine with Date Selector */}
           <div className="relative" ref={dropdownRef}>
             <div className="flex justify-between items-center mb-1.5">
               <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
@@ -241,6 +254,29 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
               <span className="text-[10px] text-brand-green font-semibold">
                 {loadingMatches ? 'Chargement API...' : 'API Matchs Connectée'}
               </span>
+            </div>
+
+            {/* Date Selector Row */}
+            <div className="flex gap-2 mb-2">
+              <div className="flex-1">
+                <input
+                  type="date"
+                  value={searchDate}
+                  onChange={(e) => {
+                    setSearchDate(e.target.value);
+                    fetchMatchesForDate(e.target.value);
+                  }}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-xs font-bold text-white focus:outline-none focus:border-brand-green"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => fetchMatchesForDate(searchDate)}
+                disabled={loadingMatches}
+                className="bg-brand-green/20 hover:bg-brand-green/30 text-brand-green border border-brand-green/40 px-3.5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1"
+              >
+                {loadingMatches ? '...' : 'Actualiser'}
+              </button>
             </div>
 
             <div className="relative">
