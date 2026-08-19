@@ -11,6 +11,7 @@ export const ChannelTabs: React.FC<ChannelTabsProps> = ({ activeTab, setActiveTa
     { id: 'all', label: 'Tous' },
     { id: 'premium', label: 'Premium' },
     { id: 'free', label: 'Gratuits' },
+    { id: 'top_rated', label: 'Les mieux notés' },
     { id: 'joined', label: 'Rejoints' },
     { id: 'pinned', label: 'Épinglés' }
   ];
@@ -20,15 +21,15 @@ export const ChannelTabs: React.FC<ChannelTabsProps> = ({ activeTab, setActiveTa
   }
 
   return (
-    <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
-      <div className="flex space-x-4 overflow-x-auto pb-1">
+    <div className="mb-4">
+      <div className="flex space-x-2 overflow-x-auto pb-1 scrollbar-hide">
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            className={`px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
               activeTab === tab.id
-                ? 'bg-green-600 text-white'
-                : 'bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-500'
+                ? 'bg-brand-green text-white shadow-md shadow-emerald-500/20'
+                : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800/90'
             }`}
             onClick={() => setActiveTab(tab.id)}
           >

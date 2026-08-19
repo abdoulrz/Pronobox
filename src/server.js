@@ -194,13 +194,20 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Middleware to require Pro or Admin status
-const requireProOrAdmin = (req, res, next) => {
+// Middleware to require Pro or Admin status (fetches fresh DB state to prevent stale JWT bypass)
+const requireProOrAdmin = async (req, res, next) => {
   if (!req.user) return res.status(401).json({ message: 'Authentication required' });
-  if (req.user.role === 'admin' || req.user.isPro) {
-    next();
-  } else {
-    res.status(403).json({ message: 'This action requires a Pro or Admin account' });
+  try {
+    const freshUser = await User.findById(req.user.id).select('role isPro accountType');
+    if (!freshUser) return res.status(401).json({ message: 'User not found' });
+    if (freshUser.role === 'admin' || freshUser.isPro || freshUser.accountType === 'tipster') {
+      next();
+    } else {
+      res.status(403).json({ message: 'This action requires a Pro or Admin account' });
+    }
+  } catch (error) {
+    console.error('requireProOrAdmin middleware error:', error);
+    res.status(500).json({ message: 'Server error during authorization check' });
   }
 };
 
@@ -217,7 +224,12 @@ const requireAdmin = (req, res, next) => {
 // Auth routes
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, accountType } = req.body;
+    // Validate accountType
+    const validAccountTypes = ['standard', 'tipster', 'wildcard'];
+    const selectedAccountType = validAccountTypes.includes(accountType) ? accountType : 'standard';
+    const isPro = selectedAccountType === 'tipster';
+
     // Check if user already exists
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
@@ -227,12 +239,14 @@ app.post('/api/auth/register', async (req, res) => {
     const user = new User({
       username,
       email,
-      password
+      password,
+      accountType: selectedAccountType,
+      isPro
     });
     await user.save();
-    // Generate token with role and isPro status
+    // Generate token with role, isPro and accountType status
     const token = jwt.sign(
-      { id: user._id, role: user.role, isPro: user.isPro },
+      { id: user._id, role: user.role, isPro: user.isPro, accountType: user.accountType },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -243,7 +257,9 @@ app.post('/api/auth/register', async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        accountType: user.accountType,
         isPro: user.isPro,
+        isCertified: user.isCertified || false,
         avatar: user.avatar,
         walletBalance: user.walletBalance,
         unlockedResources: user.unlockedResources || []
@@ -273,7 +289,7 @@ app.post('/api/auth/login', async (req, res) => {
     await user.save();
     // Generate token
     const token = jwt.sign(
-      { id: user._id, role: user.role },
+      { id: user._id, role: user.role, isPro: user.isPro, accountType: user.accountType },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -284,7 +300,9 @@ app.post('/api/auth/login', async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
-        isPro: user.isPro,
+        accountType: user.accountType || 'standard',
+        isPro: user.isPro || false,
+        isCertified: user.isCertified || false,
         avatar: user.avatar,
         walletBalance: user.walletBalance,
         unlockedResources: user.unlockedResources || []
@@ -298,7 +316,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.post('/api/auth/google', async (req, res) => {
   try {
-    const { credential } = req.body;
+    const { credential, accountType } = req.body;
     if (!credential) {
       return res.status(400).json({ message: 'Google credential is required' });
     }
@@ -338,12 +356,16 @@ app.post('/api/auth/google', async (req, res) => {
       // Generate secure random password
       const randomPassword = crypto.randomBytes(16).toString('hex');
 
+      const validAccountTypes = ['standard', 'tipster', 'wildcard'];
+      const initialAccountType = (accountType && validAccountTypes.includes(accountType)) ? accountType : 'standard';
+
       user = new User({
         username,
         email: email.toLowerCase(),
         password: randomPassword,
         avatar: picture || undefined,
-        isPro: false
+        accountType: initialAccountType,
+        isPro: initialAccountType === 'tipster'
       });
       await user.save();
     } else {
@@ -358,7 +380,7 @@ app.post('/api/auth/google', async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { id: user._id, role: user.role, isPro: user.isPro },
+      { id: user._id, role: user.role, isPro: user.isPro, accountType: user.accountType },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -370,7 +392,9 @@ app.post('/api/auth/google', async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
-        isPro: user.isPro,
+        accountType: user.accountType || 'standard',
+        isPro: user.isPro || false,
+        isCertified: user.isCertified || false,
         avatar: user.avatar,
         walletBalance: user.walletBalance,
         unlockedResources: user.unlockedResources || []
@@ -379,6 +403,42 @@ app.post('/api/auth/google', async (req, res) => {
   } catch (error) {
     console.error('Google Auth Route Error:', error);
     res.status(500).json({ message: 'Authentication failed: ' + error.message });
+  }
+});
+
+// Upgrade user role (e.g. Wildcard or Standard to Tipster)
+app.post('/api/users/upgrade-role', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur introuvable' });
+    }
+    const { targetRole } = req.body;
+    if (targetRole === 'tipster') {
+      user.accountType = 'tipster';
+      user.isPro = true;
+      await user.save();
+
+      return res.json({
+        message: 'Félicitations, votre compte est désormais configuré en Tipster !',
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          accountType: user.accountType,
+          isPro: user.isPro,
+          isCertified: user.isCertified || false,
+          avatar: user.avatar,
+          walletBalance: user.walletBalance,
+          unlockedResources: user.unlockedResources || []
+        }
+      });
+    }
+    return res.status(400).json({ message: 'Rôle cible invalide' });
+  } catch (error) {
+    console.error('Upgrade role error:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -2132,9 +2192,14 @@ app.get('/api/users/me', authenticateToken, async (req, res) => {
 app.put('/api/users/me', authenticateToken, async (req, res) => {
   try {
     const updates = req.body;
-    // Don't allow updating sensitive fields
+    // Don't allow updating sensitive fields via self-service endpoint
     delete updates.password;
     delete updates.role;
+    delete updates.accountType;
+    delete updates.isPro;
+    delete updates.isCertified;
+    delete updates.isBanned;
+    delete updates.walletBalance;
 
     if (updates.email || updates.username) {
       const query = [];
@@ -2380,6 +2445,125 @@ app.get('/api/channels', async (req, res) => {
         }
       }
     } catch (e) {}
+
+    // Compute per-channel win rate and prediction metrics from all DB pronos, cached pronos & channel messages
+    try {
+      const cleanStr = (s) => String(s || '').replace(/[⚽🎯🏆💡]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().trim();
+      const allDbPronos = await Prono.find().lean();
+      const allPronosPool = [...allDbPronos, ...(typeof cachedPronosList !== 'undefined' ? cachedPronosList : [])];
+
+      // Convert to plain JS objects to guarantee winRate & lastWonProno serialize cleanly
+      const channelList = channels.map(ch => {
+        const chObj = ch.toObject ? ch.toObject() : { ...ch };
+        const chId = String(ch._id || ch.id);
+        const chNameLower = (ch.name || '').toLowerCase();
+
+        // Deduplicated map of predictions published for this channel
+        const channelPronos = new Map();
+
+        // 1. Check allPronosPool (DB pronos + cached)
+        for (const p of allPronosPool) {
+          let isMatch = false;
+
+          if (p.channelId && String(p.channelId) === chId) {
+            isMatch = true;
+          } else if (p.league && p.league.toLowerCase().includes(chNameLower)) {
+            isMatch = true;
+          } else {
+            const normHome = cleanStr(p.homeTeamName);
+            const normAway = cleanStr(p.awayTeamName);
+            if (normHome && normAway) {
+              if (ch.lastMessage && cleanStr(ch.lastMessage).includes(normHome) && cleanStr(ch.lastMessage).includes(normAway)) {
+                isMatch = true;
+              } else if (ch.messages) {
+                for (const msg of ch.messages) {
+                  const msgText = cleanStr(msg.text);
+                  if (msgText.includes(normHome) && msgText.includes(normAway)) {
+                    isMatch = true;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          if (isMatch) {
+            const key = p.matchId ? `id_${p.matchId}` : `${cleanStr(p.homeTeamName)}_vs_${cleanStr(p.awayTeamName)}`;
+            channelPronos.set(key, {
+              home: p.homeTeamName,
+              away: p.awayTeamName,
+              status: p.status || p.freeStatus || 'pending',
+              result: p.freeExpectedResult || p.premiumExpectedResult || '',
+              verifiedAt: p.verifiedAt || p.updatedAt
+            });
+          }
+        }
+
+        // 2. Also check ch.messages for any embedded prediction messages
+        if (ch.messages) {
+          for (const msg of ch.messages) {
+            const text = String(msg.text || '');
+            if (text.includes(' vs ') || text.includes('PRONOSTIC')) {
+              let home = '';
+              let away = '';
+              if (text.includes(' vs ')) {
+                const parts = text.split('\n')[0].split(' — ')[0].split(' - ')[0].split(' vs ');
+                if (parts.length >= 2) {
+                  home = parts[0].replace(/[⚽🎯🏆💡]/g, '').trim();
+                  away = parts[1].replace(/[⚽🎯🏆💡]/g, '').split('(')[0].trim();
+                }
+              }
+              if (home && away) {
+                const key = msg.pronoMatchId ? `id_${msg.pronoMatchId}` : `${cleanStr(home)}_vs_${cleanStr(away)}`;
+                let status = msg.pronoStatus || 'pending';
+                if (text.includes('(✅') || text.includes('gagné') || text.includes('✅')) {
+                  status = 'won';
+                } else if (text.includes('(❌') || text.includes('perdu') || text.includes('❌')) {
+                  status = 'lost';
+                }
+
+                if (!channelPronos.has(key) || status === 'won' || status === 'lost') {
+                  channelPronos.set(key, {
+                    home,
+                    away,
+                    status,
+                    result: msg.pronoActualResult || '',
+                    verifiedAt: msg.time
+                  });
+                }
+              }
+            }
+          }
+        }
+
+        const pronoList = Array.from(channelPronos.values());
+        const evaluated = pronoList.filter(p => p.status === 'won' || p.status === 'lost');
+        const wonList = evaluated.filter(p => p.status === 'won');
+
+        // Computed Win Rate (null if 0 evaluated pronos)
+        chObj.winRate = evaluated.length > 0 ? Math.round((wonList.length / evaluated.length) * 100) : null;
+        chObj.totalPronosCount = pronoList.length;
+
+        // Last won prono preview
+        if (wonList.length > 0) {
+          wonList.sort((a, b) => new Date(b.verifiedAt || 0).getTime() - new Date(a.verifiedAt || 0).getTime());
+          const lastWon = wonList[0];
+          chObj.lastWonProno = {
+            home: lastWon.home,
+            away: lastWon.away,
+            result: lastWon.result || 'Gagné'
+          };
+        } else {
+          chObj.lastWonProno = null;
+        }
+
+        return chObj;
+      });
+
+      return res.json(channelList);
+    } catch (e) {
+      console.error('Win rate calculation error:', e);
+    }
 
     res.json(channels);
   } catch (error) {
@@ -3016,6 +3200,7 @@ const initializeMockData = async () => {
         password: 'pro123',
         role: 'user',
         isPro: true,
+        accountType: 'tipster',
         walletBalance: 250,
         avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
       });

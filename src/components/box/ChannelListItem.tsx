@@ -30,18 +30,28 @@ export const ChannelListItem: React.FC<ChannelListItemProps> = ({
 }) => {
   const [showEnlargedAvatar, setShowEnlargedAvatar] = React.useState(false);
   const features = (channelFeatures[channel.id] || {}) as Record<string, boolean>;
+  const hasWinRate = channel.winRate !== null && channel.winRate !== undefined && !isNaN(Number(channel.winRate));
+  const rateValue = hasWinRate ? Number(channel.winRate) : null;
+  const winRateColor = (rateValue || 0) >= 50 ? 'text-brand-green' : 'text-amber-500';
+
   return (
     <div
-      className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+      className={`rounded-2xl border transition-all duration-200 cursor-pointer overflow-hidden p-4 sm:p-5 shadow-lg ${
+        channel.premium
+          ? 'bg-gradient-to-b from-amber-950/20 via-[#131724] to-[#0D111D] border-amber-500/35 hover:border-amber-500/60 shadow-amber-500/5'
+          : 'bg-[#0D111D]/95 border-slate-800/90 hover:border-slate-700/90 shadow-slate-950/50'
+      }`}
       onClick={() => onOpen(channel.id)}
     >
-      <div className="flex items-start">
-        <div 
+      {/* ── Top Header: Avatar + Channel Info + Win Rate ─────────── */}
+      <div className="flex items-start gap-3 sm:gap-3.5">
+        {/* Avatar */}
+        <div
           onClick={(e) => {
             e.stopPropagation();
             setShowEnlargedAvatar(true);
           }}
-          className="w-12 h-12 rounded-full overflow-hidden mr-4 flex-shrink-0 border border-gray-200 dark:border-gray-600 cursor-pointer hover:opacity-90 transition-opacity"
+          className="w-12 h-12 rounded-2xl overflow-hidden shrink-0 border border-slate-700/80 bg-slate-850 cursor-pointer hover:opacity-90 transition-opacity shadow-inner"
           title="Agrandir la photo"
         >
           <img
@@ -53,218 +63,169 @@ export const ChannelListItem: React.FC<ChannelListItemProps> = ({
             }}
           />
         </div>
+
+        {/* Name + Badges + Subtitle */}
         <div className="flex-1 min-w-0">
-          <div className="flex justify-between items-start">
-            <h3 className="font-medium truncate dark:text-white">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-bold text-sm sm:text-base text-white truncate">
               {channel.name}
-              {channel.premium && (
-                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100">
-                  Premium
-                </span>
-              )}
-              {channel.owner && channel.owner.id === currentUserId && (
-                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100">
-                  Propriétaire
-                </span>
-              )}
             </h3>
-            <div className="flex items-center">
-              <span className="text-xs text-gray-500 dark:text-gray-400 mr-2">12:45</span>
-              {channel.joined && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onTogglePin(channel.id);
-                  }}
-                  className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mr-2"
-                  title={channel.pinned ? 'Désépingler' : 'Épingler'}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className={`h-4 w-4 ${channel.pinned ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}
-                    fill={channel.pinned ? 'currentColor' : 'none'}
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                    />
-                  </svg>
-                </button>
-              )}
-              {isPro && (channel.owner?.id === currentUserId || isEditing) && (
-                <button
-                  title="Modifier le canal"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleEdit(channel.id);
-                  }}
-                  className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
-                    />
-                  </svg>
-                </button>
-              )}
-            </div>
-          </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">
-            {channel.lastMessage || 'Aucun message'}
-          </p>
-          <div className="flex justify-between items-center mt-2">
-            <div className="flex items-center">
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {channel.members.toLocaleString()} membres
+
+            {/* Premium / Gratuit badge */}
+            {channel.premium ? (
+              <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">
+                ★ PREMIUM
               </span>
-              {channel.premium && (
-                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                  {channel.price}€/mois
-                </span>
-              )}
-            </div>
-            {channel.joined ? (
-              <span className="text-xs text-green-600 dark:text-green-400 font-medium">
-                Rejoint
-              </span>
-            ) : isPro ? (
-              <button
-                className="px-3 py-1 rounded-full bg-green-600 hover:bg-green-700 text-white text-xs font-medium"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onJoin(channel);
-                }}
-                disabled={isProcessingJoin}
-              >
-                Accès Pro
-              </button>
             ) : (
-              <button
-                className={`px-3 py-1 rounded-full ${channel.premium ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} text-white text-xs font-medium flex items-center`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onJoin(channel);
-                }}
-                disabled={isProcessingJoin}
-              >
-                {isProcessingJoin ? (
-                  <>
-                    <svg
-                      className="animate-spin -ml-1 mr-1 h-3 w-3 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    <span>Traitement...</span>
-                  </>
-                ) : channel.premium ? (
-                  "S'abonner"
-                ) : (
-                  'Rejoindre'
-                )}
-              </button>
+              <span className="inline-flex items-center bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">
+                GRATUIT
+              </span>
+            )}
+
+            {channel.owner && String(channel.owner.id) === String(currentUserId) && (
+              <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0">
+                Propriétaire
+              </span>
+            )}
+
+            {/* Pin badge indicator */}
+            {channel.pinned && (
+              <span className="text-amber-400 shrink-0" title="Épinglé">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                </svg>
+              </span>
             )}
           </div>
 
-          {isEditing && isPro && channel.owner?.id === currentUserId && (
-            <div
-              className="mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                Gestion du canal
-              </h4>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                      Messages vocaux
-                    </p>
-                  </div>
-                  <label className="relative inline-block w-10 h-6 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="sr-only peer"
-                      title="Messages vocaux"
-                      checked={features.voiceMessages || false}
-                      onChange={() => onFeatureToggle(channel.id, 'voiceMessages')}
-                    />
-                    <div className="w-10 h-6 bg-gray-300 dark:bg-gray-600 rounded-full peer peer-checked:bg-green-600 peer-checked:after:translate-x-4 after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-                  </label>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                      Commentaires
-                    </p>
-                  </div>
-                  <label className="relative inline-block w-10 h-6 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="sr-only peer"
-                      title="Commentaires"
-                      checked={features.comments || false}
-                      onChange={() => onFeatureToggle(channel.id, 'comments')}
-                    />
-                    <div className="w-10 h-6 bg-gray-300 dark:bg-gray-600 rounded-full peer peer-checked:bg-green-600 peer-checked:after:translate-x-4 after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Members + Owner */}
+          <p className="text-xs text-slate-400 mt-1">
+            {(channel.members || 0).toLocaleString()} membres
+            {channel.owner?.username && (
+              <> · <span className="text-slate-300 font-medium">{channel.owner.username}</span></>
+            )}
+          </p>
         </div>
+
+        {/* Win Rate (Top Right) */}
+        {hasWinRate && (
+          <div className="text-right shrink-0 pl-2">
+            <span className={`text-xl sm:text-2xl font-black tabular-nums ${winRateColor}`}>
+              {rateValue}%
+            </span>
+            <p className="text-[10px] text-slate-400 -mt-0.5 font-medium">réussite</p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Middle: Last Won Prono or Last Message ───────────────────── */}
+      <div className="mt-3.5 pt-3 border-t border-slate-800/80 text-xs text-slate-400">
+        {channel.lastWonProno ? (
+          <p className="flex items-center gap-1.5 text-slate-300">
+            <span className="text-brand-green font-bold">✓</span>
+            <span>
+              Dernier prono gagné · <strong className="text-white font-semibold">{channel.lastWonProno.home} vs {channel.lastWonProno.away}</strong>
+              {channel.lastWonProno.result && <> — <span className="text-emerald-300 font-medium">{channel.lastWonProno.result}</span></>}
+            </span>
+          </p>
+        ) : channel.lastMessage && (channel.lastMessage.includes(' vs ') || channel.lastMessage.includes('PRONOSTIC')) ? (
+          <p className="flex items-center gap-1.5 text-slate-300 truncate">
+            <span className="text-brand-green font-bold">✓</span>
+            <span className="truncate">{channel.lastMessage}</span>
+          </p>
+        ) : channel.lastMessage ? (
+          <p className="flex items-center gap-1.5 text-slate-300 truncate">
+            <span className="text-slate-400">💬</span>
+            <span className="truncate">{channel.lastMessage}</span>
+          </p>
+        ) : (
+          <p className="text-slate-500 italic">
+            Aucun message publié pour le moment
+          </p>
+        )}
+      </div>
+
+      {/* ── Bottom: Action Button + Pin Toggle ───────────────────── */}
+      <div className="mt-3.5 flex items-center gap-2">
+        {channel.joined ? (
+          <button
+            className="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1.5"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(channel.id);
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            Membre — Accéder
+          </button>
+        ) : channel.premium ? (
+          <button
+            className="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold text-slate-950 bg-[#F59E0B] hover:bg-[#D97706] shadow-md shadow-amber-500/20 transition-all flex items-center justify-center"
+            onClick={(e) => {
+              e.stopPropagation();
+              onJoin(channel);
+            }}
+            disabled={isProcessingJoin}
+          >
+            {isProcessingJoin ? 'Traitement...' : `Rejoindre — ${(channel.price || 0) > 0 ? `${channel.price}€/mois` : 'Premium'}`}
+          </button>
+        ) : (
+          <button
+            className="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold text-white bg-brand-green hover:bg-emerald-600 shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center"
+            onClick={(e) => {
+              e.stopPropagation();
+              onJoin(channel);
+            }}
+            disabled={isProcessingJoin}
+          >
+            {isProcessingJoin ? 'Traitement...' : 'Rejoindre'}
+          </button>
+        )}
+
+        {/* Pin toggle button */}
+        <button
+          className={`p-2.5 rounded-xl border transition-all shrink-0 ${
+            channel.pinned
+              ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+              : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-amber-400 hover:border-amber-500/30'
+          }`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTogglePin(channel.id);
+          }}
+          title={channel.pinned ? 'Désépingler' : 'Épingler'}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill={channel.pinned ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+          </svg>
+        </button>
       </div>
 
       {/* Enlarged Avatar Modal */}
       {showEnlargedAvatar && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm cursor-default"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm cursor-default"
           onClick={(e) => {
             e.stopPropagation();
             setShowEnlargedAvatar(false);
           }}
         >
           <div
-            className="relative max-w-sm w-full bg-white dark:bg-slate-800 rounded-2xl overflow-hidden p-2 shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col items-center animate-fade-in"
+            className="relative max-w-sm w-full bg-slate-900 rounded-2xl overflow-hidden p-3 shadow-2xl border border-slate-800 flex flex-col items-center animate-fade-in"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => setShowEnlargedAvatar(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-700/80 hover:bg-slate-200 p-2 rounded-full z-10 transition"
+              className="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-full z-10 transition"
               title="Fermer"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            <div className="w-full aspect-square rounded-xl overflow-hidden shadow-inner mb-3 bg-slate-100 dark:bg-slate-950 flex items-center justify-center">
+            <div className="w-full aspect-square rounded-xl overflow-hidden shadow-inner mb-3 bg-slate-950 flex items-center justify-center">
               <img
                 src={channel.avatar}
                 alt={channel.name}
@@ -275,11 +236,11 @@ export const ChannelListItem: React.FC<ChannelListItemProps> = ({
               />
             </div>
             <div className="text-center py-2 px-4 w-full">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white truncate">
+              <h3 className="text-lg font-bold text-white truncate">
                 {channel.name}
               </h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                {channel.members.toLocaleString()} membres
+              <p className="text-xs text-slate-400 mt-0.5">
+                {(channel.members || 0).toLocaleString()} membres
               </p>
             </div>
           </div>

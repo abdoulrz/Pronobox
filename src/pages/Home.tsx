@@ -45,9 +45,14 @@ const Home: React.FC = () => {
         const freeCh = ownerChannels.find(ch => !ch.premium);
         const premCh = ownerChannels.find(ch => ch.premium);
 
+        const validRates = ownerChannels.map(ch => ch.winRate).filter(r => r !== null && r !== undefined && !isNaN(Number(r)));
+        const avgSuccess = validRates.length > 0
+          ? Math.round(validRates.reduce((acc, curr) => acc + Number(curr), 0) / validRates.length)
+          : null;
+
         tipsters.push({
           name: ownerName,
-          success: `${65 - (idx * 4)}%`,
+          success: avgSuccess !== null ? `${avgSuccess}% réussite` : '',
           initials,
           color: colors[idx % colors.length],
           avatar: c.owner?.avatar,
@@ -64,7 +69,7 @@ const Home: React.FC = () => {
       return [
         { 
           name: 'Talakaka', 
-          success: '61%', 
+          success: '', 
           initials: 'TA', 
           color: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
           avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
@@ -73,7 +78,7 @@ const Home: React.FC = () => {
         },
         { 
           name: 'Hakim', 
-          success: '57%', 
+          success: '', 
           initials: 'HA', 
           color: 'bg-blue-500/20 text-blue-500 border-blue-500/30',
           avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
@@ -138,7 +143,7 @@ const TipsterAvatar: React.FC<{
     return dbChannels.map((dc: any) => ({
       ...dc,
       isCertified: dc.isCertified ?? true,
-      successRate: dc.successRate || (dc.name.toLowerCase().includes('dooobi') ? '50% réussite' : '55% réussite'),
+      successRate: dc.winRate ? `${dc.winRate}% réussite` : null,
       formattedLastMessage: formatPronoText(dc.lastMessage, dc.name) || 'Al Ahly vs Zamalek — Victoire (⏳ en attente)'
     }));
   }, [channelData]);
@@ -232,9 +237,11 @@ const TipsterAvatar: React.FC<{
                 {tipster.name}
                 <span className="text-[10px] text-brand-green">★</span>
               </p>
-              <span className="mt-2 text-xs font-black px-2.5 py-1 rounded-full bg-green-500/10 text-brand-green border border-green-500/20">
-                {tipster.success} réussite
-              </span>
+              {tipster.success && (
+                <span className="mt-2 text-xs font-black px-2.5 py-1 rounded-full bg-green-500/10 text-brand-green border border-green-500/20">
+                  {tipster.success}
+                </span>
+              )}
             </div>
           ))}
         </div>

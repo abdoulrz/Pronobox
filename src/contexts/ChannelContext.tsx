@@ -45,7 +45,7 @@ const mapApiChannel = (c: any, currentUserId?: string): Channel => {
     description: c.description,
     premium: c.premium,
     joined: currentUserId ? (c.members || []).some((m: any) => String(m._id || m.id || m) === String(currentUserId)) : false,
-    lastMessage: msgText,
+    lastMessage: c.lastMessage || msgText,
     avatar: c.avatar || '',
     price: c.subscriptionPrice || 0,
     pinned: false,
@@ -55,7 +55,9 @@ const mapApiChannel = (c: any, currentUserId?: string): Channel => {
     allowVoiceMessages: c.allowVoiceMessages !== false,
     owner: c.owner
       ? { id: c.owner.id || c.owner._id || c.owner, username: c.owner.username || '', avatar: c.owner.avatar || '' }
-      : { id: '', username: '', avatar: '' }
+      : { id: '', username: '', avatar: '' },
+    winRate: c.winRate ?? null,
+    lastWonProno: c.lastWonProno ?? null
   };
 };
 

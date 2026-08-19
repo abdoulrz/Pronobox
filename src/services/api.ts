@@ -9,8 +9,9 @@ export interface User {
   email: string;
   username: string;
   role: 'user' | 'admin';
-  accountType?: 'standard' | 'tipster';
+  accountType?: 'standard' | 'tipster' | 'wildcard';
   isPro: boolean;
+  isCertified?: boolean;
   walletBalance: number;
   avatar: string;
   password?: string;
@@ -214,9 +215,9 @@ export const login = async (credentials: any) => {
   }
 };
 
-export const googleLogin = async (credential: string) => {
+export const googleLogin = async (credential: string, accountType?: string) => {
   try {
-    const response = await api.post('/auth/google', { credential });
+    const response = await api.post('/auth/google', { credential, accountType });
     return response.data;
   } catch (error) {
     if (localStorage.getItem('fallbackMode') === 'true') {
@@ -226,7 +227,9 @@ export const googleLogin = async (credential: string) => {
         email: 'google-user@example.com',
         username: 'google_user',
         role: 'user',
-        isPro: false,
+        accountType: (accountType as any) || 'standard',
+        isPro: accountType === 'tipster',
+        isCertified: false,
         walletBalance: 0,
         avatar: 'https://lh3.googleusercontent.com/a/default-user'
       };
@@ -235,6 +238,11 @@ export const googleLogin = async (credential: string) => {
     }
     throw error;
   }
+};
+
+export const upgradeUserRole = async (targetRole: 'tipster') => {
+  const response = await api.post('/users/upgrade-role', { targetRole });
+  return response.data;
 };
 
 export const getCurrentUser = async () => {

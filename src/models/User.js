@@ -25,7 +25,7 @@ const UserSchema = new mongoose.Schema({
   },
   accountType: {
     type: String,
-    enum: ['standard', 'tipster'],
+    enum: ['standard', 'tipster', 'wildcard'],
     default: 'standard'
   },
   isPro: {

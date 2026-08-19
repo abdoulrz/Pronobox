@@ -115,7 +115,13 @@ const Header: React.FC<HeaderProps> = ({ onBetEducClick }) => {
                 {user.role === 'admin' ? (
                   <span className="hidden sm:inline-flex items-center text-xs font-bold bg-white/20 text-white border border-white/30 px-2 py-0.5 rounded-full ml-2 shadow-sm backdrop-blur-md">Admin</span>
                 ) : (user.accountType === 'tipster' || user.isPro) ? (
-                  <span className="hidden sm:inline-flex badge-pro bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full text-xs font-bold">Tipster</span>
+                  <span className="hidden sm:inline-flex badge-pro bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full text-xs font-bold">
+                    {user.isCertified ? '🎯 Certifié' : '🎯 Tipster'}
+                  </span>
+                ) : user.accountType === 'wildcard' ? (
+                  <span className="hidden sm:inline-flex bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full text-xs font-bold">
+                    ⚡ Wildcard
+                  </span>
                 ) : null}
               </button>
 
@@ -126,8 +132,17 @@ const Header: React.FC<HeaderProps> = ({ onBetEducClick }) => {
                   <div className="px-4 py-3 border-b border-slate-200 dark:border-brand-slate">
                     <p className="text-sm font-semibold text-slate-900 dark:text-brand-text-1">{user.username}</p>
                     <p className="text-xs text-slate-500 dark:text-brand-text-3 truncate">{user.email}</p>
-                    <div className="flex gap-1.5 mt-1.5">
-                      {user.role !== 'admin' && (user.accountType === 'tipster' || user.isPro) && <span className="badge-pro bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full text-xs font-bold">🎯 Tipster</span>}
+                    <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                      {user.role !== 'admin' && (user.accountType === 'tipster' || user.isPro) && (
+                        <span className="badge-pro bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded-full text-xs font-bold">
+                          {user.isCertified ? '🎯 Tipster Certifié' : '🎯 Tipster'}
+                        </span>
+                      )}
+                      {user.role !== 'admin' && user.accountType === 'wildcard' && (
+                        <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full text-xs font-bold">
+                          ⚡ Wildcard
+                        </span>
+                      )}
                       {user.role === 'admin' && (
                         <span className="inline-flex items-center text-xs font-bold bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full">Admin</span>
                       )}

@@ -50,6 +50,8 @@ export interface Channel {
   premium?: boolean;
   price?: number;
   allowVoiceMessages?: boolean;
+  winRate?: number | null;
+  lastWonProno?: { home: string; away: string; result: string } | null;
 }
 
 export interface UserFeatures {

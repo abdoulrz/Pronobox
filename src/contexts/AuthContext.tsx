@@ -4,15 +4,17 @@ import {
   register as apiRegister,
   googleLogin as apiGoogleLogin,
   getCurrentUser,
-  updateUser as apiUpdateUser } from
-'../services/api';
+  updateUser as apiUpdateUser,
+  upgradeUserRole as apiUpgradeUserRole
+} from '../services/api';
 export type User = {
   id: string;
   email: string;
   username: string;
   role: 'admin' | 'user';
-  accountType?: 'standard' | 'tipster';
+  accountType?: 'standard' | 'tipster' | 'wildcard';
   isPro: boolean;
+  isCertified?: boolean;
   avatar: string;
   walletBalance?: number;
   bio?: string;
@@ -37,16 +39,19 @@ type AuthContextType = {
   isAdmin: boolean;
   isPro: boolean;
   isTipster: boolean;
+  isWildcard: boolean;
+  isCertified: boolean;
   login: (credentials: {email: string;password: string;}) => Promise<void>;
   register: (userData: {
     username: string;
     email: string;
     password: string;
-    accountType?: 'standard' | 'tipster';
+    accountType?: 'standard' | 'tipster' | 'wildcard';
   }) => Promise<User | void>;
-  loginWithGoogle: (credential: string) => Promise<void>;
+  loginWithGoogle: (credential: string, accountType?: string) => Promise<void>;
   logout: () => void;
   updateUser: (data: Partial<User>) => Promise<User | void>;
+  upgradeToTipster: () => Promise<void>;
   isFallbackMode: boolean;
 };
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -71,7 +76,9 @@ export const AuthProvider: React.FC<{
           email: userData.email,
           username: userData.username,
           role: userData.role,
-          isPro: userData.isPro,
+          accountType: userData.accountType || 'standard',
+          isPro: userData.isPro || false,
+          isCertified: userData.isCertified || false,
           avatar: userData.avatar,
           walletBalance: userData.walletBalance,
           bio: userData.bio,
@@ -102,7 +109,9 @@ export const AuthProvider: React.FC<{
               email: fallbackUser.email,
               username: fallbackUser.username,
               role: fallbackUser.role,
-              isPro: fallbackUser.isPro,
+              accountType: fallbackUser.accountType || 'standard',
+              isPro: fallbackUser.isPro || false,
+              isCertified: fallbackUser.isCertified || false,
               avatar: fallbackUser.avatar,
               walletBalance: fallbackUser.walletBalance,
               bio: fallbackUser.bio,
@@ -139,7 +148,9 @@ export const AuthProvider: React.FC<{
         email: data.user.email,
         username: data.user.username,
         role: data.user.role,
-        isPro: data.user.isPro,
+        accountType: data.user.accountType || 'standard',
+        isPro: data.user.isPro || false,
+        isCertified: data.user.isCertified || false,
         avatar: data.user.avatar,
         walletBalance: data.user.walletBalance,
         bio: data.user.bio,
@@ -164,6 +175,7 @@ export const AuthProvider: React.FC<{
     username: string;
     email: string;
     password: string;
+    accountType?: 'standard' | 'tipster' | 'wildcard';
   }) => {
     try {
       const data = await apiRegister(userData);
@@ -175,7 +187,9 @@ export const AuthProvider: React.FC<{
         email: data.user.email,
         username: data.user.username,
         role: data.user.role,
-        isPro: data.user.isPro,
+        accountType: data.user.accountType || userData.accountType || 'standard',
+        isPro: data.user.isPro || false,
+        isCertified: data.user.isCertified || false,
         avatar: data.user.avatar,
         walletBalance: data.user.walletBalance,
         bio: data.user.bio,
@@ -195,9 +209,9 @@ export const AuthProvider: React.FC<{
       throw error;
     }
   };
-  const loginWithGoogle = async (credential: string) => {
+  const loginWithGoogle = async (credential: string, accountType?: string) => {
     try {
-      const data = await apiGoogleLogin(credential);
+      const data = await apiGoogleLogin(credential, accountType);
       // Save token to localStorage
       localStorage.setItem('token', data.token);
       // Set user data
@@ -206,7 +220,9 @@ export const AuthProvider: React.FC<{
         email: data.user.email,
         username: data.user.username,
         role: data.user.role,
-        isPro: data.user.isPro,
+        accountType: data.user.accountType || 'standard',
+        isPro: data.user.isPro || false,
+        isCertified: data.user.isCertified || false,
         avatar: data.user.avatar,
         walletBalance: data.user.walletBalance,
         bio: data.user.bio,
@@ -243,7 +259,9 @@ export const AuthProvider: React.FC<{
           email: updatedUserData.email,
           username: updatedUserData.username,
           role: updatedUserData.role,
-          isPro: updatedUserData.isPro,
+          accountType: updatedUserData.accountType || user.accountType || 'standard',
+          isPro: updatedUserData.isPro !== undefined ? updatedUserData.isPro : user.isPro,
+          isCertified: updatedUserData.isCertified !== undefined ? updatedUserData.isCertified : user.isCertified,
           avatar: updatedUserData.avatar,
           walletBalance: updatedUserData.walletBalance,
           bio: updatedUserData.bio,
@@ -263,10 +281,42 @@ export const AuthProvider: React.FC<{
       }
     }
   };
+  const upgradeToTipster = async () => {
+    try {
+      const response = await apiUpgradeUserRole('tipster');
+      if (response && response.user) {
+        setUser({
+          id: response.user.id || response.user._id,
+          email: response.user.email,
+          username: response.user.username,
+          role: response.user.role,
+          accountType: 'tipster',
+          isPro: true,
+          isCertified: response.user.isCertified || false,
+          avatar: response.user.avatar,
+          walletBalance: response.user.walletBalance,
+          bio: response.user.bio,
+          notifications: response.user.notifications || {
+            email: false,
+            push: true,
+            matches: true,
+            channels: true
+          },
+          paymentMethods: response.user.paymentMethods || [],
+          unlockedResources: response.user.unlockedResources || []
+        });
+      }
+    } catch (error) {
+      console.error('Error upgrading to tipster:', error);
+      throw error;
+    }
+  };
   const isAuthenticated = !!user;
   const isAdmin = user?.role === 'admin';
   const isPro = user?.isPro === true;
   const isTipster = user?.accountType === 'tipster' || user?.isPro === true;
+  const isWildcard = user?.accountType === 'wildcard';
+  const isCertified = user?.isCertified === true;
   return (
     <AuthContext.Provider
       value={{
@@ -275,11 +325,14 @@ export const AuthProvider: React.FC<{
         isAdmin,
         isPro,
         isTipster,
+        isWildcard,
+        isCertified,
         login,
         register,
         loginWithGoogle,
         logout,
         updateUser,
+        upgradeToTipster,
         isFallbackMode
       }}>
 

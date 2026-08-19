@@ -250,15 +250,25 @@ const Box = () => {
     }
   };
 
-  const filteredChannels = channels.filter((channel) => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'premium') return channel.premium;
-    if (activeTab === 'free') return !channel.premium;
-    if (activeTab === 'joined') return channel.joined;
-    if (activeTab === 'pinned') return channel.pinned && channel.joined;
-    if (activeTab === 'owned') return channel.owner?.id === user?.id;
-    return true;
-  });
+  const filteredChannels = channels
+    .filter((channel) => {
+      if (activeTab === 'all') return true;
+      if (activeTab === 'premium') return channel.premium;
+      if (activeTab === 'free') return !channel.premium;
+      if (activeTab === 'top_rated') return (channel.winRate || 0) >= 50;
+      if (activeTab === 'joined') return channel.joined;
+      if (activeTab === 'pinned') return channel.pinned;
+      if (activeTab === 'owned') return String(channel.owner?.id) === String(user?.id);
+      return true;
+    })
+    .sort((a, b) => {
+      const aPinned = a.pinned ? 1 : 0;
+      const bPinned = b.pinned ? 1 : 0;
+      if (aPinned !== bPinned) return bPinned - aPinned;
+      const aRate = a.winRate ?? -1;
+      const bRate = b.winRate ?? -1;
+      return bRate - aRate;
+    });
 
   // Debates logic
   const handleSaveDebate = async (debateData: { title: string; description: string; images: string[]; category: string }) => {
@@ -653,20 +663,26 @@ const Box = () => {
 
       <div className="w-full">
         {mainView === 'canaux' ? (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-xl font-bold dark:text-white">Canaux</h2>
+          <div className="space-y-4 max-w-3xl mx-auto">
+            <div className="flex justify-between items-center mb-1">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Canaux</h2>
               <button
                 onClick={() => isPro ? setShowCreateChannelModal(true) : setShowProModal(true)}
-                className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 flex items-center"
+                className="px-3.5 py-2 bg-brand-green hover:bg-emerald-600 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-emerald-500/20 flex items-center gap-1.5 transition-all"
               >
-                <span className="mr-1">+</span> Créer un canal
+                <span className="text-base leading-none">+</span> Créer un canal
               </button>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden mb-6">
-              <ChannelTabs activeTab={activeTab} setActiveTab={setActiveTab} isPro={isPro} />
-              <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            <ChannelTabs activeTab={activeTab} setActiveTab={setActiveTab} isPro={isPro} />
+
+            {filteredChannels.length === 0 ? (
+              <div className="text-center py-16 bg-[#0D111D]/80 border border-slate-800/80 rounded-2xl text-slate-400">
+                <p className="text-sm font-medium">Aucun canal dans cette catégorie.</p>
+                <p className="text-xs text-slate-500 mt-1">Essayez un autre filtre ou créez votre propre canal.</p>
+              </div>
+            ) : (
+              <div className="space-y-3.5 sm:space-y-4">
                 {filteredChannels.map((channel) => (
                   <ChannelListItem
                     key={channel.id}
@@ -684,7 +700,7 @@ const Box = () => {
                   />
                 ))}
               </div>
-            </div>
+            )}
           </div>
         ) : (
           <div className="w-full">

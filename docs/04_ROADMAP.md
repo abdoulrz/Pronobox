@@ -81,6 +81,8 @@ Ce document décrit les étapes nécessaires pour faire passer PronosBox de son 
     - [ ] Implémentation du lazy loading des images.
     - [ ] Optimisation des requêtes MongoDB pour le flux de la "Box" (Pagination).
     - [x] **Consolidation du Dashboard Admin** : Fusion de tous les panneaux d'administration (retraits, liste d'utilisateurs, chat de support, résumé financier) dans un tableau de bord centralisé unique avec vérifications strictes du compilateur TypeScript.
+- [ ] **Migrations & Nettoyage de Données** :
+    - [ ] Exécuter la migration `accountType` pour les utilisateurs pré-existants en DB : `db.users.updateMany({ accountType: { $exists: false } }, { $set: { accountType: 'standard' } })`.
 - [ ] **Déploiement** :
     - [ ] Finaliser la configuration du VPS Contabo (Nginx, PM2, MongoDB).
     - [ ] Configurer SSL (Certbot).
@@ -88,41 +90,40 @@ Ce document décrit les étapes nécessaires pour faire passer PronosBox de son 
 
 ---
 
-## 💰 Phase 5 : Paiements & Monétisation
+## 💰 Phase 5 : Paiements, Monétisation & Modèle Économique
 
-- [ ] **Intégration des Paiements** :
+- [ ] **Intégration des Passerelles de Paiement** :
     - [ ] Connecter **FedaPay** / **NowPayments.io** au système de portefeuille.
-    - [ ] Finaliser le flux "Acheter Pro" avec gestion des états de succès/erreur et mise à jour automatique du statut.
-    - [ ] Implémenter la logique de commission pour les utilisateurs Pro (frais de plateforme de 10%).
+    - [ ] Gestion des états de succès/erreur, webhooks et mise à jour instantanée du solde wallet.
+- [ ] **Accès Payant aux Contenus & Canaux VIP** :
+    - [ ] **Canaux Premium / VIP** : Abonnement mensuel récurrent ou one-time débloquant l'accès au flux privé du Tipster (commission plateforme de 10-15%).
+    - [ ] **Pronostics Exclusifs** : Déverrouillage à l'unité de pronostics à haute cote / analyses pointues.
+    - [ ] **BET-EDUC Premium** : Vente d'E-books spécialisés, masterclasses vidéo et fiches méthodologiques.
+- [ ] **Passerelle Wildcard → Tipster (Achat Unique)** :
+    - [ ] Achat unique du "Pass Créateur" permettant à un utilisateur Wildcard de débloquer immédiatement la création de canaux et la publication de pronostics officiels.
+    - [ ] **UI du bouton d'upgrade** : Ajouter un composant dans les paramètres utilisateur / profil Wildcard pour appeler `upgradeToTipster()` (la logique backend existe déjà).
+- [ ] **UX Google Re-Login (Edge Case)** :
+    - [ ] Lors d'un login Google d'un utilisateur existant, si un `accountType` différent est sélectionné sur le formulaire d'inscription, afficher un message informatif expliquant que le rôle existant est conservé.
 - [x] **Authentification Sociale** :
     - [x] Implémentation de la connexion via Google OAuth / Single Sign-On (SSO).
 
 ---
 
-## ✅ Phase 6 : Moteur Unifié des Pronostics & Automatisation 12:00 UTC (Complétée)
+## 🎖️ Phase 6 : Système de Certification & Classement des Tipsters
 
-- [x] **Unification Complète des Données (Canaux ↔ Pronostics ↔ Administration)** :
-    - [x] Modèle canonique unique basé sur un *Upsert* intelligent dans MongoDB (`Prono`).
-    - [x] Élimination définitive des faux identifiants de message (`6A8223FE...`) et des doublons d'affichage grâce à la normalisation insensible aux émojis/espaces (`cleanStr`).
-    - [x] Double barrière de déduplication (Serveur + Navigateur `Pronos.tsx`).
-    - [x] Tri chronologique strict du plus récent au plus ancien (`matchDate` / `createdAt`).
-- [x] **Recherche Assistée des Matchs par Date** :
-    - [x] Sélecteur de date interactif (`<input type="date">`) dans `CreatePronoModal.tsx` et `AdminDashboard.tsx` pour charger les matchs du jour ou futurs via `/api/football/matches?date=YYYY-MM-DD`.
-- [x] **Vérification Automatique Quotidienne à 12:00 PM UTC** :
-    - [x] Ordonnanceur quotidien précis (`scheduleDailyVerificationAt12PMUTC()`) vérifiant automatiquement les matchs terminés.
-    - [x] Algorithme d'évaluation (`determinePronoResult`) gérant 1X2, Double Chance (1X, 2X, 12), V1/V2, Nul, Plus/Moins de buts (+X.5, -X.5), BTTS et Scores exacts.
-    - [x] Détection du délai de sécurité (2h30) et bascule en revue manuelle si l'intitulé est complexe.
-- [x] **Cartes Vivantes ("Alive") & Synchronisation Rétroactive des Canaux** :
-    - [x] Mise à jour en direct des cartes de messages (`MessageCard.tsx`) avec badges verts/rouges et bloc **Score Final** (`Score Final: 2-3` - `Validé`).
-    - [x] Actualisation automatique de l'aperçu du canal (`channel.lastMessage`) sur `/channels`.
-    - [x] Publication automatique d'un message d'annonce officiel récapitulant le résultat dans le canal.
-    - [x] Synchronisation On-Read sur `GET /api/channels`, `GET /api/channels/:id` et `GET /api/pronos`.
-- [x] **Documentation d'Architecture Dédiée** :
-    - [x] Rédaction de [`docs/10_UNIFIED_PRONOSTICS_ENGINE.md`](./10_UNIFIED_PRONOSTICS_ENGINE.md) avec diagrammes Mermaid.
+- [ ] **Hiérarchie des Tipsters (Niveau 1 : Validé / Niveau 2 : Certifié)** :
+    - [ ] **Règles d'attribution automatique de la certification** :
+        - Minimum 30 jours d'activité.
+        - Minimum 20 pronostics formulaires publiés.
+        - Minimum 50% de taux de réussite (win-rate).
+    - [ ] **Réévaluation dynamique continue** : Perte automatique du badge si le taux de réussite chute sous 50% sur fenêtre glissante.
+- [ ] **Priorisation Visuelle des Canaux & Pronostics** :
+    - [ ] Ordre des canaux : 1. Épinglés → 2. Tipsters Certifiés (Admins en tête, triés par performance) → 3. Tipsters Non-certifiés (triés par performance).
+    - [ ] Mise en avant des pronostics certifiés dans l'onglet Pronostics et sur la page d'accueil.
 
 ---
 
-## 🎯 Phase 7 : Architecture & Roadmap pour le CRUD des Pronostics Premium (Futur)
+## 🎯 Phase 7 : Architecture & Roadmap pour le CRUD des Pronostics Premium
 
 - [ ] **Gating & Paywall API Robuste** :
     - [ ] Masquage conditionnel des champs `premiumExpectedResult`, `premiumOdds` et `premiumObservation` dans `GET /api/pronos` pour les utilisateurs sans abonnement Pro (`user.isPro !== true`).
@@ -142,3 +143,4 @@ Ce document décrit les étapes nécessaires pour faire passer PronosBox de son 
 - **Compétitions de Pronostics** : Classements hebdomadaires pour les meilleurs pronostiqueurs.
 - **Notifications Push Générales** : Pour les buts de matchs et les alertes de canaux.
 - **PWA** : Rendre PronosBox installable sur mobile.
+

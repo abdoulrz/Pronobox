@@ -26,6 +26,8 @@ export interface Channel {
   category?: string;
   allowVoiceMessages?: boolean;
   owner?: { id: string; username?: string; name?: string; avatar: string };
+  winRate?: number | null;
+  lastWonProno?: { home: string; away: string; result: string } | null;
 }
 
 export interface ChannelPost {
