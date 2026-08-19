@@ -4,6 +4,31 @@ Toutes les modifications notables de ce projet seront documentées dans ce fichi
 
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.24.0] - 2026-08-19 ([Unification Pronostics, Automatisation 12:00 UTC & Cartes Vivantes Canaux])
+
+### Ajouté
+- **Moteur Unifié des Pronostics & Canaux** :
+  - Unification de la création de pronostics depuis les canaux (`CreatePronoModal.tsx`) et le panneau d'administration (`AdminDashboard.tsx`). Tout pronostic est désormais inséré par *Upsert* dans MongoDB (`Prono`) avec son ID officiel API-Sports.
+  - Sélecteur de date dans le modal de création de pronostics des canaux permettant de rechercher les matchs du jour ou du futur via `/api/football/matches?date=YYYY-MM-DD`.
+  - Documentation d'architecture complète créée dans [`docs/10_UNIFIED_PRONOSTICS_ENGINE.md`](./10_UNIFIED_PRONOSTICS_ENGINE.md) avec diagrammes Mermaid détaillant le cycle de vie, les règles de vérification et la feuille de route Premium.
+- **Cartes de Pronostic Vivantes ("Alive") dans les Canaux** :
+  - Les cartes de pronostic dans `MessageCard.tsx` s'actualisent en direct lors de la validation du résultat (`[⏳ EN ATTENTE]` -> `[✅ GAGNÉ]` / `[❌ PERDU]`).
+  - Intégration d'un bloc visuel **Score Final** sur chaque carte de pronostic vérifié (ex: `Score Final : 2-3` - `Validé`).
+  - Publication automatique d'un message récapitulatif officiel dans le fil du canal lors de la vérification.
+  - Actualisation dynamique de l'aperçu du dernier message (`channel.lastMessage`) sur `/channels`.
+- **Automatisation Quotidienne de la Vérification à 12:00 PM UTC** :
+  - Mise en place d'un ordonnanceur calculant le délai exact jusqu'à 12:00:00 UTC chaque jour (`scheduleDailyVerificationAt12PMUTC()`) pour exécuter la vérification par lot des matchs terminés.
+- **Synchronisation Rétroactive à la Lecture ("On-Read Sync")** :
+  - Les routes `GET /api/channels`, `GET /api/channels/:id` et `GET /api/pronos` actualisent automatiquement les messages et aperçus existants en base en les comparant aux pronostics validés.
+
+### Corrigé
+- **Élimination Définitive des Faux Identifiants et Doublons** :
+  - Suppression des identifiants hexadécimaux de message (`6A8223FE...`) dans le flux de pronostics grâce à une déduplication stricte insensible aux émojis, accents et espaces (`cleanStr`).
+  - Barrière de déduplication côté client dans `Pronos.tsx` pour garantir l'unicité absolue de chaque carte affichée.
+  - Nettoyage des pronostics mockés résiduels dans `Pronos.tsx`.
+- **Tri Chronologique Strict** :
+  - Tous les flux de pronostics (`/pronos` et tableau de bord) sont strictement ordonnés du match le plus récent au plus ancien (`matchDate` / `createdAt`).
+
 ## [2.23.0] - 2026-06-14 ([Google Auth, Performance, Caching & Real Stats])
 
 ### Ajouté

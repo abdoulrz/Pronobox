@@ -1306,9 +1306,33 @@ app.get('/api/pronos/:matchId', async (req, res) => {
 
 app.post('/api/pronos', authenticateToken, async (req, res) => {
   try {
-    const newProno = new Prono(req.body);
-    await newProno.save();
-    res.status(201).json(newProno);
+    const data = req.body;
+    const matchIdNum = Number(data.matchId);
+    const hasValidMatchId = matchIdNum && !isNaN(matchIdNum) && matchIdNum < 100000000;
+
+    const query = hasValidMatchId
+      ? { matchId: matchIdNum }
+      : { 
+          homeTeamName: new RegExp(`^${(data.homeTeamName || '').trim()}$`, 'i'),
+          awayTeamName: new RegExp(`^${(data.awayTeamName || '').trim()}$`, 'i')
+        };
+
+    // Upsert: If a prono document already exists for this matchup, update it instead of creating duplicates!
+    let prono = await Prono.findOne(query);
+    if (prono) {
+      Object.assign(prono, data);
+      await prono.save();
+    } else {
+      prono = new Prono(data);
+      await prono.save();
+    }
+
+    // Synchronize to channels
+    if (prono.status && prono.status !== 'pending') {
+      await syncPronoStatusToChannels(prono.matchId, prono.status, prono.actualResult, prono.homeTeamName, prono.awayTeamName);
+    }
+
+    res.status(201).json(prono);
   } catch (err) {
     console.error('Error in POST /api/pronos:', err);
     res.status(400).json({ error: 'Failed to create prono', details: err.message });
@@ -1317,8 +1341,28 @@ app.post('/api/pronos', authenticateToken, async (req, res) => {
 
 app.put('/api/pronos/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const prono = await Prono.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const { id } = req.params;
+    let prono;
+
+    if (id.startsWith('ch_msg_')) {
+      // Virtual channel prono being converted/edited into a permanent DB record
+      prono = new Prono(req.body);
+      await prono.save();
+    } else {
+      prono = await Prono.findByIdAndUpdate(id, req.body, { new: true });
+    }
+
     if (!prono) return res.status(404).json({ error: 'Prono not found' });
+
+    // Sync changes to channel messages
+    await syncPronoStatusToChannels(
+      prono.matchId,
+      prono.status || (prono.premiumExpectedResult ? prono.premiumStatus : prono.freeStatus),
+      prono.actualResult,
+      prono.homeTeamName,
+      prono.awayTeamName
+    );
+
     res.json(prono);
   } catch (err) {
     console.error('Error in PUT /api/pronos/:id:', err);
@@ -1328,7 +1372,17 @@ app.put('/api/pronos/:id', authenticateToken, requireAdmin, async (req, res) => 
 
 app.delete('/api/pronos/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const prono = await Prono.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
+    if (id.startsWith('ch_msg_')) {
+      const msgId = id.replace('ch_msg_', '');
+      await Channel.updateMany(
+        { "messages._id": msgId },
+        { $pull: { messages: { _id: msgId } } }
+      );
+      return res.json({ message: 'Channel message prono deleted successfully' });
+    }
+
+    const prono = await Prono.findByIdAndDelete(id);
     if (!prono) return res.status(404).json({ error: 'Prono not found' });
     res.json({ message: 'Prono deleted successfully' });
   } catch (err) {

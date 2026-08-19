@@ -99,15 +99,46 @@ Ce document décrit les étapes nécessaires pour faire passer PronosBox de son 
 
 ---
 
-## 🤖 Phase 6 : Automatisation Avancée des Pronos
+## ✅ Phase 6 : Moteur Unifié des Pronostics & Automatisation 12:00 UTC (Complétée)
 
-- [ ] **Ergonomie Admin** : Implémentation d'une recherche dynamique des matchs pour la création de pronostics.
-- [ ] **Logique des Diffuseurs** : Permettre de surcharger le diffuseur spécifique à un match en base de données.
-- [ ] **Données en Temps Réel** : Implémentation de la synchronisation en arrière-plan pour les cotes en direct.
+- [x] **Unification Complète des Données (Canaux ↔ Pronostics ↔ Administration)** :
+    - [x] Modèle canonique unique basé sur un *Upsert* intelligent dans MongoDB (`Prono`).
+    - [x] Élimination définitive des faux identifiants de message (`6A8223FE...`) et des doublons d'affichage grâce à la normalisation insensible aux émojis/espaces (`cleanStr`).
+    - [x] Double barrière de déduplication (Serveur + Navigateur `Pronos.tsx`).
+    - [x] Tri chronologique strict du plus récent au plus ancien (`matchDate` / `createdAt`).
+- [x] **Recherche Assistée des Matchs par Date** :
+    - [x] Sélecteur de date interactif (`<input type="date">`) dans `CreatePronoModal.tsx` et `AdminDashboard.tsx` pour charger les matchs du jour ou futurs via `/api/football/matches?date=YYYY-MM-DD`.
+- [x] **Vérification Automatique Quotidienne à 12:00 PM UTC** :
+    - [x] Ordonnanceur quotidien précis (`scheduleDailyVerificationAt12PMUTC()`) vérifiant automatiquement les matchs terminés.
+    - [x] Algorithme d'évaluation (`determinePronoResult`) gérant 1X2, Double Chance (1X, 2X, 12), V1/V2, Nul, Plus/Moins de buts (+X.5, -X.5), BTTS et Scores exacts.
+    - [x] Détection du délai de sécurité (2h30) et bascule en revue manuelle si l'intitulé est complexe.
+- [x] **Cartes Vivantes ("Alive") & Synchronisation Rétroactive des Canaux** :
+    - [x] Mise à jour en direct des cartes de messages (`MessageCard.tsx`) avec badges verts/rouges et bloc **Score Final** (`Score Final: 2-3` - `Validé`).
+    - [x] Actualisation automatique de l'aperçu du canal (`channel.lastMessage`) sur `/channels`.
+    - [x] Publication automatique d'un message d'annonce officiel récapitulant le résultat dans le canal.
+    - [x] Synchronisation On-Read sur `GET /api/channels`, `GET /api/channels/:id` et `GET /api/pronos`.
+- [x] **Documentation d'Architecture Dédiée** :
+    - [x] Rédaction de [`docs/10_UNIFIED_PRONOSTICS_ENGINE.md`](./10_UNIFIED_PRONOSTICS_ENGINE.md) avec diagrammes Mermaid.
+
+---
+
+## 🎯 Phase 7 : Architecture & Roadmap pour le CRUD des Pronostics Premium (Futur)
+
+- [ ] **Gating & Paywall API Robuste** :
+    - [ ] Masquage conditionnel des champs `premiumExpectedResult`, `premiumOdds` et `premiumObservation` dans `GET /api/pronos` pour les utilisateurs sans abonnement Pro (`user.isPro !== true`).
+    - [ ] Retour de messages incitatifs au passage Pro (*"🔒 Réservé aux membres VIP"*).
+- [ ] **Gestion Multi-Tipsters & Canaux Privés Payants** :
+    - [ ] Publication de pronostics Premium par les créateurs de canaux Pro avec définition de cotes (`premiumOdds`) et d'indices de confiance.
+    - [ ] Liaison automatique avec le prix d'abonnement au canal (`subscriptionPrice`).
+- [ ] **Calcul Automatisé du ROI & Taux de Réussite (Win-Rate)** :
+    - [ ] Calcul automatique du ROI (%) et du bénéfice net en unités basé sur les cotes enregistrées.
+    - [ ] Affichage de graphiques de performance historique sur les profils de tipsters et les canaux.
+- [ ] **Notifications VIP Instantanées** :
+    - [ ] Envoi d'alertes push / in-app aux abonnés lors de la publication d'un nouveau pronostic Premium ou de la validation d'un gain.
 
 ---
 
 ## 🃏 Idées Futures
 - **Compétitions de Pronostics** : Classements hebdomadaires pour les meilleurs pronostiqueurs.
-- **Notifications Push** : Pour les buts de matchs et les alertes de canaux.
+- **Notifications Push Générales** : Pour les buts de matchs et les alertes de canaux.
 - **PWA** : Rendre PronosBox installable sur mobile.

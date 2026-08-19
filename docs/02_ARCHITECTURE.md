@@ -13,9 +13,10 @@ pronobox_codebase/
 │   ├── 03_METHODOLOGY_AND_CHECKLISTS.md
 │   ├── 04_ROADMAP.md             # Global finalization roadmap
 │   ├── 05_ARCHITECTURE_RECOMMENDATIONS.md
-│   ├── 06_INFRASTRUCTURE.md      # Contabo VPS setup
 │   ├── 07_DEPLOYMENT.md          # Deployment scripts
 │   ├── 08_FRAMEWORK_INTEGRATION.md
+│   ├── 09_ADMIN_GUIDE.md         # Admin panel operational guide
+│   ├── 10_UNIFIED_PRONOSTICS_ENGINE.md # Unified Pronostics & Channels Engine
 │   ├── CHANGELOG.md              # Version history
 │   └── PRONOBOX_DESIGN_SYSTEM.md # Colors, Typography, Components
 │

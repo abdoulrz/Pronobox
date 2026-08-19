@@ -59,18 +59,21 @@ L'administration s'effectue via les onglets dédiés du tableau de bord.
    - **Broadcasters (TV)** : La barre TV affiche automatiquement les logos officiels cliquables (beIN, DAZN, Canal+). Assurez-vous que les informations de match sont à jour pour aider les utilisateurs à trouver où regarder la rencontre.
 
 ### Vérification Automatique des Pronostics
-Pronobox intègre un système de vérification automatique basé sur l'API Sports. Il détecte la fin des matchs et met à jour les statuts (Gagné/Perdu) des cartes gratuites et premium.
+Pronobox intègre un système de vérification automatique basé sur l'API Sports. Il détecte la fin des matchs et met à jour les statuts (Gagné/Perdu) des cartes gratuites et premium, tout en synchronisant les canaux en direct.
 
-**Fonctionnement & Limites :**
-1. **Délai de Sécurité (Vérification par lot) :** Le bouton "Vérifier Tout" applique automatiquement un délai de sécurité de **2h30** après l'heure de début programmée du match. Cela évite les requêtes inutiles et garantit que le match est bien terminé. Les matchs plus récents seront tout simplement ignorés et resteront en "Attente".
-   - *Astuce :* Si vous souhaitez **forcer la vérification** d'un match avant la fin de ce délai de 2h30, vous pouvez utiliser le bouton de **Vérification Individuelle** (l'icône de rafraîchissement à côté du bouton "Modifier" sur la ligne du match). Le système tentera alors de récupérer le score, mais l'API peut toujours renvoyer une erreur si le match n'est pas encore statué comme terminé chez eux.
-2. **Format des Choix (Très Important) :** Pour que l'algorithme comprenne le résultat attendu, respectez impérativement ces conventions de saisie lors de la création d'un prono :
-   - *Scores exacts* : `0-2` ou `2-1` (Utilisez le tiret).
-   - *Plus/Moins de buts* : `+2,5 buts` ou `plus de 2,5 buts` (la virgule et le `+` sont supportés). `moins de 2.5` ou `-2,5` (avec virgule ou point).
-   - *1X2* : `1`, `X`, `2`, `1X`, `X2`, `12`.
+**Fonctionnement & Synchronisation Complète :**
+1. **Exécution Quotidienne Automatisée (12:00 PM UTC) :** Le serveur planifie et exécute automatiquement une passe de vérification chaque jour à 12:00:00 UTC. Tous les matchs terminés sont actualisés sans intervention humaine.
+2. **Délai de Sécurité (Vérification par lot) :** Le bouton "Vérifier Tout" applique automatiquement un délai de sécurité de **2h30** après l'heure de début programmée du match pour éviter les requêtes inutiles. Les matchs plus récents restent en "Attente".
+   - *Astuce :* Pour **forcer la vérification** d'un match avant ce délai, utilisez le bouton de **Vérification Individuelle** (icône de rafraîchissement sur la ligne du match).
+3. **Synchronisation en Direct des Canaux ("Alive") :** Dès qu'un statut est validé (Gagné/Perdu), les cartes dans les canaux s'actualisent instantanément avec le score final, l'aperçu du canal est mis à jour, et un message d'annonce officiel est publié dans le canal.
+4. **Format des Choix (Standardisé) :**
+   - *Double Chance* : `1X`, `2X`, `X2`, `12`.
+   - *Issues Simples* : `1`, `2`, `X`, `V1`, `V2`, `Match nul`.
+   - *Plus/Moins de buts* : `+2,5 buts`, `-1.5 buts`.
    - *BTTS* : `btts` ou `les deux équipes marquent`.
-3. **Double Statut :** Le statut gratuit et le statut premium sont désormais indépendants. Une prédiction gratuite peut être gagnante tandis que le choix premium (plus risqué, par ex. un score exact) peut être perdant.
-4. **Revue Manuelle :** Si l'algorithme ne reconnaît pas la phrase (ex: `"Victoire difficile par 1 but d'écart"`), il enregistrera le score final mais passera le pronostic en statut "⏳ En attente" pour que vous puissiez définir manuellement s'il est Gagné ou Perdu via le tableau de bord.
+   - *Scores exacts* : `0-2`, `2-1`, `3-0`.
+5. **Revue Manuelle :** Si un libellé non standard est rencontré, le score réel est enregistré et le pronostic passe en attente de validation manuelle via le menu déroulant du tableau de bord.
+6. **Documentation Complète :** Pour une vue détaillée des diagrammes et des règles, consultez [`docs/10_UNIFIED_PRONOSTICS_ENGINE.md`](./10_UNIFIED_PRONOSTICS_ENGINE.md).
 
 ### Gestion BET-EDUC
 La section BET-EDUC permet d'éduquer et de fidéliser vos utilisateurs via des ressources variées.
