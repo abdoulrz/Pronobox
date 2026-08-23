@@ -88,6 +88,13 @@ const Home: React.FC = () => {
       ];
     }
 
+    // Sort by win rate descending — tipsters with no data go last
+    tipsters.sort((a, b) => {
+      const rateA = a.success ? parseInt(a.success) : -1;
+      const rateB = b.success ? parseInt(b.success) : -1;
+      return rateB - rateA;
+    });
+
     return tipsters;
   }, [channelData]);
 

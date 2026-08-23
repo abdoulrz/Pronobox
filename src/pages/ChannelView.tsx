@@ -89,6 +89,7 @@ const ChannelView = () => {
     // Use real populated member users from the database
     const realMembers = channel.memberUsers || [];
     const ownerId = channel.owner?.id ? String(channel.owner.id) : '';
+    const ownerUsername = channel.owner?.username ? channel.owner.username.toLowerCase() : '';
 
     realMembers.forEach(member => {
       if (!member || !member.username) return;
@@ -96,7 +97,10 @@ const ChannelView = () => {
       if (seen.has(key)) return;
       seen.add(key);
 
-      const isOwner = !!(ownerId && String(member.id) === ownerId);
+      const isOwner = !!(
+        (ownerId && String(member.id) === ownerId) ||
+        (ownerUsername && key === ownerUsername)
+      );
       list.push({
         id: member.id,
         username: member.username,
@@ -834,7 +838,8 @@ const ChannelView = () => {
             </div>
 
             {/* Channel Owner */}
-            {channel.owner && (
+            {/* Channel Owner — only from channel.owner, never guessed */}
+            {channel.owner && channel.owner.username && (
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Propriétaire</h4>
                 <div className="flex items-center space-x-3">
