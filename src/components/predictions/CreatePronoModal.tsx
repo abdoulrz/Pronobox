@@ -113,7 +113,7 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
 
   const [selectedOptionId, setSelectedOptionId] = useState('V1');
   const [pick, setPick] = useState('');
-  const [confidence, setConfidence] = useState(4);
+  const [confidence, setConfidence] = useState(80);
   const [analysis, setAnalysis] = useState('');
 
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -401,25 +401,20 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
           {/* 4. Confidence */}
           <div>
             <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">
-              4. Confiance ({confidence}/5 ★)
+              4. Confiance ({confidence}%)
             </label>
-            <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5">
-              <div className="flex gap-1.5">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    type="button"
-                    key={star}
-                    onClick={() => setConfidence(star)}
-                    className={`text-2xl transition-transform hover:scale-125 ${
-                      star <= confidence ? 'text-amber-400 scale-110' : 'text-slate-600'
-                    }`}
-                  >
-                    ★
-                  </button>
-                ))}
-              </div>
-              <span className="ml-auto text-xs font-bold text-brand-green bg-brand-green/10 px-2.5 py-1 rounded-lg">
-                {confidence * 20}%
+            <div className="flex items-center gap-4 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5">
+              <input
+                type="range"
+                min="10"
+                max="100"
+                step="5"
+                value={confidence}
+                onChange={(e) => setConfidence(parseInt(e.target.value))}
+                className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-green focus:outline-none"
+              />
+              <span className="ml-auto text-xs font-bold text-brand-green bg-brand-green/10 px-2.5 py-1 rounded-lg min-w-[45px] text-center">
+                {confidence}%
               </span>
             </div>
           </div>

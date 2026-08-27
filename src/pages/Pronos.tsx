@@ -199,7 +199,7 @@ const Pronos = () => {
                       prono.freeStatus === 'lost' ? 'bg-red-500/10 text-red-500 dark:text-red-400 border-red-500/20' :
                       'bg-brand-green/10 text-brand-green border-brand-green/20'
                     }`}>
-                      {prono.freeConfidence}%
+                      {prono.freeConfidence <= 5 ? (prono.freeConfidence || 4) * 20 : prono.freeConfidence}%
                     </div>
                   </div>
                 </div>
@@ -322,7 +322,7 @@ const Pronos = () => {
                     prono.premiumStatus === 'lost' ? 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]' :
                     'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
                   }`}>
-                    {prono.premiumConfidence}%
+                    {prono.premiumConfidence <= 5 ? (prono.premiumConfidence || 4) * 20 : prono.premiumConfidence}%
                   </div>
                 </div>
               </div>

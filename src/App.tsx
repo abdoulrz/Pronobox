@@ -29,13 +29,13 @@ import { ChannelDataProvider } from './contexts/ChannelContext';
 
 // Composant pour vérifier l'authentification initiale
 const AuthChecker: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, clearFallbackMode } = useAuth();
   
   useEffect(() => {
     console.log("AuthChecker - État d'authentification:", isAuthenticated);
     // Always attempt to use the real API on fresh load
-    localStorage.removeItem('fallbackMode');
-  }, [isAuthenticated]);
+    clearFallbackMode();
+  }, [isAuthenticated, clearFallbackMode]);
   
   return <>{children}</>;
 };

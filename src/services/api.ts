@@ -163,6 +163,9 @@ api.interceptors.response.use(
     if (error.code === 'ECONNREFUSED' || error.code === 'ECONNABORTED' || !error.response) {
       console.log('API Connection failed - using fallback mode');
       localStorage.setItem('fallbackMode', 'true');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('fallback-mode-changed'));
+      }
     }
     return Promise.reject(error);
   }

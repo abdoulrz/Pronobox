@@ -53,6 +53,7 @@ type AuthContextType = {
   updateUser: (data: Partial<User>) => Promise<User | void>;
   upgradeToTipster: () => Promise<void>;
   isFallbackMode: boolean;
+  clearFallbackMode: () => void;
 };
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{
@@ -137,6 +138,31 @@ export const AuthProvider: React.FC<{
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const handleFallbackChange = () => {
+      const mode = localStorage.getItem('fallbackMode') === 'true';
+      setIsFallbackMode(mode);
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('fallback-mode-changed', handleFallbackChange);
+      window.addEventListener('storage', handleFallbackChange);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('fallback-mode-changed', handleFallbackChange);
+        window.removeEventListener('storage', handleFallbackChange);
+      }
+    };
+  }, []);
+
+  const clearFallbackMode = () => {
+    localStorage.removeItem('fallbackMode');
+    setIsFallbackMode(false);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('fallback-mode-changed'));
+    }
+  };
   const login = async (credentials: {email: string;password: string;}) => {
     try {
       const data = await apiLogin(credentials);
@@ -246,8 +272,13 @@ export const AuthProvider: React.FC<{
     // Remove token from localStorage
     localStorage.removeItem('token');
     localStorage.removeItem('fallbackUser');
+    localStorage.removeItem('fallbackMode');
     // Clear user data
     setUser(null);
+    setIsFallbackMode(false);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('fallback-mode-changed'));
+    }
   };
   const updateUser = async (data: Partial<User>) => {
     if (user) {
@@ -333,7 +364,8 @@ export const AuthProvider: React.FC<{
         logout,
         updateUser,
         upgradeToTipster,
-        isFallbackMode
+        isFallbackMode,
+        clearFallbackMode
       }}>
 
       {!loading && children}

@@ -2004,31 +2004,18 @@ const PronosManagement = () => {
             {/* 3. Confiance (Stars + %) & Observation */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">
-                  Confiance ({formData.freeConfidence <= 5 ? (formData.freeConfidence || 4) : Math.round(formData.freeConfidence / 20)}/5 ★ &nbsp;|&nbsp; {formData.freeConfidence <= 5 ? (formData.freeConfidence || 4) * 20 : formData.freeConfidence}%)
+                <label htmlFor="prono-freeConfidence" className="block text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">
+                  Confiance (%)
                 </label>
-                <div className="flex items-center gap-1.5 p-2.5 bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl">
-                  {[1, 2, 3, 4, 5].map((star) => {
-                    const currentStars = formData.freeConfidence <= 5 
-                      ? (formData.freeConfidence || 4)
-                      : Math.round(formData.freeConfidence / 20);
-                    return (
-                      <button
-                        type="button"
-                        key={star}
-                        onClick={() => setFormData({ ...formData, freeConfidence: star * 20 })}
-                        className={`text-2xl transition-transform hover:scale-125 ${
-                          star <= currentStars ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'
-                        }`}
-                      >
-                        ★
-                      </button>
-                    );
-                  })}
-                  <span className="ml-auto text-xs font-black text-brand-green px-2.5 py-1 rounded-lg bg-brand-green/10">
-                    {formData.freeConfidence <= 5 ? (formData.freeConfidence || 4) * 20 : formData.freeConfidence}%
-                  </span>
-                </div>
+                <input
+                  id="prono-freeConfidence"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={formData.freeConfidence}
+                  onChange={e => setFormData({ ...formData, freeConfidence: parseInt(e.target.value) || 0 })}
+                  className="w-full bg-white dark:bg-brand-navy-2 border border-slate-100 dark:border-brand-slate/50 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-green/30 outline-none transition-all text-slate-800 dark:text-white"
+                />
               </div>
 
               <div className="space-y-1.5">

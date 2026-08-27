@@ -88,12 +88,12 @@ export const PredictionCard: React.FC<PredictionCardProps> = ({ prediction, isPr
           </p>
           <div className="h-1.5 w-full bg-slate-200 dark:bg-brand-navy rounded-full overflow-hidden">
             <DynamicWidthBar
-              progress={prediction.confidence}
+              progress={prediction.confidence <= 5 ? prediction.confidence * 20 : prediction.confidence}
               className={`h-full rounded-full transition-all duration-700 ${isPro ? 'bg-brand-gold' : 'bg-brand-green'}`}
             />
           </div>
           <p className="text-[10px] text-slate-400 dark:text-brand-text-3 mt-1 text-right">
-            Confiance : {prediction.confidence}%
+            Confiance : {prediction.confidence <= 5 ? prediction.confidence * 20 : prediction.confidence}%
           </p>
         </div>
       </div>
