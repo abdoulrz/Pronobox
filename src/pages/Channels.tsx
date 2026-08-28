@@ -60,6 +60,10 @@ const Channels = () => {
       const aPinned = pinnedChannels.includes(a.id) ? 1 : 0;
       const bPinned = pinnedChannels.includes(b.id) ? 1 : 0;
       if (aPinned !== bPinned) return bPinned - aPinned;
+      // Joined channels before non-joined
+      const aJoined = a.joined ? 1 : 0;
+      const bJoined = b.joined ? 1 : 0;
+      if (aJoined !== bJoined) return bJoined - aJoined;
       // Then sort by winRate descending (null = no evaluated pronos → last)
       const aRate = a.winRate ?? -1;
       const bRate = b.winRate ?? -1;
@@ -353,7 +357,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
 
         {/* Name + Metadata */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <h3 className="font-bold text-sm sm:text-base text-white truncate">
               {channel.name}
             </h3>
@@ -369,12 +373,9 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
               </span>
             )}
 
-            {/* Pin indicator */}
-            {isPinned && (
-              <span className="text-amber-400 shrink-0" title="Épinglé">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                </svg>
+            {channel.joined && (
+              <span className="inline-flex items-center gap-1 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">
+                ✓ MEMBRE
               </span>
             )}
           </div>
@@ -388,19 +389,76 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
           </p>
         </div>
 
-        {/* Win Rate (right side) */}
-        {hasWinRate && (
-          <div className="text-right shrink-0 pl-2">
-            <span className={`text-xl sm:text-2xl font-black tabular-nums ${winRateColor}`}>
-              {rateValue}%
-            </span>
-            <p className="text-[10px] text-slate-400 -mt-0.5 font-medium">réussite</p>
-          </div>
-        )}
+        {/* Right Section: Win Rate, Action Button, Pin Button */}
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 pl-1">
+          {/* Win Rate */}
+          {hasWinRate && (
+            <div className="text-right">
+              <span className={`text-xl sm:text-2xl font-black tabular-nums ${winRateColor}`}>
+                {rateValue}%
+              </span>
+              <p className="text-[10px] text-slate-400 -mt-0.5 font-medium">réussite</p>
+            </div>
+          )}
+
+          {/* Action Button (On Top) */}
+          {channel.joined ? (
+            <button
+              className="py-1.5 px-3 sm:px-3.5 rounded-xl text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1 shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate();
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Accéder
+            </button>
+          ) : channel.premium ? (
+            <button
+              className="py-1.5 px-3 sm:px-3.5 rounded-xl text-xs font-bold text-slate-950 bg-[#F59E0B] hover:bg-[#D97706] shadow-md shadow-amber-500/20 transition-all flex items-center justify-center shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onJoin();
+              }}
+            >
+              Rejoindre{(channel.price || 0) > 0 ? ` · ${channel.price}€` : ''}
+            </button>
+          ) : (
+            <button
+              className="py-1.5 px-3 sm:px-3.5 rounded-xl text-xs font-bold text-white bg-brand-green hover:bg-emerald-600 shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onJoin();
+              }}
+            >
+              Rejoindre
+            </button>
+          )}
+
+          {/* Pin toggle button (on the far right) */}
+          <button
+            className={`p-2 rounded-xl border transition-all shrink-0 ${
+              isPinned
+                ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-amber-400 hover:border-amber-500/30'
+            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePin();
+            }}
+            title={isPinned ? 'Désépingler' : 'Épingler'}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill={isPinned ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* ── Middle: Last Won Prono Preview ───────────────────── */}
-      <div className="mt-3.5 pt-3 border-t border-slate-800/80 text-xs text-slate-400">
+      <div className="mt-3 pt-2.5 border-t border-slate-800/80 text-xs text-slate-400">
         {channel.lastWonProno ? (
           <p className="flex items-center gap-1.5 text-slate-300">
             <span className="text-brand-green font-bold">✓</span>
@@ -424,62 +482,6 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
             Aucun message publié pour le moment
           </p>
         )}
-      </div>
-
-      {/* ── Bottom: Action Button + Pin Toggle ───────────────── */}
-      <div className="mt-3.5 flex items-center gap-2">
-        {channel.joined ? (
-          <button
-            className="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1.5"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNavigate();
-            }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-            Membre — Accéder
-          </button>
-        ) : channel.premium ? (
-          <button
-            className="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold text-slate-950 bg-[#F59E0B] hover:bg-[#D97706] shadow-md shadow-amber-500/20 transition-all flex items-center justify-center"
-            onClick={(e) => {
-              e.stopPropagation();
-              onJoin();
-            }}
-          >
-            Rejoindre — {(channel.price || 0) > 0 ? `${channel.price}€/mois` : 'Premium'}
-          </button>
-        ) : (
-          <button
-            className="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold text-white bg-brand-green hover:bg-emerald-600 shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center"
-            onClick={(e) => {
-              e.stopPropagation();
-              onJoin();
-            }}
-          >
-            Rejoindre
-          </button>
-        )}
-
-        {/* Pin toggle */}
-        <button
-          className={`p-2.5 rounded-xl border transition-all shrink-0 ${
-            isPinned
-              ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
-              : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-amber-400 hover:border-amber-500/30'
-          }`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onTogglePin();
-          }}
-          title={isPinned ? 'Désépingler' : 'Épingler'}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill={isPinned ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
-        </button>
       </div>
     </div>
   );

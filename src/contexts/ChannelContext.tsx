@@ -88,37 +88,22 @@ export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ childre
         return;
       }
 
-      // Read locally-persisted minimal membership data {id, memberIds[]}
-      let localMembership: Record<string, string[]> = {};
-      try {
-        const parsed = JSON.parse(localStorage.getItem('pronobox_membership') || '{}');
-        localMembership = parsed || {};
-      } catch { localMembership = {}; }
 
       const channels: Channel[] = data.map((c: any) => {
         const mapped = mapApiChannel(c, user?.id);
-        // If the server says not joined, check our local membership cache
-        if (!mapped.joined && user?.id) {
-          const localMembers = localMembership[String(mapped.id)] || [];
-          if (localMembers.includes(String(user.id))) {
-            return { ...mapped, joined: true };
-          }
-        }
         return mapped;
       });
 
-      // Update minimal membership cache: only store {channelId -> memberIds[]}
-      // This is tiny (just IDs) and will never exceed localStorage quota
+      // Rebuild the membership cache purely from the server response.
+      // The server is the source of truth — do NOT merge stale local IDs.
+      const freshMembership: Record<string, string[]> = {};
       data.forEach((c: any) => {
         const channelId = String(c.id || c._id);
         const serverMemberIds = (c.members || []).map((m: any) => String(m._id || m.id || m));
-        // Merge: keep any locally-joined IDs that the server doesn't know about yet
-        const localIds = localMembership[channelId] || [];
-        const merged = Array.from(new Set([...serverMemberIds, ...localIds]));
-        localMembership[channelId] = merged;
+        freshMembership[channelId] = serverMemberIds;
       });
       try {
-        localStorage.setItem('pronobox_membership', JSON.stringify(localMembership));
+        localStorage.setItem('pronobox_membership', JSON.stringify(freshMembership));
       } catch { /* quota exceeded — silently skip, in-memory state is still correct */ }
 
       const channelDetails: Record<string, ChannelDetails> = {};

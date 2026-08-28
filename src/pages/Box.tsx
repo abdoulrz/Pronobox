@@ -265,6 +265,10 @@ const Box = () => {
       const aPinned = a.pinned ? 1 : 0;
       const bPinned = b.pinned ? 1 : 0;
       if (aPinned !== bPinned) return bPinned - aPinned;
+      // Joined channels before non-joined
+      const aJoined = a.joined ? 1 : 0;
+      const bJoined = b.joined ? 1 : 0;
+      if (aJoined !== bJoined) return bJoined - aJoined;
       const aRate = a.winRate ?? -1;
       const bRate = b.winRate ?? -1;
       return bRate - aRate;

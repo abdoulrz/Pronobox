@@ -2724,10 +2724,10 @@ app.post('/api/channels/:id/leave', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Le propriétaire ne peut pas quitter son propre canal. Supprimez-le à la place.' });
     }
     await Channel.findByIdAndUpdate(req.params.id, {
-      $pull: { members: req.user.id }
+      $pull: { members: new mongoose.Types.ObjectId(req.user.id) }
     });
     await User.findByIdAndUpdate(req.user.id, {
-      $pull: { channelsJoined: channel._id }
+      $pull: { channelsJoined: new mongoose.Types.ObjectId(channel._id) }
     });
     res.json({ message: 'Left channel successfully' });
   } catch (error) {
