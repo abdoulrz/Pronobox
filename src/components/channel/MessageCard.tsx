@@ -291,10 +291,15 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                   }
 
                   let cleanTitle = mainText
+                    .replace(/RÉSULTAT DU PRONOSTIC\s*:\s*/gi, '')
+                    .replace(/🎯\s*PRONOSTIC OFFICIEL\s*:\s*/gi, '')
+                    .replace(/Match\s*:\s*/gi, '')
+                    .replace(/Score Final\s*:\s*[\d-]+\s*/gi, '')
+                    .replace(/Résultat\s*:\s*(✅\s*GAGNÉ|❌\s*PERDU)?/gi, '')
                     .replace(/\(⏳\s*en\s*attente\)/gi, '')
                     .replace(/\(✅\s*gagné\)/gi, '')
                     .replace(/\(❌\s*perdu\)/gi, '')
-                    .replace(/🎯/g, '')
+                    .replace(/[🎯📊🏆]/g, '')
                     .trim();
 
                   let matchName = cleanTitle;
@@ -310,13 +315,32 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                     pickName = parts.slice(1).join(' - ').trim();
                   }
 
+                  // If matchName contains duplicate team names, extract single match
+                  if (matchName.includes(' vs ')) {
+                    const vsParts = matchName.split(' vs ');
+                    const home = vsParts[0].replace(/⚽/g, '').trim();
+                    const away = vsParts[1].split(/\s+/)[0].replace(/⚽/g, '').trim();
+                    if (home && away) {
+                      matchName = `${home} vs ${away}`;
+                    }
+                  }
+
+                  const isOfficialAdmin = message.user?.username?.includes('Officiel') || message.user?.role === 'admin';
+
                   return (
                     <div className="rounded-2xl p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 border border-emerald-500/40 shadow-xl max-w-sm w-full my-1 text-white">
                       {/* Header Badge */}
                       <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2 mb-2.5">
                         <div className="flex items-center gap-1.5">
                           <span className="text-base">🎯</span>
-                          <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Pronostic Officiel</span>
+                          <span className="text-xs font-black uppercase tracking-wider text-emerald-400 truncate max-w-[130px]">
+                            {message.user?.username || 'PronosBox'}
+                          </span>
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 ${
+                            isOfficialAdmin ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          }`}>
+                            {isOfficialAdmin ? 'OFFICIEL' : 'TIPSTER'}
+                          </span>
                         </div>
                         <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border shadow-sm ${statusStyle}`}>
                           {statusBadge}

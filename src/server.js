@@ -2549,7 +2549,9 @@ app.get('/api/channels', async (req, res) => {
               if (text.includes(' vs ')) {
                 const parts = text.split('\n')[0].split(' — ')[0].split(' - ')[0].split(' vs ');
                 if (parts.length >= 2) {
-                  home = parts[0].replace(/[⚽🎯🏆💡]/g, '').trim();
+                  // Strip system announcement headers (e.g. "🎯 RÉSULTAT DU PRONOSTIC :") before extracting team name
+                  const rawHome = parts[0].replace(/[⚽🎯🏆💡]/g, '').trim();
+                  home = rawHome.includes(':') ? rawHome.split(':').pop().trim() : rawHome;
                   away = parts[1].replace(/[⚽🎯🏆💡]/g, '').split('(')[0].trim();
                 }
               }
@@ -3211,16 +3213,16 @@ setTimeout(() => {
 // Initialize mock data
 const initializeMockData = async () => {
   try {
-    // One-shot migration: rename 'Admin' → '@Pronosbox'
-    const oldAdmin = await User.findOne({ username: 'Admin', role: 'admin' });
+    // One-shot migration: rename 'Admin' or '@Pronosbox' → '@Pronosbox Officiel'
+    const oldAdmin = await User.findOne({ username: { $in: ['Admin', '@Pronosbox'] }, role: 'admin' });
     if (oldAdmin) {
-      oldAdmin.username = '@Pronosbox';
+      oldAdmin.username = '@Pronosbox Officiel';
       await oldAdmin.save();
-      console.log('Migration: Admin renamed to @Pronosbox');
+      console.log('Migration: Admin renamed to @Pronosbox Officiel');
     }
 
-    // One-shot migration: assign @Pronosbox as owner of DOOOBI if orphaned
-    const pronosboxUser = await User.findOne({ username: '@Pronosbox' });
+    // One-shot migration: assign @Pronosbox Officiel as owner of DOOOBI if orphaned
+    const pronosboxUser = await User.findOne({ username: '@Pronosbox Officiel' });
     if (pronosboxUser) {
       const doobiChannel = await Channel.findOne({ name: /DOOOBI/i });
       if (doobiChannel) {
@@ -3235,23 +3237,24 @@ const initializeMockData = async () => {
             doobiChannel.members.unshift(pronosboxUser._id);
           }
           await doobiChannel.save();
-          console.log('Migration: @Pronosbox assigned as owner of DOOOBI');
+          console.log('Migration: @Pronosbox Officiel assigned as owner of DOOOBI');
         }
       }
     }
-    // Ensure PronosBox bot user exists
-    let botUser = await User.findOne({ username: 'PronosBox' });
-    if (!botUser) {
-      botUser = new User({
-        username: 'PronosBox',
-        email: 'bot@pronosbox.com',
-        password: 'botpassword123',
-        role: 'admin',
-        isPro: true,
-        avatar: 'https://images.unsplash.com/photo-1531379410502-63bfe8cdaf6f?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80'
+    // Ensure official PronosBox channel exists
+    let officialChannel = await Channel.findOne({ name: 'PronosBox Officiel' });
+    if (!officialChannel && pronosboxUser) {
+      officialChannel = new Channel({
+        name: 'PronosBox Officiel',
+        description: 'Le canal officiel de la plateforme PronosBox. Pronostics officiels, annonces et actualités de la communauté.',
+        premium: false,
+        owner: pronosboxUser._id,
+        members: [pronosboxUser._id],
+        avatar: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80',
+        lastMessage: 'Bienvenue sur le canal officiel PronosBox ! ⚽🎯'
       });
-      await botUser.save();
-      console.log('PronosBox bot user created');
+      await officialChannel.save();
+      console.log('Official channel "PronosBox Officiel" created.');
     }
 
     // Check if we already have users
@@ -3260,7 +3263,7 @@ const initializeMockData = async () => {
       console.log('Initializing mock data...');
       // Create mock users
       const adminUser = new User({
-        username: '@Pronosbox',
+        username: '@Pronosbox Officiel',
         email: 'admin@pronosbox.com',
         password: 'admin123',
         role: 'admin',

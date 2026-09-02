@@ -793,7 +793,7 @@ const AdminDashboard = () => {
                             <p className="text-sm font-bold text-slate-800 dark:text-white">{c.name}</p>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400 font-medium">{c.owner?.username || '@Pronosbox'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400 font-medium">{c.owner?.username || '@Pronosbox Officiel'}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${c.premium ? 'bg-amber-500/10 text-amber-500' : 'bg-brand-green/10 text-brand-green'}`}>
                             {c.premium ? 'Premium' : 'Gratuit'}

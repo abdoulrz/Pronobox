@@ -339,9 +339,9 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
       onClick={onNavigate}
     >
       {/* ── Top Header: Avatar + Channel Info + Win Rate ─────────── */}
-      <div className="flex items-start gap-3 sm:gap-3.5">
+      <div className="flex items-start gap-2.5 sm:gap-3.5">
         {/* Avatar */}
-        <div className="w-12 h-12 rounded-2xl overflow-hidden shrink-0 border border-slate-700/80 bg-slate-850 shadow-inner">
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl overflow-hidden shrink-0 border border-slate-700/80 bg-slate-850 shadow-inner">
           {channel.avatar ? (
             <img
               src={channel.avatar}
@@ -349,7 +349,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-brand-green text-lg font-bold">
+            <div className="w-full h-full flex items-center justify-center text-brand-green text-sm sm:text-lg font-bold">
               {channel.name.charAt(0).toUpperCase()}
             </div>
           )}
@@ -357,31 +357,31 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
 
         {/* Name + Metadata */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <h3 className="font-bold text-sm sm:text-base text-white truncate">
+          <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+            <h3 className="font-bold text-xs sm:text-base text-white truncate max-w-[110px] xs:max-w-[140px] sm:max-w-none">
               {channel.name}
             </h3>
 
             {/* Premium / Gratuit badge */}
             {channel.premium ? (
-              <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">
+              <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded sm:rounded-md uppercase tracking-wider shrink-0">
                 ★ PREMIUM
               </span>
             ) : (
-              <span className="inline-flex items-center bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">
+              <span className="inline-flex items-center bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded sm:rounded-md uppercase tracking-wider shrink-0">
                 GRATUIT
               </span>
             )}
 
             {channel.joined && (
-              <span className="inline-flex items-center gap-1 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">
+              <span className="inline-flex items-center gap-1 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded sm:rounded-md uppercase tracking-wider shrink-0">
                 ✓ MEMBRE
               </span>
             )}
           </div>
 
           {/* Members + Owner */}
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 truncate">
             {(channel.members || 0).toLocaleString()} membres
             {channel.owner?.username && (
               <> · <span className="text-slate-300 font-medium">{channel.owner.username}</span></>
@@ -390,34 +390,55 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
         </div>
 
         {/* Right Section: Win Rate, Action Button, Pin Button */}
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 pl-1">
-          {/* Win Rate */}
-          {hasWinRate && (
-            <div className="text-right">
-              <span className={`text-xl sm:text-2xl font-black tabular-nums ${winRateColor}`}>
-                {rateValue}%
-              </span>
-              <p className="text-[10px] text-slate-400 -mt-0.5 font-medium">réussite</p>
-            </div>
-          )}
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5 sm:gap-2.5 shrink-0 pl-0.5">
+          {/* Sub-row on mobile: Win Rate + Pin Button */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Win Rate */}
+            {hasWinRate && (
+              <div className="text-right">
+                <span className={`text-sm sm:text-2xl font-black tabular-nums ${winRateColor}`}>
+                  {rateValue}%
+                </span>
+                <p className="text-[8px] sm:text-[10px] text-slate-400 -mt-0.5 font-medium">réussite</p>
+              </div>
+            )}
 
-          {/* Action Button (On Top) */}
+            {/* Pin toggle button */}
+            <button
+              className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl border transition-all shrink-0 ${
+                isPinned
+                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                  : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-amber-400 hover:border-amber-500/30'
+              }`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePin();
+              }}
+              title={isPinned ? 'Désépingler' : 'Épingler'}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill={isPinned ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Action Button */}
           {channel.joined ? (
             <button
-              className="py-1.5 px-3 sm:px-3.5 rounded-xl text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1 shrink-0"
+              className="py-1 sm:py-1.5 px-2.5 sm:px-3.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1 shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
                 onNavigate();
               }}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-3.5 sm:w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
               Accéder
             </button>
           ) : channel.premium ? (
             <button
-              className="py-1.5 px-3 sm:px-3.5 rounded-xl text-xs font-bold text-slate-950 bg-[#F59E0B] hover:bg-[#D97706] shadow-md shadow-amber-500/20 transition-all flex items-center justify-center shrink-0"
+              className="py-1 sm:py-1.5 px-2.5 sm:px-3.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold text-slate-950 bg-[#F59E0B] hover:bg-[#D97706] shadow-md shadow-amber-500/20 transition-all flex items-center justify-center shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
                 onJoin();
@@ -427,7 +448,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
             </button>
           ) : (
             <button
-              className="py-1.5 px-3 sm:px-3.5 rounded-xl text-xs font-bold text-white bg-brand-green hover:bg-emerald-600 shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center shrink-0"
+              className="py-1 sm:py-1.5 px-2.5 sm:px-3.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold text-white bg-brand-green hover:bg-emerald-600 shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
                 onJoin();
@@ -436,52 +457,93 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
               Rejoindre
             </button>
           )}
-
-          {/* Pin toggle button (on the far right) */}
-          <button
-            className={`p-2 rounded-xl border transition-all shrink-0 ${
-              isPinned
-                ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
-                : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-amber-400 hover:border-amber-500/30'
-            }`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onTogglePin();
-            }}
-            title={isPinned ? 'Désépingler' : 'Épingler'}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill={isPinned ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-            </svg>
-          </button>
         </div>
       </div>
 
       {/* ── Middle: Last Won Prono Preview ───────────────────── */}
       <div className="mt-3 pt-2.5 border-t border-slate-800/80 text-xs text-slate-400">
-        {channel.lastWonProno ? (
-          <p className="flex items-center gap-1.5 text-slate-300">
-            <span className="text-brand-green font-bold">✓</span>
-            <span>
-              Dernier prono gagné · <strong className="text-white font-semibold">{channel.lastWonProno.home} vs {channel.lastWonProno.away}</strong>
-              {channel.lastWonProno.result && <> — <span className="text-emerald-300 font-medium">{channel.lastWonProno.result}</span></>}
-            </span>
-          </p>
-        ) : channel.lastMessage && (channel.lastMessage.includes(' vs ') || channel.lastMessage.includes('PRONOSTIC')) ? (
-          <p className="flex items-center gap-1.5 text-slate-300 truncate">
-            <span className="text-brand-green font-bold">✓</span>
-            <span className="truncate">{channel.lastMessage}</span>
-          </p>
-        ) : channel.lastMessage ? (
-          <p className="flex items-center gap-1.5 text-slate-300 truncate">
-            <span className="text-slate-400">💬</span>
-            <span className="truncate">{channel.lastMessage}</span>
-          </p>
-        ) : (
-          <p className="text-slate-500 italic">
-            Aucun message publié pour le moment
-          </p>
-        )}
+        {(() => {
+          if (channel.lastWonProno) {
+            return (
+              <p className="flex items-center gap-1 text-slate-300 truncate">
+                <span className="truncate">
+                  Prono <strong className="text-white font-semibold">{channel.lastWonProno.home} vs {channel.lastWonProno.away}</strong>: <strong className="text-emerald-400 font-bold">Gagné</strong> --
+                </span>
+                <span className="shrink-0 font-bold ml-1">✅</span>
+              </p>
+            );
+          }
+
+          const msg = channel.lastMessage || '';
+          if (msg.includes(' vs ') || msg.includes('PRONOSTIC')) {
+            const isWon = msg.includes('✅') || msg.toLowerCase().includes('gagné') || msg.toLowerCase().includes('victoire');
+            const isDraw = msg.includes('🤝') || msg.toLowerCase().includes('nul') || msg.toLowerCase().includes('draw');
+            const isLost = msg.includes('❌') || msg.toLowerCase().includes('perdu') || msg.toLowerCase().includes('défaite');
+
+            // Strictly extract "TeamA vs TeamB" from the text
+            let cleanMatchTitle = msg;
+            if (msg.includes(' vs ')) {
+              const vsParts = msg.split(' vs ');
+              // Extract Team A: take substring after last ':' or header
+              const rawA = vsParts[0].split(':').pop() || vsParts[0];
+              const home = rawA.replace(/[🎯⚽📊🏆]/g, '').trim().split('\n').pop() || '';
+              // Extract Team B: take substring before score/dashes/parentheses
+              const away = vsParts[1].replace(/[🎯⚽📊🏆]/g, '').trim().split(/\s{2,}|\n|—|-|\(/)[0].trim();
+              if (home && away) {
+                cleanMatchTitle = `${home} vs ${away}`;
+              }
+            } else {
+              cleanMatchTitle = msg
+                .replace(/^.*?:/gi, '')
+                .replace(/\(.*?$/gi, '')
+                .replace(/—.*$/gi, '')
+                .replace(/[🎯⚽📊🏆]/g, '')
+                .trim();
+            }
+
+            let icon = '⏳';
+            let statusLabel = 'En attente';
+            let labelColor = 'text-slate-400';
+
+            if (isWon) {
+              icon = '✅';
+              statusLabel = 'Gagné';
+              labelColor = 'text-emerald-400';
+            } else if (isDraw) {
+              icon = '🤝';
+              statusLabel = 'Nul';
+              labelColor = 'text-amber-400';
+            } else if (isLost) {
+              icon = '❌';
+              statusLabel = 'Perdu';
+              labelColor = 'text-rose-400';
+            }
+
+            return (
+              <p className="flex items-center gap-1 text-slate-300 truncate">
+                <span className="truncate">
+                  Prono <strong className="text-white font-semibold">{cleanMatchTitle}</strong>: <strong className={`${labelColor} font-bold`}>{statusLabel}</strong> --
+                </span>
+                <span className="shrink-0 font-bold ml-1">{icon}</span>
+              </p>
+            );
+          }
+
+          if (msg) {
+            return (
+              <p className="flex items-center gap-1.5 text-slate-300 truncate">
+                <span className="shrink-0 text-slate-400">💬</span>
+                <span className="truncate">{msg}</span>
+              </p>
+            );
+          }
+
+          return (
+            <p className="text-slate-500 italic">
+              Aucun message publié pour le moment
+            </p>
+          );
+        })()}
       </div>
     </div>
   );
