@@ -127,6 +127,25 @@ if (!fs.existsSync(uploadsDir)) {
 app.use('/uploads', express.static(uploadsDir));
 app.use('/api/uploads', express.static(uploadsDir)); // Also serve at /api/uploads for Nginx proxy compatibility
 
+// Fallback placeholder for missing uploaded files in development
+const uploadPlaceholderSvg = Buffer.from(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+    <rect width="200" height="200" fill="#0D111D"/>
+    <circle cx="100" cy="100" r="40" fill="#10B981" opacity="0.2"/>
+    <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="bold" font-size="28" fill="#10B981">PB</text>
+  </svg>`,
+  'utf-8'
+);
+
+const handleUploadFallback = (req, res) => {
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.status(200).send(uploadPlaceholderSvg);
+};
+
+app.use('/uploads', handleUploadFallback);
+app.use('/api/uploads', handleUploadFallback);
+
 // MongoDB Connection Options
 const mongoOptions = {
   serverSelectionTimeoutMS: 5000,
@@ -2453,50 +2472,28 @@ async function ensureChannelOwner(ch) {
 app.get('/api/channels', async (req, res) => {
   try {
     let channels = await Channel.find()
-      .populate('owner', '_id username avatar')
+      .populate('owner', '_id username avatar isCertified role')
       .populate('members', '_id username avatar');
 
     for (const ch of channels) {
       await ensureChannelOwner(ch);
     }
 
-    // Auto-sync channel lastMessage with verified pronos
-    try {
-      const cleanStr = (s) => String(s || '').replace(/[⚽🎯🏆💡]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().trim();
-      const verifiedPronos = await Prono.find({ status: { $in: ['won', 'lost'] } }).lean();
-
-      for (const ch of channels) {
-        if (ch.lastMessage && ch.lastMessage.includes(' vs ')) {
-          for (const vp of verifiedPronos) {
-            const normHome = cleanStr(vp.homeTeamName);
-            const normAway = cleanStr(vp.awayTeamName);
-            if (normHome && normAway && cleanStr(ch.lastMessage).includes(normHome) && cleanStr(ch.lastMessage).includes(normAway)) {
-              const statusTag = vp.status === 'won' ? '(✅ gagné)' : '(❌ perdu)';
-              const updated = ch.lastMessage
-                .replace(/\(⏳\s*en\s*attente\)/gi, statusTag)
-                .replace(/\(✅\s*gagné\)/gi, statusTag)
-                .replace(/\(❌\s*perdu\)/gi, statusTag);
-              if (updated !== ch.lastMessage) {
-                ch.lastMessage = updated;
-                await Channel.updateOne({ _id: ch._id }, { $set: { lastMessage: updated } });
-              }
-            }
-          }
-        }
-      }
-    } catch (e) {}
-
-    // Compute per-channel win rate and prediction metrics from all DB pronos, cached pronos & channel messages
+    // Compute per-channel win rate and prediction metrics from all DB pronos & channel messages
     try {
       const cleanStr = (s) => String(s || '').replace(/[⚽🎯🏆💡]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().trim();
       const allDbPronos = await Prono.find().lean();
       const allPronosPool = [...allDbPronos, ...(typeof cachedPronosList !== 'undefined' ? cachedPronosList : [])];
 
-      // Convert to plain JS objects to guarantee winRate & lastWonProno serialize cleanly
+      // Convert to plain JS objects to guarantee winRate & lastProno serialize cleanly
       const channelList = channels.map(ch => {
         const chObj = ch.toObject ? ch.toObject() : { ...ch };
         const chId = String(ch._id || ch.id);
         const chNameLower = (ch.name || '').toLowerCase();
+        const cleanLastMsg = ch.lastMessage ? cleanStr(ch.lastMessage) : '';
+
+        // Pre-combine cleaned message text once for O(1) matching per prono
+        const combinedMsgText = (ch.messages || []).map(m => cleanStr(m.text)).join(' ');
 
         // Deduplicated map of predictions published for this channel
         const channelPronos = new Map();
@@ -2513,16 +2510,10 @@ app.get('/api/channels', async (req, res) => {
             const normHome = cleanStr(p.homeTeamName);
             const normAway = cleanStr(p.awayTeamName);
             if (normHome && normAway) {
-              if (ch.lastMessage && cleanStr(ch.lastMessage).includes(normHome) && cleanStr(ch.lastMessage).includes(normAway)) {
+              if (cleanLastMsg && cleanLastMsg.includes(normHome) && cleanLastMsg.includes(normAway)) {
                 isMatch = true;
-              } else if (ch.messages) {
-                for (const msg of ch.messages) {
-                  const msgText = cleanStr(msg.text);
-                  if (msgText.includes(normHome) && msgText.includes(normAway)) {
-                    isMatch = true;
-                    break;
-                  }
-                }
+              } else if (combinedMsgText && combinedMsgText.includes(normHome) && combinedMsgText.includes(normAway)) {
+                isMatch = true;
               }
             }
           }
@@ -2534,7 +2525,9 @@ app.get('/api/channels', async (req, res) => {
               away: p.awayTeamName,
               status: p.status || p.freeStatus || 'pending',
               result: p.freeExpectedResult || p.premiumExpectedResult || '',
-              verifiedAt: p.verifiedAt || p.updatedAt
+              actualResult: p.actualResult || '',
+              verifiedAt: p.verifiedAt || p.updatedAt,
+              matchDate: p.matchDate
             });
           }
         }
@@ -2549,7 +2542,6 @@ app.get('/api/channels', async (req, res) => {
               if (text.includes(' vs ')) {
                 const parts = text.split('\n')[0].split(' — ')[0].split(' - ')[0].split(' vs ');
                 if (parts.length >= 2) {
-                  // Strip system announcement headers (e.g. "🎯 RÉSULTAT DU PRONOSTIC :") before extracting team name
                   const rawHome = parts[0].replace(/[⚽🎯🏆💡]/g, '').trim();
                   home = rawHome.includes(':') ? rawHome.split(':').pop().trim() : rawHome;
                   away = parts[1].replace(/[⚽🎯🏆💡]/g, '').split('(')[0].trim();
@@ -2570,6 +2562,7 @@ app.get('/api/channels', async (req, res) => {
                     away,
                     status,
                     result: msg.pronoActualResult || '',
+                    actualResult: msg.pronoActualResult || '',
                     verifiedAt: msg.time
                   });
                 }
@@ -2586,7 +2579,31 @@ app.get('/api/channels', async (req, res) => {
         chObj.winRate = evaluated.length > 0 ? Math.round((wonList.length / evaluated.length) * 100) : null;
         chObj.totalPronosCount = pronoList.length;
 
-        // Last won prono preview
+        // Most recent prono preview (any status)
+        if (pronoList.length > 0) {
+          pronoList.sort((a, b) => new Date(b.verifiedAt || b.matchDate || 0).getTime() - new Date(a.verifiedAt || a.matchDate || 0).getTime());
+          const recent = pronoList[0];
+          let prediction = 'En attente';
+          if (recent.status === 'won') {
+            prediction = `Victoire ${recent.home}`;
+          } else if (recent.status === 'lost') {
+            prediction = 'Défaite';
+          } else if (recent.status === 'draw' || recent.status === 'partial') {
+            prediction = 'Match nul';
+          }
+
+          chObj.lastProno = {
+            home: recent.home,
+            away: recent.away,
+            status: recent.status || 'pending',
+            prediction: prediction,
+            score: recent.actualResult || ''
+          };
+        } else {
+          chObj.lastProno = null;
+        }
+
+        // Keep lastWonProno backward compatibility
         if (wonList.length > 0) {
           wonList.sort((a, b) => new Date(b.verifiedAt || 0).getTime() - new Date(a.verifiedAt || 0).getTime());
           const lastWon = wonList[0];

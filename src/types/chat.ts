@@ -46,12 +46,21 @@ export interface Channel {
     id: string | number;
     username: string;
     avatar: string;
+    isCertified?: boolean;
+    role?: string;
   };
   premium?: boolean;
   price?: number;
   allowVoiceMessages?: boolean;
   winRate?: number | null;
   lastWonProno?: { home: string; away: string; result: string } | null;
+  lastProno?: {
+    home: string;
+    away: string;
+    status: string;
+    prediction: string;
+    score?: string;
+  } | null;
 }
 
 export interface UserFeatures {

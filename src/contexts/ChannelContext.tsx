@@ -54,10 +54,17 @@ const mapApiChannel = (c: any, currentUserId?: string): Channel => {
     category: c.premium ? 'premium' : 'free',
     allowVoiceMessages: c.allowVoiceMessages !== false,
     owner: c.owner
-      ? { id: c.owner.id || c.owner._id || c.owner, username: c.owner.username || '', avatar: c.owner.avatar || '' }
-      : { id: '', username: '', avatar: '' },
+      ? { 
+          id: c.owner.id || c.owner._id || c.owner, 
+          username: c.owner.username || '', 
+          avatar: c.owner.avatar || '',
+          isCertified: Boolean(c.owner.isCertified),
+          role: c.owner.role || 'user'
+        }
+      : { id: '', username: '', avatar: '', isCertified: false, role: 'user' },
     winRate: c.winRate ?? null,
-    lastWonProno: c.lastWonProno ?? null
+    lastWonProno: c.lastWonProno ?? null,
+    lastProno: c.lastProno ?? null
   };
 };
 
@@ -77,14 +84,22 @@ const mapApiChannelDetails = (c: any): ChannelDetails => ({
 });
 
 export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [channelData, setChannelData] = useState<ChannelData | null>(null);
+  const [channelData, setChannelData] = useState<ChannelData | null>(() => {
+    try {
+      const cached = localStorage.getItem('pronobox_channels_cache');
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch { /* ignore */ }
+    return null;
+  });
   const { user } = useAuth();
 
   const fetchChannels = useCallback(async () => {
     try {
       const data = await getChannels();
       if (!Array.isArray(data)) {
-        setChannelData({ channels: [], channelDetails: {} });
+        setChannelData(prev => prev || { channels: [], channelDetails: {} });
         return;
       }
 
@@ -113,9 +128,12 @@ export const ChannelDataProvider: React.FC<{ children: ReactNode }> = ({ childre
       });
 
       setChannelData({ channels, channelDetails });
+      try {
+        localStorage.setItem('pronobox_channels_cache', JSON.stringify({ channels, channelDetails }));
+      } catch { /* ignore */ }
     } catch (error) {
       console.error('Erreur lors du chargement des canaux:', error);
-      setChannelData({ channels: [], channelDetails: {} });
+      setChannelData(prev => prev || { channels: [], channelDetails: {} });
     }
   }, [user?.id]);
 

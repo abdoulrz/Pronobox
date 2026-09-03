@@ -14,6 +14,11 @@ export default defineConfig({
         target: 'http://localhost:5001',
         changeOrigin: true,
       },
+      '^/\\d{10,}_.*': {
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+        rewrite: (path) => `/uploads${path}`,
+      },
     },
   },
 })

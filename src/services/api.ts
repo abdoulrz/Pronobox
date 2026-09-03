@@ -108,13 +108,21 @@ api.interceptors.request.use(
 const transformUploadUrls = (obj: any): any => {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === 'string') {
+    const apiURL = (import.meta as any).env?.VITE_API_URL || '/api';
+    const cleanApiURL = apiURL.endsWith('/') ? apiURL.slice(0, -1) : apiURL;
+
     if (obj.startsWith('/uploads/')) {
-      const apiURL = (import.meta as any).env?.VITE_API_URL || '/api';
-      const cleanApiURL = apiURL.endsWith('/') ? apiURL.slice(0, -1) : apiURL;
-      const cleanObj = obj.startsWith('/') ? obj : `/${obj}`;
-      // This will map /uploads/xxx to /api/uploads/xxx (or http://domain/api/uploads/xxx)
-      // which is correctly served by the backend proxy.
-      return `${cleanApiURL}${cleanObj}`;
+      return `${cleanApiURL}${obj}`;
+    }
+    if (obj.startsWith('api/uploads/')) {
+      return `/${obj}`;
+    }
+    if (obj.startsWith('/api/uploads/')) {
+      return obj;
+    }
+    // Handle raw uploaded file names like "1781188325830_378357448_1001685476.png"
+    if (/^\d{10,}_\S+\.(png|jpe?g|jfif|webp|gif|webm|mp3|wav|pdf)$/i.test(obj)) {
+      return `${cleanApiURL}/uploads/${obj}`;
     }
     return obj;
   }

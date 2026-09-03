@@ -112,10 +112,11 @@ Ce document décrit les étapes nécessaires pour faire passer PronosBox de son 
 ## 🎖️ Phase 6 : Système de Certification & Classement des Tipsters
 
 - [ ] **Hiérarchie des Tipsters (Niveau 1 : Validé / Niveau 2 : Certifié)** :
-    - [ ] **Règles d'attribution automatique de la certification** :
-        - Minimum 30 jours d'activité.
-        - Minimum 20 pronostics formulaires publiés.
-        - Minimum 50% de taux de réussite (win-rate).
+    - [ ] **Règles d'attribution de la certification Tipster (★)** :
+        - Minimum 20 pronostics publiés dans un mois calendaire.
+        - Taux de réussite (win-rate) maintenu à ≥ 50%.
+        - Procédure de vérification d'identité : Dès que les compétences sont prouvées, demande d'informations personnelles pour s'assurer qu'il s'agit d'une personne réelle souhaitant s'engager avec la plateforme.
+        - Badge visuel ★ doré sur les cartes de canaux et les pronostics.
     - [ ] **Réévaluation dynamique continue** : Perte automatique du badge si le taux de réussite chute sous 50% sur fenêtre glissante.
 - [ ] **Priorisation Visuelle des Canaux & Pronostics** :
     - [ ] Ordre des canaux : 1. Épinglés → 2. Tipsters Certifiés (Admins en tête, triés par performance) → 3. Tipsters Non-certifiés (triés par performance).
