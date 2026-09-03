@@ -7,7 +7,7 @@ import { Channel } from '../types/channel';
 const Channels = () => {
   const { user, isTipster: isTipsterAuth } = useAuth();
   const navigate = useNavigate();
-  const { channelData, navigateToChannel, addChannel } = useChannelData();
+  const { channelData, navigateToChannel, addChannel, setChannelJoined } = useChannelData();
 
   const [activeTab, setActiveTab] = useState('all');
 
@@ -77,6 +77,7 @@ const Channels = () => {
 
   const handleJoinChannel = async (channelId: string | number) => {
     const idStr = String(channelId);
+    setChannelJoined?.(channelId, true);
     setJoinedChannels((prev) => {
       const updated = [...prev, idStr];
       localStorage.setItem('joinedChannels', JSON.stringify(updated));
