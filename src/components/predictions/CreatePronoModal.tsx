@@ -10,6 +10,7 @@ export interface PronoSubmissionData {
   formattedTitle: string;
   matchId?: string | number;
   matchDate?: string | Date;
+  league?: string;
 }
 
 interface CreatePronoModalProps {
@@ -214,7 +215,8 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
       analysis,
       formattedTitle,
       matchId: finalMatchId,
-      matchDate: finalMatchDate
+      matchDate: finalMatchDate,
+      league: selectedMatch?.league || ''
     });
 
     onClose();

@@ -54,6 +54,6 @@ Ces règles sont strictement contraignantes pour tous les modèles et sous-agent
 
 ## 5. Moteur de Pronostics & Canaux (Règles Métier)
 * **Unification :** Les pronostics publiés depuis un canal (`CreatePronoModal.tsx`) et depuis le tableau de bord (`AdminDashboard.tsx`) partagent la même collection MongoDB `Prono` avec le véritable `matchId` officiel API-Sports.
-* **Vérification Quotidienne :** Programmée à 12:00:00 UTC (`scheduleDailyVerificationAt12PMUTC()`).
+* **Vérification Quotidienne & Périodique :** Programmée à Minuit (00:00:00 UTC), Midi (12:00:00 UTC), balayage horaire et démarrage serveur (`scheduleDailyVerificationAt12PMUTC()`).
 * **Synchronisation en Direct :** Les cartes dans les canaux s'actualisent en direct (`won`/`lost` + Score Final) avec annonce automatique.
 * **Déduplication :** Normalisation stricte (`cleanStr`) éliminant émojis, accents et espaces pour éviter tout doublon.

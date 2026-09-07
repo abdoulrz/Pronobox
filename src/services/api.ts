@@ -568,9 +568,25 @@ export const uploadMedia = async (file: File | Blob) => {
   }
 };
 
-export const sendMessage = async (channelId: string | number, text: string, imageUrl?: string | null, audioUrl?: string | null, isImage?: boolean, isVoiceMessage?: boolean, replyTo?: any) => {
+export const sendMessage = async (
+  channelId: string | number, 
+  text: string, 
+  imageUrl?: string | null, 
+  audioUrl?: string | null, 
+  isImage?: boolean, 
+  isVoiceMessage?: boolean, 
+  replyTo?: any,
+  pronoData?: {
+    pronoMatchId?: number;
+    pronoStatus?: string;
+    pronoActualResult?: string;
+    pronoLeague?: string;
+    pronoMatchDate?: Date | string;
+    pronoConfidence?: number;
+  }
+) => {
   try {
-    const payload: any = { text };
+    const payload: any = { text, ...(pronoData || {}) };
     if (imageUrl) payload.imageUrl = imageUrl;
     if (audioUrl) payload.audioUrl = audioUrl;
     if (isImage !== undefined) payload.isImage = isImage;
@@ -581,7 +597,7 @@ export const sendMessage = async (channelId: string | number, text: string, imag
     return response.data;
   } catch (error) {
     if (localStorage.getItem('fallbackMode') === 'true') {
-      return { id: Date.now(), text, time: new Date().toLocaleTimeString(), sender: 'me' };
+      return { id: Date.now(), text, time: new Date().toLocaleTimeString(), sender: 'me', ...(pronoData || {}) };
     }
     throw error;
   }

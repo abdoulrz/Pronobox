@@ -127,6 +127,28 @@ export const MessageCard: React.FC<MessageCardProps> = ({
     }
   };
 
+  const isLegacyAnnouncement = Boolean(
+    message.text && (
+      message.text.startsWith('🎯 RÉSULTAT DU PRONOSTIC') || 
+      message.text.startsWith('🎯 RÉSULTAT')
+    )
+  );
+  if (isLegacyAnnouncement) {
+    return null;
+  }
+
+  const isPronoMessage = Boolean(
+    message.pronoStatus ||
+    message.pronoLeague ||
+    (message.text && (
+      message.text.includes('⏳ en attente') ||
+      message.text.includes('✅ gagné') ||
+      message.text.includes('❌ perdu') ||
+      message.text.startsWith('🎯') ||
+      (message.text.includes(' — ') && message.text.includes('vs'))
+    ))
+  ) && !(message.isImage && !message.imageUrl) && !(message.isVoiceMessage && !message.audioUrl);
+
   const isOwnMessage = message.user.id === currentUserId;
 
   return (
@@ -162,11 +184,15 @@ export const MessageCard: React.FC<MessageCardProps> = ({
 
         <div className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'}`}>
           <div
-            className={`px-3 py-2 rounded-2xl transition-all duration-200 ${
-              isOwnMessage 
-                ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-gray-900 dark:text-gray-100 rounded-br-none shadow-sm' 
-                : 'bg-white dark:bg-[#202c33] text-gray-900 dark:text-gray-100 rounded-bl-none shadow-sm'
-            }`}
+            className={
+              isPronoMessage
+                ? 'p-0 bg-transparent shadow-none w-full max-w-sm'
+                : `px-3 py-2 rounded-2xl transition-all duration-200 ${
+                    isOwnMessage 
+                      ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-gray-900 dark:text-gray-100 rounded-br-none shadow-sm' 
+                      : 'bg-white dark:bg-[#202c33] text-gray-900 dark:text-gray-100 rounded-bl-none shadow-sm'
+                  }`
+            }
             onMouseDown={startLongPress}
             onMouseUp={cancelLongPress}
             onMouseLeave={cancelLongPress}
@@ -174,22 +200,24 @@ export const MessageCard: React.FC<MessageCardProps> = ({
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            {/* Sender Name & Badges */}
-            <div className="flex items-center space-x-1 mb-1 opacity-90">
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${isOwnMessage ? 'text-emerald-700 dark:text-emerald-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                {message.user.username}
-              </span>
-              {message.user.role === 'admin' && (
-                <span className="inline-flex items-center px-1 py-0.25 rounded text-[9px] font-bold bg-purple-500 text-white uppercase tracking-tighter">
-                  Admin
+            {/* Sender Name & Badges (Only for regular chat messages) */}
+            {!isPronoMessage && (
+              <div className="flex items-center space-x-1 mb-1 opacity-90">
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${isOwnMessage ? 'text-emerald-700 dark:text-emerald-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  {message.user.username}
                 </span>
-              )}
-              {message.user.isPro && (
-                <span className="inline-flex items-center px-1 py-0.25 rounded text-[9px] font-bold bg-yellow-500 text-white uppercase tracking-tighter">
-                  Pro
-                </span>
-              )}
-            </div>
+                {message.user.role === 'admin' && (
+                  <span className="inline-flex items-center px-1 py-0.25 rounded text-[9px] font-bold bg-purple-500 text-white uppercase tracking-tighter">
+                    Admin
+                  </span>
+                )}
+                {message.user.isPro && (
+                  <span className="inline-flex items-center px-1 py-0.25 rounded text-[9px] font-bold bg-yellow-500 text-white uppercase tracking-tighter">
+                    Pro
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Reply Block */}
             {message.replyTo && (
@@ -270,6 +298,11 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                                 message.text.startsWith('🎯') ||
                                 (message.text.includes(' — ') && message.text.includes('vs'));
 
+                if (message.text && (message.text.startsWith('🎯 RÉSULTAT DU PRONOSTIC') || message.text.startsWith('🎯 RÉSULTAT'))) {
+                  // Legacy duplicate announcement from previous versions: hide it so only the single living card is displayed!
+                  return null;
+                }
+
                 if (isProno) {
                   let mainText = message.text;
                   let analysisText = '';
@@ -279,15 +312,19 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                     analysisText = parts[1].trim();
                   }
 
-                  let statusBadge = '⏳ EN ATTENTE';
-                  let statusStyle = 'bg-amber-500/20 text-amber-400 border-amber-500/40';
+                  const isWon = message.pronoStatus === 'won' || mainText.includes('✅ gagné') || mainText.toLowerCase().includes('gagné');
+                  const isLost = message.pronoStatus === 'lost' || mainText.includes('❌ perdu') || mainText.toLowerCase().includes('perdu');
+                  const isPending = !isWon && !isLost;
 
-                  if (message.pronoStatus === 'won' || mainText.includes('✅ gagné') || mainText.toLowerCase().includes('gagné')) {
+                  let statusBadge = '⌛ EN ATTENTE';
+                  let statusStyle = 'bg-slate-800 text-slate-300 border-slate-700';
+
+                  if (isWon) {
                     statusBadge = '✅ GAGNÉ';
-                    statusStyle = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40';
-                  } else if (message.pronoStatus === 'lost' || mainText.includes('❌ perdu') || mainText.toLowerCase().includes('perdu')) {
+                    statusStyle = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50';
+                  } else if (isLost) {
                     statusBadge = '❌ PERDU';
-                    statusStyle = 'bg-rose-500/20 text-rose-400 border-rose-500/40';
+                    statusStyle = 'bg-rose-500/20 text-rose-400 border-rose-500/50';
                   }
 
                   let cleanTitle = mainText
@@ -303,7 +340,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                     .trim();
 
                   let matchName = cleanTitle;
-                  let pickName = 'Pronostic Tipster';
+                  let pickName = '';
 
                   if (cleanTitle.includes(' — ')) {
                     const parts = cleanTitle.split(' — ');
@@ -316,20 +353,119 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                   }
 
                   // If matchName contains duplicate team names, extract single match
+                  let homeTeam = 'Équipe 1';
+                  let awayTeam = 'Équipe 2';
                   if (matchName.includes(' vs ')) {
                     const vsParts = matchName.split(' vs ');
-                    const home = vsParts[0].replace(/⚽/g, '').trim();
-                    const away = vsParts[1].split(/\s+/)[0].replace(/⚽/g, '').trim();
-                    if (home && away) {
-                      matchName = `${home} vs ${away}`;
+                    homeTeam = vsParts[0].replace(/⚽/g, '').trim();
+                    awayTeam = vsParts[1].split(/\s+/)[0].replace(/⚽/g, '').trim();
+                    if (homeTeam && awayTeam) {
+                      matchName = `${homeTeam} vs ${awayTeam}`;
                     }
+                  }
+
+                  // If pickName is generic or empty, infer from text markers
+                  if (!pickName || pickName === 'Pronostic Tipster') {
+                    if (mainText.includes('V1')) pickName = `V1 — Victoire ${homeTeam}`;
+                    else if (mainText.includes('1X')) pickName = `1X — ${homeTeam} ou Nul`;
+                    else if (mainText.includes('2X') || mainText.includes('X2')) pickName = `2X — ${awayTeam} ou Nul`;
+                    else if (mainText.includes('V2')) pickName = `V2 — Victoire ${awayTeam}`;
+                    else if (mainText.includes('12')) pickName = '12 — Pas de Nul';
+                    else if (mainText.includes('X -') || mainText.includes('Match Nul')) pickName = 'X — Match Nul';
+                    else pickName = isWon ? `Victoire ${homeTeam}` : 'Pronostic Tipster';
                   }
 
                   const isOfficialAdmin = message.user?.username?.includes('Officiel') || message.user?.role === 'admin';
 
+                  // Header competition + match schedule
+                  const inferLeague = (home: string, away: string, existingLeague?: string): string => {
+                    if (existingLeague && !existingLeague.startsWith('Canal ') && !existingLeague.includes('PronosBox Channel')) {
+                      return existingLeague;
+                    }
+                    const combined = `${home} ${away}`.toLowerCase();
+                    if (combined.match(/dortmund|bayern|leipzig|leverkusen|hambourg|hamburger|bremen|frankfurt|stuttgart|schalke|wolfsburg|union berlin|gladbach/)) {
+                      return '🇩🇪 Bundesliga';
+                    }
+                    if (combined.match(/barcelona|real madrid|atletico|sevilla|betis|valencia|villarreal|athletic club|celta|alaves|getafe|rayo|elche|levante|sociedad/)) {
+                      return '🇪🇸 La Liga';
+                    }
+                    if (combined.match(/manchester|liverpool|arsenal|chelsea|tottenham|everton|bournemouth|palace|aston villa|newcastle|west ham|coventry|fulham/)) {
+                      return '🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League';
+                    }
+                    if (combined.match(/juventus|inter|milan|napoli|roma|lazio|atalanta|fiorentina|parma|venezia|torino|bologna/)) {
+                      return '🇮🇹 Serie A';
+                    }
+                    if (combined.match(/paris|psg|marseille|lyon|monaco|lille|rennes|toulouse|nice|lens|nantes|strasbourg/)) {
+                      return '🇫🇷 Ligue 1';
+                    }
+                    if (combined.match(/porto|benfica|sporting|braga|arouca|viseu|rio ave|santa clara|castelo branco|hospital/)) {
+                      return '🇵🇹 Liga Portugal';
+                    }
+                    if (combined.match(/galatasaray|fenerbahce|fenerbahçe|besiktas|trabzonspor|goztepe|göztepe/)) {
+                      return '🇹🇷 Süper Lig';
+                    }
+                    if (combined.match(/ferencvaros|aarhus|zabrze/)) {
+                      return '🇪🇺 Compétition Européenne';
+                    }
+                    return '🏆 Match Officiel';
+                  };
+
+                  const formatMatchDateTime = (dateVal?: Date | string) => {
+                    if (!dateVal) return '';
+                    const d = new Date(dateVal);
+                    if (isNaN(d.getTime())) return '';
+                    const weekday = d.toLocaleDateString('fr-FR', { weekday: 'short' });
+                    const capitalizedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1).replace('.', '');
+                    const dayMonth = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+                    const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                    return `${capitalizedWeekday}. ${dayMonth} · ${time}`;
+                  };
+
+                  const displayLeague = inferLeague(homeTeam, awayTeam, message.pronoLeague);
+                  const matchDateStr = formatMatchDateTime(message.pronoMatchDate || message.timestamp || (message.time ? new Date(message.time) : undefined));
+                  const fullHeaderSubtitle = [displayLeague, matchDateStr].filter(Boolean).join(' · ');
+
+                  // Confidence stars (1-5, only shown when pending)
+                  const confidencePercent = message.pronoConfidence || 80;
+                  const starsCount = Math.max(1, Math.min(5, Math.round(confidencePercent / 20)));
+
+                  // Automatic explanation
+                  let explanationText = message.pronoExplanation || '';
+                  if (!explanationText && !isPending && message.pronoActualResult) {
+                    const mark = isWon ? '✓' : '✗';
+                    if (pickName && pickName !== 'Pronostic Tipster') {
+                      explanationText = isWon
+                        ? `${mark} ${homeTeam} confirme le résultat — le marché ${pickName} est validé par le score final.`
+                        : `${mark} Le marché ${pickName} n'est pas validé par le score final de ${message.pronoActualResult}.`;
+                    } else {
+                      explanationText = isWon
+                        ? `${mark} ${homeTeam} confirme le résultat avec une victoire validée par le score final de ${message.pronoActualResult}.`
+                        : `${mark} Pronostic non validé par le score final de ${message.pronoActualResult}.`;
+                    }
+                  }
+
+                  // Double timestamp
+                  const publishedTimeStr = (() => {
+                    const d = message.timestamp instanceof Date ? message.timestamp : (message.time ? new Date(message.time) : null);
+                    if (d && !isNaN(d.getTime())) {
+                      return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                    }
+                    return '';
+                  })();
+
+                  const updatedTimeStr = (() => {
+                    if (message.pronoVerifiedAt) {
+                      const d = new Date(message.pronoVerifiedAt);
+                      if (!isNaN(d.getTime())) {
+                        return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                      }
+                    }
+                    return '';
+                  })();
+
                   return (
                     <div className="rounded-2xl p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 border border-emerald-500/40 shadow-xl max-w-sm w-full my-1 text-white">
-                      {/* Header Badge */}
+                      {/* Top Header Row */}
                       <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2 mb-2.5">
                         <div className="flex items-center gap-1.5">
                           <span className="text-base">🎯</span>
@@ -337,7 +473,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                             {message.user?.username || 'PronosBox'}
                           </span>
                           <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 ${
-                            isOfficialAdmin ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                            isOfficialAdmin ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : 'bg-slate-800 text-slate-300 border border-slate-700'
                           }`}>
                             {isOfficialAdmin ? 'OFFICIEL' : 'TIPSTER'}
                           </span>
@@ -347,9 +483,16 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                         </span>
                       </div>
 
+                      {/* Subtitle: Competition + Date/Time */}
+                      {fullHeaderSubtitle && (
+                        <div className="text-[10px] sm:text-[11px] font-semibold text-slate-400 mb-1 flex items-center gap-1">
+                          <span className="truncate">{fullHeaderSubtitle}</span>
+                        </div>
+                      )}
+
                       {/* Match Title */}
-                      <div className="mb-2">
-                        <h4 className="text-xs sm:text-sm font-black text-white tracking-tight flex items-center gap-1.5">
+                      <div className="mb-2.5">
+                        <h4 className="text-sm sm:text-base font-black text-white tracking-tight flex items-center gap-1.5">
                           <span>⚽</span>
                           <span>{matchName}</span>
                         </h4>
@@ -359,35 +502,71 @@ export const MessageCard: React.FC<MessageCardProps> = ({
                       <div className="bg-slate-950/70 rounded-xl p-2.5 border border-white/10 mb-2.5 flex items-center justify-between">
                         <div>
                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Issue Pronostiquée</span>
-                          <span className="text-xs font-black text-emerald-400">{pickName}</span>
+                          <span className="text-xs sm:text-sm font-black text-emerald-400">{pickName}</span>
                         </div>
-                        <div className="flex items-center gap-0.5 text-amber-400 text-xs">
-                          <span>★</span><span>★</span><span>★</span><span>★</span><span className="text-slate-600">★</span>
-                        </div>
+                        {/* Stars: ONLY visible when pending */}
+                        {isPending && (
+                          <div className="flex items-center gap-0.5 text-amber-400 text-xs">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <span key={s} className={s <= starsCount ? 'text-amber-400' : 'text-slate-600'}>
+                                ★
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
-                      {/* Final Score (if finished/verified) */}
-                      {message.pronoActualResult && (
+                      {/* Final Score (visible after match) */}
+                      {!isPending && message.pronoActualResult && (
                         <div className="bg-slate-950/70 rounded-xl p-2.5 border border-white/10 mb-2.5 flex items-center justify-between">
                           <div>
                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Score Final</span>
-                            <span className="text-xs font-black text-white">{message.pronoActualResult}</span>
+                            <span className="text-sm font-black text-white">{message.pronoActualResult}</span>
                           </div>
                           <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
-                            message.pronoStatus === 'won' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            isWon ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                           }`}>
-                            {message.pronoStatus === 'won' ? 'Validé' : 'Non Passé'}
+                            {isWon ? 'Validé' : 'Non Passé'}
                           </span>
                         </div>
                       )}
 
-                      {/* Tactical Analysis */}
+                      {/* Automatic Explanation */}
+                      {!isPending && explanationText && (
+                        <div className="rounded-xl p-2.5 bg-slate-950/50 border border-emerald-500/20 mb-2.5 text-xs">
+                          <p className={`leading-relaxed text-[11px] font-medium ${isWon ? 'text-emerald-300' : 'text-slate-300'}`}>
+                            {explanationText}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Tipster Impact Stats Banner */}
+                      {!isPending && (message.pronoStreak !== undefined || message.pronoWinRate !== undefined) && (
+                        <div className="rounded-xl px-3 py-2 bg-gradient-to-r from-amber-500/10 via-amber-600/15 to-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center justify-center gap-1.5 text-[11px] font-bold shadow-sm mb-2">
+                          <span>🔥</span>
+                          <span>
+                            {message.pronoStreak ? `Série en cours : ${message.pronoStreak} gagnant${message.pronoStreak > 1 ? 's' : ''}` : 'Nouvelle série'}
+                            {message.pronoWinRate !== undefined && ` · Nouveau taux de réussite : ${message.pronoWinRate}%`}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Tactical Analysis (optional custom tipster notes) */}
                       {analysisText && (
-                        <div className="bg-emerald-950/40 rounded-xl p-2.5 border border-emerald-500/20 text-xs">
+                        <div className="bg-emerald-950/40 rounded-xl p-2.5 border border-emerald-500/20 text-xs mb-2">
                           <span className="text-[9px] font-bold text-emerald-400 block mb-0.5">💡 Analyse Tactique</span>
                           <p className="leading-relaxed text-slate-300 italic text-[11px]">{analysisText}</p>
                         </div>
                       )}
+
+                      {/* Double Timestamp Footer */}
+                      <div className="text-right text-[10px] text-slate-400 font-medium pt-1 border-t border-white/5">
+                        {!isPending && updatedTimeStr ? (
+                          <span>Mis à jour à {updatedTimeStr} · publié à {publishedTimeStr || '11:31'}</span>
+                        ) : (
+                          <span>Publié à {publishedTimeStr || '11:31'}</span>
+                        )}
+                      </div>
                     </div>
                   );
                 }
@@ -400,19 +579,21 @@ export const MessageCard: React.FC<MessageCardProps> = ({
               })()}
             </div>
 
-            {/* Time and Status */}
-            <div className={`flex items-center mt-1 space-x-1 ${isOwnMessage ? 'justify-end text-emerald-800 dark:text-emerald-200' : 'justify-start text-gray-500 dark:text-gray-400'}`}>
-              <span className="text-[9px] opacity-70">
-                {message.timestamp instanceof Date && !isNaN(message.timestamp.getTime())
-                  ? message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : ''}
-              </span>
-              {isOwnMessage && (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </div>
+            {/* Time and Status (Only for regular chat messages, prono cards have internal footer) */}
+            {!isPronoMessage && (
+              <div className={`flex items-center mt-1 space-x-1 ${isOwnMessage ? 'justify-end text-emerald-800 dark:text-emerald-200' : 'justify-start text-gray-500 dark:text-gray-400'}`}>
+                <span className="text-[9px] opacity-70">
+                  {message.timestamp instanceof Date && !isNaN(message.timestamp.getTime())
+                    ? message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : ''}
+                </span>
+                {isOwnMessage && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Reactions Row */}

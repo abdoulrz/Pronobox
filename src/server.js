@@ -1624,6 +1624,123 @@ function determinePronoResult(prediction, homeGoals, awayGoals, homeTeam, awayTe
   return null;
 }
 
+/**
+ * Generates an automatic pedagogic explanation linking the final score to the bet market.
+ * e.g. "✓ Inter s'impose à domicile — le marché 1X (Inter ou Nul) est validé par le score final."
+ */
+function generatePronoExplanation(prediction, actualResult, homeGoals, awayGoals, homeTeam, awayTeam, status) {
+  const isWon = status === 'won';
+  const mark = isWon ? '✓' : '✗';
+  const hTeam = homeTeam || 'Équipe 1';
+  const aTeam = awayTeam || 'Équipe 2';
+  const hGoals = Number(homeGoals != null ? homeGoals : 0);
+  const aGoals = Number(awayGoals != null ? awayGoals : 0);
+  const pred = (prediction || '').toLowerCase().trim();
+
+  // 1X: Home Win or Draw
+  if (pred.includes('1x') || (pred.includes('ou nul') && pred.includes(hTeam.toLowerCase()))) {
+    if (isWon) {
+      if (hGoals > aGoals) {
+        return `${mark} ${hTeam} s'impose à domicile — le marché 1X (${hTeam} ou Nul) est validé par le score final.`;
+      } else {
+        return `${mark} Score de parité (${hGoals}-${aGoals}) — le marché 1X (${hTeam} ou Nul) est validé par le score final.`;
+      }
+    } else {
+      return `${mark} ${aTeam} s'impose à l'extérieur — le marché 1X (${hTeam} ou Nul) n'est pas validé.`;
+    }
+  }
+
+  // 2X or X2: Away Win or Draw
+  if (pred.includes('2x') || pred.includes('x2') || (pred.includes('ou nul') && pred.includes(aTeam.toLowerCase()))) {
+    if (isWon) {
+      if (aGoals > hGoals) {
+        return `${mark} ${aTeam} s'impose à l'extérieur — le marché 2X (${aTeam} ou Nul) est validé par le score final.`;
+      } else {
+        return `${mark} Score de parité (${hGoals}-${aGoals}) — le marché 2X (${aTeam} ou Nul) est validé par le score final.`;
+      }
+    } else {
+      return `${mark} ${hTeam} s'impose à domicile — le marché 2X (${aTeam} ou Nul) n'est pas validé.`;
+    }
+  }
+
+  // 12: Either wins / No draw
+  if (pred.startsWith('12') || pred.includes('12 -') || pred.includes('pas de nul')) {
+    if (isWon) {
+      const winner = hGoals > aGoals ? hTeam : aTeam;
+      return `${mark} Victoire de ${winner} sans match nul — le marché 12 (Pas de Nul) est validé par le score final.`;
+    } else {
+      return `${mark} Match nul (${hGoals}-${aGoals}) — le marché 12 (Pas de Nul) n'est pas validé.`;
+    }
+  }
+
+  // V1: Home Win
+  if (pred.startsWith('v1') || pred === '1' || (pred.includes('victoire') && pred.includes(hTeam.toLowerCase()) && !pred.includes('nul'))) {
+    if (isWon) {
+      return `${mark} ${hTeam} s'impose à domicile — le marché V1 (Victoire ${hTeam}) est validé par le score final.`;
+    } else {
+      return `${mark} ${hTeam} ne s'impose pas (${hGoals}-${aGoals}) — le marché V1 n'est pas validé.`;
+    }
+  }
+
+  // V2: Away Win
+  if (pred.startsWith('v2') || pred === '2' || (pred.includes('victoire') && pred.includes(aTeam.toLowerCase()) && !pred.includes('nul'))) {
+    if (isWon) {
+      return `${mark} ${aTeam} s'impose à l'extérieur — le marché V2 (Victoire ${aTeam}) est validé par le score final.`;
+    } else {
+      return `${mark} ${aTeam} ne s'impose pas (${hGoals}-${aGoals}) — le marché V2 n'est pas validé.`;
+    }
+  }
+
+  // X: Draw
+  if (pred.startsWith('x -') || pred === 'x' || pred.includes('match nul')) {
+    if (isWon) {
+      return `${mark} Match nul confirmé (${hGoals}-${aGoals}) — le marché X (Match Nul) est validé par le score final.`;
+    } else {
+      return `${mark} Pas de score de parité (${hGoals}-${aGoals}) — le marché X n'est pas validé.`;
+    }
+  }
+
+  // Over
+  const overMatch = pred.match(/(?:\+|plus de\s*)(\d+[,.]\d*)\s*buts?/i);
+  if (overMatch) {
+    const threshold = overMatch[1];
+    const total = hGoals + aGoals;
+    return isWon
+      ? `${mark} ${total} buts inscrits au total — le marché +${threshold} buts est validé par le score final.`
+      : `${mark} Seulement ${total} but(s) inscrit(s) — le marché +${threshold} buts n'est pas validé.`;
+  }
+
+  // Under
+  const underMatch = pred.match(/(?:\-|moins de\s*)(\d+[,.]\d*)\s*buts?/i);
+  if (underMatch) {
+    const threshold = underMatch[1];
+    const total = hGoals + aGoals;
+    return isWon
+      ? `${mark} ${total} buts inscrits au total — le marché -${threshold} buts est validé par le score final.`
+      : `${mark} ${total} buts inscrits au total — le marché -${threshold} buts est dépassé.`;
+  }
+
+  // BTTS
+  if (pred.includes('marquent') || pred === 'btts') {
+    return isWon
+      ? `${mark} Les deux équipes ont marqué (${hGoals}-${aGoals}) — le marché est validé par le score final.`
+      : `${mark} Score final ${hGoals}-${aGoals} — les deux équipes n'ont pas marqué toutes les deux.`;
+  }
+
+  // Exact score
+  const exactMatch = pred.match(/(\d+)\s*[-–:]\s*(\d+)/);
+  if (exactMatch) {
+    return isWon
+      ? `${mark} Score exact parfait (${hGoals}-${aGoals}) — le pronostic est validé.`
+      : `${mark} Score final ${hGoals}-${aGoals} — différent du score pronostiqué.`;
+  }
+
+  // Generic fallback
+  return isWon
+    ? `${mark} Pronostic validé par le score final de ${actualResult || `${hGoals}-${aGoals}`}.`
+    : `${mark} Pronostic non validé par le score final de ${actualResult || `${hGoals}-${aGoals}`}.`;
+}
+
 // Helper to synchronize pronostic status and result into Channel messages
 async function syncPronoStatusToChannels(matchId, status, actualResult, homeTeamName, awayTeamName) {
   try {
@@ -1633,11 +1750,22 @@ async function syncPronoStatusToChannels(matchId, status, actualResult, homeTeam
     const normHome = (homeTeamName || '').toLowerCase().trim();
     const normAway = (awayTeamName || '').toLowerCase().trim();
 
+    // Parse score goals if available
+    let homeGoals = null;
+    let awayGoals = null;
+    if (actualResult) {
+      const scoreParts = String(actualResult).split(/[-–:]/).map(s => parseInt(s.trim(), 10));
+      if (scoreParts.length === 2 && !isNaN(scoreParts[0]) && !isNaN(scoreParts[1])) {
+        homeGoals = scoreParts[0];
+        awayGoals = scoreParts[1];
+      }
+    }
+
     const channels = await Channel.find({});
     for (const ch of channels) {
       let modified = false;
-      let matchFoundInChannel = false;
 
+      // 1. First pass: update the matched prono message(s) in place
       for (const msg of (ch.messages || [])) {
         const msgText = String(msg.text || '');
         const msgMatchId = Number(msg.pronoMatchId || msg._id || 0);
@@ -1650,10 +1778,19 @@ async function syncPronoStatusToChannels(matchId, status, actualResult, homeTeam
         }
 
         if (isMatch) {
-          matchFoundInChannel = true;
           msg.pronoStatus = status;
           if (actualResult) msg.pronoActualResult = actualResult;
           if (matchId && !msg.pronoMatchId && !isNaN(Number(matchId))) msg.pronoMatchId = Number(matchId);
+          msg.pronoVerifiedAt = new Date();
+
+          // Generate pedagogic explanation
+          let pickText = '';
+          if (msgText.includes(' — ')) {
+            pickText = msgText.split(' — ')[1].split('\n')[0].replace(/\(.*?\)/g, '').trim();
+          } else if (msgText.includes(' - ')) {
+            pickText = msgText.split(' - ')[1].split('\n')[0].replace(/\(.*?\)/g, '').trim();
+          }
+          msg.pronoExplanation = generatePronoExplanation(pickText, actualResult, homeGoals, awayGoals, homeTeamName, awayTeamName, status);
 
           // Update text by replacing status tag
           let updatedText = msgText
@@ -1672,7 +1809,36 @@ async function syncPronoStatusToChannels(matchId, status, actualResult, homeTeam
         }
       }
 
-      // Also update channel.lastMessage if it references this match
+      // 2. Second pass: compute updated win rate and current winning streak for the channel
+      const evaluatedMsgs = (ch.messages || []).filter(m => m.pronoStatus === 'won' || m.pronoStatus === 'lost');
+      const wonCount = evaluatedMsgs.filter(m => m.pronoStatus === 'won').length;
+      const chWinRate = evaluatedMsgs.length > 0 ? Math.round((wonCount / evaluatedMsgs.length) * 100) : 0;
+
+      // Sort evaluated messages by verification/time desc to calculate current streak
+      const sortedEvaluated = [...evaluatedMsgs].sort((a, b) => {
+        const dateA = new Date(a.pronoVerifiedAt || a.time || 0).getTime();
+        const dateB = new Date(b.pronoVerifiedAt || b.time || 0).getTime();
+        return dateB - dateA;
+      });
+
+      let currentStreak = 0;
+      for (const em of sortedEvaluated) {
+        if (em.pronoStatus === 'won') {
+          currentStreak++;
+        } else {
+          break;
+        }
+      }
+
+      // Assign computed streak and win rate to newly verified messages
+      for (const msg of (ch.messages || [])) {
+        if (msg.pronoVerifiedAt && (!msg.pronoStreak || !msg.pronoWinRate)) {
+          msg.pronoStreak = currentStreak;
+          msg.pronoWinRate = chWinRate;
+        }
+      }
+
+      // 3. Update channel.lastMessage if it references this match
       if (ch.lastMessage && normHome && normAway && ch.lastMessage.toLowerCase().includes(normHome) && ch.lastMessage.toLowerCase().includes(normAway)) {
         let updatedLast = ch.lastMessage
           .replace(/\(⏳\s*en\s*attente\)/gi, statusTextTag)
@@ -1680,36 +1846,17 @@ async function syncPronoStatusToChannels(matchId, status, actualResult, homeTeam
           .replace(/\(❌\s*perdu\)/gi, statusTextTag);
         ch.lastMessage = updatedLast;
         modified = true;
+      } else if (normHome && normAway) {
+        ch.lastMessage = `🎯 ${homeTeamName} vs ${awayTeamName} (${status === 'won' ? '✅ Gagné' : '❌ Perdu'})`;
+        modified = true;
       }
 
-      // If status is verified (won/lost) and this channel had this pronostic, post an automatic notification message
-      if (matchFoundInChannel && (status === 'won' || status === 'lost')) {
-        const announcementHeader = `🎯 RÉSULTAT DU PRONOSTIC : ${homeTeamName} vs ${awayTeamName}`;
-        const alreadyAnnounced = (ch.messages || []).some(m => String(m.text || '').includes(announcementHeader));
-        
-        if (!alreadyAnnounced && ch.owner) {
-          const outcomeEmoji = status === 'won' ? '✅ GAGNÉ 🎉' : '❌ PERDU';
-          const notificationMsg = `${announcementHeader}\n\n⚽ Match : ${homeTeamName} vs ${awayTeamName}\n📊 Score Final : ${actualResult || 'Terminé'}\n🏆 Résultat : ${outcomeEmoji}`;
-          
-          ch.messages.push({
-            user: ch.owner,
-            text: notificationMsg,
-            time: new Date(),
-            isVoiceMessage: false,
-            isImage: false,
-            likes: 0,
-            reactions: []
-          });
-
-          ch.lastMessage = `🎯 ${homeTeamName} vs ${awayTeamName} (${status === 'won' ? '✅ Gagné' : '❌ Perdu'})`;
-          if (ch.statistics) ch.statistics.messagesSent = (ch.statistics.messagesSent || 0) + 1;
-          modified = true;
-        }
-      }
+      // Note: As per the "Single Living Message" design rule, NO second announcement message is created.
+      // The original message card evolves in-place.
 
       if (modified) {
         await ch.save();
-        console.log(`[SyncChannels] Synchronized prono status '${status}' to channel: ${ch.name}`);
+        console.log(`[SyncChannels] Synchronized living prono status '${status}' to channel: ${ch.name}`);
       }
     }
   } catch (err) {
@@ -1825,36 +1972,72 @@ app.post('/api/pronos/verify-all', authenticateToken, requireAdmin, async (req, 
   }
 });
 
-// Run batch verification automatically every day at 12:00 PM UTC (12:00:00 UTC)
+// --- Automated Pronostic Verification Engine ---
+// Schedules automatic verifications at Midnight (00:00 UTC), Midday (12:00 UTC),
+// hourly background sweeps for finished matches, and on server startup.
 function scheduleDailyVerificationAt12PMUTC() {
-  const scheduleNext = () => {
-    const now = new Date();
-    const next12UTC = new Date(Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      12, 0, 0, 0
-    ));
-    // If 12:00 UTC already passed today, schedule for tomorrow 12:00 UTC
-    if (now.getTime() >= next12UTC.getTime()) {
-      next12UTC.setUTCDate(next12UTC.getUTCDate() + 1);
+  // 1. Startup verification pass (15 seconds after boot)
+  setTimeout(async () => {
+    console.log('[Auto-Verify] Running initial startup verification pass...');
+    try {
+      const res = await runBatchVerification();
+      if (res.results && res.results.length > 0) {
+        console.log('[Auto-Verify] Startup pass resolved:', res.message);
+      } else {
+        console.log('[Auto-Verify] Startup pass: No pending finished pronostics to verify.');
+      }
+    } catch (err) {
+      console.error('[Auto-Verify] Startup pass error:', err.message);
     }
-    const delay = next12UTC.getTime() - now.getTime();
-    console.log(`[Auto-Verify] Next automatic verification scheduled for 12:00 PM UTC in ${(delay / 1000 / 60).toFixed(1)} minutes (${next12UTC.toISOString()})`);
+  }, 15000);
+
+  // 2. Hourly background sweep (checks every 60 minutes for finished matches; 0 API calls if none)
+  const HOURLY_INTERVAL = 60 * 60 * 1000;
+  setInterval(async () => {
+    try {
+      const res = await runBatchVerification();
+      if (res.results && res.results.length > 0) {
+        console.log('[Auto-Verify] Hourly sweep resolved:', res.message);
+      }
+    } catch (err) {
+      console.error('[Auto-Verify] Hourly sweep error:', err.message);
+    }
+  }, HOURLY_INTERVAL);
+
+  // 3. Daily Midnight & Noon UTC anchor schedule (00:00 UTC and 12:00 UTC)
+  const scheduleNextAnchor = () => {
+    const now = new Date();
     
+    // Target 00:00:00 UTC (Midnight) or 12:00:00 UTC (Noon)
+    const midnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    const noonUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0));
+    
+    let targetUTC;
+    if (now.getTime() < midnightUTC.getTime()) {
+      targetUTC = midnightUTC;
+    } else if (now.getTime() < noonUTC.getTime()) {
+      targetUTC = noonUTC;
+    } else {
+      // Tomorrow at 00:00:00 UTC (Midnight)
+      targetUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
+    }
+
+    const delay = targetUTC.getTime() - now.getTime();
+    console.log(`[Auto-Verify] Next anchor verification scheduled for ${targetUTC.toISOString()} (in ${(delay / 1000 / 60).toFixed(1)} minutes)`);
+
     setTimeout(async () => {
-      console.log('[Auto-Verify] 12:00 PM UTC reached! Running daily pronostic verification...');
+      console.log(`[Auto-Verify] Anchor time reached (${targetUTC.toISOString()})! Running batch verification...`);
       try {
         const res = await runBatchVerification();
-        console.log('[Auto-Verify] Daily verification finished:', res.message);
+        console.log('[Auto-Verify] Anchor verification finished:', res.message);
       } catch (err) {
-        console.error('[Auto-Verify] Daily verification error:', err.message);
+        console.error('[Auto-Verify] Anchor verification error:', err.message);
       }
-      scheduleNext();
+      scheduleNextAnchor();
     }, delay);
   };
 
-  scheduleNext();
+  scheduleNextAnchor();
 }
 
 scheduleDailyVerificationAt12PMUTC();
@@ -2642,15 +2825,24 @@ app.get('/api/channels/:id', async (req, res) => {
     }
     await ensureChannelOwner(channel);
 
-    // Auto-sync pronostic statuses on read
+    // Auto-sync pronostic statuses on read (and backfill past pronos)
     try {
       const cleanStr = (s) => String(s || '').replace(/[⚽🎯🏆💡]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().trim();
       const verifiedPronos = await Prono.find({ status: { $in: ['won', 'lost'] } }).lean();
       
       let modified = false;
+
+      // 1. Purge legacy duplicate announcement messages ("🎯 RÉSULTAT DU PRONOSTIC")
+      const beforeCount = channel.messages.length;
+      channel.messages = channel.messages.filter(m => !String(m.text || '').startsWith('🎯 RÉSULTAT DU PRONOSTIC'));
+      if (channel.messages.length !== beforeCount) {
+        modified = true;
+      }
+
+      // 2. Synchronize and backfill each pronostic message
       for (const msg of (channel.messages || [])) {
         const msgText = String(msg.text || '');
-        if (msgText.includes(' vs ')) {
+        if (msgText.includes(' vs ') || msg.pronoMatchId) {
           for (const vp of verifiedPronos) {
             const normHome = cleanStr(vp.homeTeamName);
             const normAway = cleanStr(vp.awayTeamName);
@@ -2658,10 +2850,58 @@ app.get('/api/channels/:id', async (req, res) => {
               (normHome && normAway && cleanStr(msgText).includes(normHome) && cleanStr(msgText).includes(normAway));
 
             if (isMatch) {
+              if (!msg.pronoMatchId && vp.matchId) {
+                msg.pronoMatchId = vp.matchId;
+                modified = true;
+              }
+              if (!msg.pronoLeague && vp.league && !vp.league.startsWith('Canal ')) {
+                msg.pronoLeague = vp.league;
+                modified = true;
+              }
+              if (!msg.pronoMatchDate && vp.matchDate) {
+                msg.pronoMatchDate = vp.matchDate;
+                modified = true;
+              }
+              if (!msg.pronoConfidence && (vp.freeConfidence || vp.premiumConfidence)) {
+                msg.pronoConfidence = vp.freeConfidence || vp.premiumConfidence;
+                modified = true;
+              }
+              if (!msg.pronoVerifiedAt && (vp.verifiedAt || vp.updatedAt)) {
+                msg.pronoVerifiedAt = vp.verifiedAt || vp.updatedAt;
+                modified = true;
+              }
+
               if (msg.pronoStatus !== vp.status || msg.pronoActualResult !== vp.actualResult) {
                 msg.pronoStatus = vp.status;
                 msg.pronoActualResult = vp.actualResult;
-                const statusTag = vp.status === 'won' ? '(✅ gagné)' : '(❌ perdu)';
+                modified = true;
+              }
+
+              // Backfill explanation if missing or generic
+              if (!msg.pronoExplanation || msg.pronoExplanation.includes('Pronostic Tipster')) {
+                let pickText = vp.freeExpectedResult || vp.premiumExpectedResult || '';
+                if (!pickText && msgText.includes(' — ')) {
+                  pickText = msgText.split(' — ')[1].split('\n')[0].replace(/\(.*?\)/g, '').trim();
+                } else if (!pickText && msgText.includes(' - ')) {
+                  pickText = msgText.split(' - ')[1].split('\n')[0].replace(/\(.*?\)/g, '').trim();
+                }
+
+                let homeGoals = null;
+                let awayGoals = null;
+                if (vp.actualResult) {
+                  const parts = String(vp.actualResult).split(/[-–:]/).map(s => parseInt(s.trim(), 10));
+                  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                    homeGoals = parts[0];
+                    awayGoals = parts[1];
+                  }
+                }
+
+                msg.pronoExplanation = generatePronoExplanation(pickText, vp.actualResult, homeGoals, awayGoals, vp.homeTeamName, vp.awayTeamName, vp.status);
+                modified = true;
+              }
+
+              const statusTag = vp.status === 'won' ? '(✅ gagné)' : '(❌ perdu)';
+              if (!msgText.includes(statusTag) && (msgText.includes('(⏳') || msgText.includes(' vs '))) {
                 msg.text = msgText
                   .replace(/\(⏳\s*en\s*attente\)/gi, statusTag)
                   .replace(/\(✅\s*gagné\)/gi, statusTag)
@@ -2670,6 +2910,34 @@ app.get('/api/channels/:id', async (req, res) => {
               }
             }
           }
+        }
+      }
+
+      // 3. Compute streak & winRate for this channel and assign to verified messages
+      const evaluatedMsgs = (channel.messages || []).filter(m => m.pronoStatus === 'won' || m.pronoStatus === 'lost');
+      const wonCount = evaluatedMsgs.filter(m => m.pronoStatus === 'won').length;
+      const chWinRate = evaluatedMsgs.length > 0 ? Math.round((wonCount / evaluatedMsgs.length) * 100) : 0;
+
+      const sortedEvaluated = [...evaluatedMsgs].sort((a, b) => {
+        const dateA = new Date(a.pronoVerifiedAt || a.time || 0).getTime();
+        const dateB = new Date(b.pronoVerifiedAt || b.time || 0).getTime();
+        return dateB - dateA;
+      });
+
+      let currentStreak = 0;
+      for (const em of sortedEvaluated) {
+        if (em.pronoStatus === 'won') {
+          currentStreak++;
+        } else {
+          break;
+        }
+      }
+
+      for (const msg of (channel.messages || [])) {
+        if (msg.pronoStatus && (msg.pronoStreak === undefined || msg.pronoWinRate === undefined)) {
+          msg.pronoStreak = currentStreak;
+          msg.pronoWinRate = chWinRate;
+          modified = true;
         }
       }
       if (modified) {
@@ -2758,7 +3026,20 @@ app.post('/api/channels/:id/leave', authenticateToken, async (req, res) => {
 
 app.post('/api/channels/:id/messages', authenticateToken, async (req, res) => {
   try {
-    const { text, imageUrl, audioUrl, isImage, isVoiceMessage, replyTo } = req.body;
+    const { 
+      text, 
+      imageUrl, 
+      audioUrl, 
+      isImage, 
+      isVoiceMessage, 
+      replyTo,
+      pronoMatchId,
+      pronoStatus,
+      pronoActualResult,
+      pronoLeague,
+      pronoMatchDate,
+      pronoConfidence
+    } = req.body;
     console.log('Received message:', { text, isImage, hasImageUrl: !!imageUrl, imageUrlLength: imageUrl?.length });
     const channel = await Channel.findById(req.params.id);
     if (!channel) {
@@ -2784,10 +3065,17 @@ app.post('/api/channels/:id/messages', authenticateToken, async (req, res) => {
       isVoiceMessage,
       replyTo,
       likes: 0,
-      reactions: []
+      reactions: [],
+      pronoMatchId: pronoMatchId ? Number(pronoMatchId) : undefined,
+      pronoStatus: pronoStatus || (text && (text.includes(' en attente') || text.includes('vs') && text.includes(' — ')) ? 'pending' : ''),
+      pronoActualResult: pronoActualResult || '',
+      pronoLeague: pronoLeague || '',
+      pronoMatchDate: pronoMatchDate ? new Date(pronoMatchDate) : undefined,
+      pronoConfidence: pronoConfidence ? Number(pronoConfidence) : 0
     });
     // Update statistics
     channel.statistics.messagesSent += 1;
+    if (text) channel.lastMessage = text;
     await channel.save();
     // Get the added message with user details
     const addedMessage = await Channel.findById(req.params.id).

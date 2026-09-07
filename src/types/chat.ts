@@ -28,6 +28,13 @@ export interface Message {
   pronoMatchId?: number;
   pronoStatus?: string;
   pronoActualResult?: string;
+  pronoLeague?: string;
+  pronoMatchDate?: Date | string;
+  pronoConfidence?: number;
+  pronoVerifiedAt?: Date | string;
+  pronoExplanation?: string;
+  pronoStreak?: number;
+  pronoWinRate?: number;
 }
 
 export interface Channel {

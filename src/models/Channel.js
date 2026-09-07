@@ -55,6 +55,30 @@ const MessageSchema = new mongoose.Schema({
   pronoActualResult: {
     type: String,
     default: ''
+  },
+  pronoLeague: {
+    type: String,
+    default: ''
+  },
+  pronoMatchDate: {
+    type: Date
+  },
+  pronoConfidence: {
+    type: Number,
+    default: 0
+  },
+  pronoVerifiedAt: {
+    type: Date
+  },
+  pronoExplanation: {
+    type: String,
+    default: ''
+  },
+  pronoStreak: {
+    type: Number
+  },
+  pronoWinRate: {
+    type: Number
   }
 });
 const ChannelSchema = new mongoose.Schema({

@@ -4,6 +4,19 @@ Toutes les modifications notables de ce projet seront documentées dans ce fichi
 
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.25.0] - 2026-09-06 ([Automatisation Minuit UTC & Balayage Périodique des Pronostics])
+
+### Modifié & Amélioré
+- **Planificateur Multi-Cadences de Vérification (`server.js`)** :
+  - **Minuit UTC (00:00:00 UTC / 02:00 CEST)** : Ajout d'un point d'ancrage quotidien à minuit UTC pour vérifier immédiatement tous les matchs de la soirée.
+  - **Midi UTC (12:00:00 UTC)** : Conservation du point d'ancrage secondaire à midi.
+  - **Balayage Horaire de Sécurité** : Vérification toutes les 60 minutes des matchs terminés (`matchDate < now - 2.5h`). Si aucun match n'est en attente, l'opération effectue 0 appel API externe.
+  - **Vérification au Démarrage** : Exécution automatique 15 secondes après le boot pour solder instantanément les pronostics en attente après un déploiement ou redémarrage PM2.
+
+### Corrigé
+- **Résolution des Pronostics Bloqués en Attente** :
+  - Vérification et validation des pronostics de la veille (`Bayer Leverkusen vs Union Berlin`, `Manchester City vs Coventry`, `Inter vs Napoli`) passés en `won` avec scores finaux et synchronisation des canaux.
+
 ## [2.24.0] - 2026-08-19 ([Unification Pronostics, Automatisation 12:00 UTC & Cartes Vivantes Canaux])
 
 ### Ajouté

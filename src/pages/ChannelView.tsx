@@ -149,7 +149,10 @@ const ChannelView = () => {
       likes: 0,
       likedBy: [],
       pronoMatchId: typeof data.matchId === 'number' ? data.matchId : undefined,
-      pronoStatus: 'pending'
+      pronoStatus: 'pending',
+      pronoLeague: data.league || '',
+      pronoMatchDate: data.matchDate,
+      pronoConfidence: data.confidence
     };
 
     setChannel(prev => {
@@ -164,7 +167,22 @@ const ChannelView = () => {
     setTimeout(() => scrollToBottom('smooth'), 100);
 
     try {
-      await sendMessage(channel.id, textContent);
+      await sendMessage(
+        channel.id, 
+        textContent, 
+        undefined, 
+        undefined, 
+        false, 
+        false, 
+        undefined,
+        {
+          pronoMatchId: typeof data.matchId === 'number' ? data.matchId : undefined,
+          pronoStatus: 'pending',
+          pronoLeague: data.league || '',
+          pronoMatchDate: data.matchDate,
+          pronoConfidence: data.confidence
+        }
+      );
 
       // Sync pronostic to main /pronos page feed so users can view it on the Pronostics page!
       const teams = (data.match || 'Match Football').split(' vs ');
@@ -177,7 +195,7 @@ const ChannelView = () => {
         matchId: data.matchId || Date.now(),
         homeTeamName,
         awayTeamName,
-        league: channel.name ? `Canal ${channel.name}` : 'PronosBox Channel',
+        league: data.league || (channel.name ? `Canal ${channel.name}` : 'PronosBox Channel'),
         matchDate: pronoMatchDate,
         channelId: channel.id,
         freeExpectedResult: isPremium ? '' : data.pick,
@@ -306,12 +324,26 @@ const ChannelView = () => {
           reactions: m.reactions || [],
           pronoMatchId: m.pronoMatchId,
           pronoStatus: m.pronoStatus,
-          pronoActualResult: m.pronoActualResult
+          pronoActualResult: m.pronoActualResult,
+          pronoLeague: m.pronoLeague,
+          pronoMatchDate: m.pronoMatchDate,
+          pronoConfidence: m.pronoConfidence,
+          pronoVerifiedAt: m.pronoVerifiedAt,
+          pronoExplanation: m.pronoExplanation,
+          pronoStreak: m.pronoStreak,
+          pronoWinRate: m.pronoWinRate
         }));
 
         const existingTexts = new Set(serverMessages.map((m: any) => m.text));
-        const extraCached = cachedMsgs.filter((m: any) => !existingTexts.has(m.text));
+        const extraCached = cachedMsgs.filter((m: any) => 
+          !existingTexts.has(m.text) &&
+          !String(m.text || '').startsWith('🎯 RÉSULTAT DU PRONOSTIC') &&
+          !String(m.text || '').startsWith('🎯 RÉSULTAT')
+        );
         const combinedMessages = [...serverMessages, ...extraCached];
+        try {
+          localStorage.setItem(`pronobox_channel_messages_${id}`, JSON.stringify(serverMessages));
+        } catch (e) {}
 
         const userIdStr = user?.id ? String(user.id) : '';
         const ownerIdStr = data.owner ? String(data.owner._id || data.owner.id || data.owner) : '';
