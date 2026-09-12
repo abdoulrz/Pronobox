@@ -1213,16 +1213,6 @@ app.get('/api/pronos', async (req, res) => {
       }
     }
     dbPronos = uniqueDbPronos;
-    
-    // Retroactively synchronize all verified pronostics into channels
-    try {
-      const verifiedDbPronos = dbPronos.filter(p => p.status === 'won' || p.status === 'lost');
-      for (const vp of verifiedDbPronos) {
-        await syncPronoStatusToChannels(vp.matchId, vp.status, vp.actualResult, vp.homeTeamName, vp.awayTeamName);
-      }
-    } catch (syncErr) {
-      // Non-blocking
-    }
 
     // Build set of match identifiers from dbPronos to avoid duplicates
     const dbMatchKeys = new Set();
@@ -1242,6 +1232,41 @@ app.get('/api/pronos', async (req, res) => {
     const channelPronos = [];
     try {
       const channels = await Channel.find({}).lean();
+      const channelMap = new Map();
+      channels.forEach(ch => {
+        const idStr = String(ch._id || ch.id);
+        channelMap.set(idStr, ch);
+      });
+
+      // Enrich dbPronos with channel metadata and clear redundant fallback strings
+      dbPronos.forEach(p => {
+        if (p.channelId) {
+          const chObj = channelMap.get(String(p.channelId));
+          if (chObj) {
+            p.channelName = chObj.name;
+            p.channelAvatar = chObj.avatar;
+          }
+        } else if (p.league && p.league.startsWith('Canal ')) {
+          const chNameClean = cleanStr(p.league.replace('Canal ', ''));
+          const found = channels.find(c => cleanStr(c.name) === chNameClean);
+          if (found) {
+            p.channelId = found._id || found.id;
+            p.channelName = found.name;
+            p.channelAvatar = found.avatar;
+          } else {
+            p.channelName = p.league.replace('Canal ', '').trim();
+          }
+        }
+
+        // Keep bottom observation note empty if it's only the generic channel origin string
+        if (p.freeObservation === 'Publication Canal' || (p.freeObservation && p.freeObservation.startsWith('Publié dans le canal'))) {
+          p.freeObservation = '';
+        }
+        if (p.premiumObservation === 'Publication Canal' || p.premiumObservation === 'Publication Canal Premium' || (p.premiumObservation && p.premiumObservation.startsWith('Publié dans le canal'))) {
+          p.premiumObservation = '';
+        }
+      });
+
       channels.forEach(ch => {
         (ch.messages || []).forEach(msg => {
           const text = String(msg.text || '');
@@ -1296,14 +1321,16 @@ app.get('/api/pronos', async (req, res) => {
               homeTeamName,
               awayTeamName,
               league: `Canal ${ch.name}`,
+              channelName: ch.name,
+              channelAvatar: ch.avatar,
               matchDate: msgDate,
               freeExpectedResult: isPremium ? '' : expectedPick,
               freeConfidence: isPremium ? 0 : 80,
-              freeObservation: isPremium ? '' : (analysisText || 'Publication Canal'),
+              freeObservation: isPremium ? '' : (analysisText || ''),
               premiumExpectedResult: isPremium ? expectedPick : '',
               premiumOdds: isPremium ? 1.75 : 0,
               premiumConfidence: isPremium ? 80 : 0,
-              premiumObservation: isPremium ? (analysisText || 'Publication Canal') : '',
+              premiumObservation: isPremium ? (analysisText || '') : '',
               status: msg.pronoStatus || 'pending',
               freeStatus: msg.pronoStatus || 'pending',
               premiumStatus: msg.pronoStatus || 'pending',
@@ -2675,9 +2702,6 @@ app.get('/api/channels', async (req, res) => {
         const chNameLower = (ch.name || '').toLowerCase();
         const cleanLastMsg = ch.lastMessage ? cleanStr(ch.lastMessage) : '';
 
-        // Pre-combine cleaned message text once for O(1) matching per prono
-        const combinedMsgText = (ch.messages || []).map(m => cleanStr(m.text)).join(' ');
-
         // Deduplicated map of predictions published for this channel
         const channelPronos = new Map();
 
@@ -2685,8 +2709,11 @@ app.get('/api/channels', async (req, res) => {
         for (const p of allPronosPool) {
           let isMatch = false;
 
-          if (p.channelId && String(p.channelId) === chId) {
-            isMatch = true;
+          if (p.channelId) {
+            // Strict isolation: if a prediction is tagged with a channelId, it must belong ONLY to this channel
+            if (String(p.channelId) === chId) {
+              isMatch = true;
+            }
           } else if (p.league && p.league.toLowerCase().includes(chNameLower)) {
             isMatch = true;
           } else {
@@ -2695,7 +2722,10 @@ app.get('/api/channels', async (req, res) => {
             if (normHome && normAway) {
               if (cleanLastMsg && cleanLastMsg.includes(normHome) && cleanLastMsg.includes(normAway)) {
                 isMatch = true;
-              } else if (combinedMsgText && combinedMsgText.includes(normHome) && combinedMsgText.includes(normAway)) {
+              } else if (ch.messages && ch.messages.some(m => {
+                const cleanText = cleanStr(m.text);
+                return cleanText.includes(normHome) && cleanText.includes(normAway);
+              })) {
                 isMatch = true;
               }
             }

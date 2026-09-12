@@ -148,7 +148,7 @@ const Pronos = () => {
       ) : activeTab === 'gratuit' ? (
         <div className="space-y-4">
           {pronos.filter(p => p.freeExpectedResult).map(prono => (
-            <div key={prono._id || prono.id} className="glass-panel p-6 relative overflow-hidden group">
+            <div key={prono._id || prono.id} className="glass-panel p-4 sm:p-6 relative overflow-hidden group">
               <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors duration-500 ${
                 prono.freeStatus === 'won' ? 'bg-brand-green' :
                 prono.freeStatus === 'lost' ? 'bg-red-500' :
@@ -157,7 +157,7 @@ const Pronos = () => {
               
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                       {prono.league || 'FOOTBALL'}
                     </span>
@@ -166,6 +166,16 @@ const Pronos = () => {
                       <span className="text-xs text-slate-400 dark:text-slate-500 border-l border-slate-200 dark:border-slate-700 pl-2">
                         Publié le {formatDate(prono.createdAt)}
                       </span>
+                    )}
+                    {(prono.channelName || (prono.league && prono.league.startsWith('Canal '))) && (
+                      <button
+                        onClick={() => navigate(prono.channelId ? `/channel/${prono.channelId}` : '/box')}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-brand-green/10 text-brand-green border border-brand-green/20 hover:bg-brand-green/20 transition-all cursor-pointer"
+                        title="Accéder au canal du tipster"
+                      >
+                        <span>📢</span>
+                        <span>{prono.channelName ? `Canal ${prono.channelName}` : prono.league}</span>
+                      </button>
                     )}
                   </div>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -223,10 +233,15 @@ const Pronos = () => {
                 </div>
               )}
               
-              {prono.freeObservation && (
-                <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-line">
-                  {prono.freeObservation}
-                </p>
+              {prono.freeObservation && 
+               prono.freeObservation !== 'Publication Canal' && 
+               !prono.freeObservation.startsWith('Publié dans le canal') && (
+                <div className="mb-4 text-sm text-slate-600 dark:text-slate-400 whitespace-pre-line bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-100 dark:border-slate-700/40">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">
+                    💡 Analyse / Note
+                  </span>
+                  <p>{prono.freeObservation}</p>
+                </div>
               )}
 
               <PronoReactions 
@@ -245,7 +260,7 @@ const Pronos = () => {
       ) : (
         <div className="space-y-4">
           {pronos.filter(p => p.premiumExpectedResult).map(prono => (
-            <div key={prono._id || prono.id} className="glass-panel p-6 relative overflow-hidden">
+            <div key={prono._id || prono.id} className="glass-panel p-4 sm:p-6 relative overflow-hidden">
               <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors duration-500 ${
                 prono.premiumStatus === 'won' ? 'bg-gradient-to-b from-green-400 to-green-600' :
                 prono.premiumStatus === 'lost' ? 'bg-gradient-to-b from-red-400 to-red-600' :
@@ -254,7 +269,7 @@ const Pronos = () => {
               
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">PREMIUM</span>
                     <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                       {prono.league || 'FOOTBALL'}
@@ -264,6 +279,16 @@ const Pronos = () => {
                       <span className="text-xs text-slate-400 dark:text-slate-500 border-l border-slate-200 dark:border-slate-700 pl-2">
                         Publié le {formatDate(prono.createdAt)}
                       </span>
+                    )}
+                    {(prono.channelName || (prono.league && prono.league.startsWith('Canal '))) && (
+                      <button
+                        onClick={() => navigate(prono.channelId ? `/channel/${prono.channelId}` : '/box')}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer"
+                        title="Accéder au canal du tipster"
+                      >
+                        <span>📢</span>
+                        <span>{prono.channelName ? `Canal ${prono.channelName}` : prono.league}</span>
+                      </button>
                     )}
                   </div>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -327,7 +352,10 @@ const Pronos = () => {
                 </div>
               </div>
 
-              {prono.premiumObservation && (
+              {prono.premiumObservation && 
+               prono.premiumObservation !== 'Publication Canal' && 
+               prono.premiumObservation !== 'Publication Canal Premium' && 
+               !prono.premiumObservation.startsWith('Publié dans le canal') && (
                 <div className={`bg-amber-500/5 rounded-xl p-4 border border-amber-500/10 ${!isAuthorizedPremium ? 'opacity-20 blur-sm select-none' : ''}`}>
                   <h4 className="font-bold text-slate-900 dark:text-white mb-2">Observation Détaillée</h4>
                   <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">

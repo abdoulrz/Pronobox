@@ -171,6 +171,14 @@ export function App() {
                       } />
 
                     <Route
+                      path="/channels/:id"
+                      element={
+                      <ProtectedRoute>
+                          <ChannelView />
+                        </ProtectedRoute>
+                      } />
+
+                    <Route
                       path="/admin"
                       element={
                         <ProtectedRoute requireAdmin={true}>

@@ -200,11 +200,11 @@ const ChannelView = () => {
         channelId: channel.id,
         freeExpectedResult: isPremium ? '' : data.pick,
         freeConfidence: isPremium ? 0 : (data.confidence || 80),
-        freeObservation: isPremium ? '' : (data.analysis || 'Publication Canal'),
+        freeObservation: isPremium ? '' : (data.analysis || (channel.name ? `Publié dans le canal ${channel.name}` : '')),
         premiumExpectedResult: isPremium ? data.pick : '',
         premiumOdds: isPremium ? (data.odds || 0) : 0,
         premiumConfidence: isPremium ? (data.confidence || 80) : 0,
-        premiumObservation: isPremium ? (data.analysis || 'Publication Canal Premium') : '',
+        premiumObservation: isPremium ? (data.analysis || (channel.name ? `Publié dans le canal ${channel.name}` : '')) : '',
         status: 'pending',
         freeStatus: 'pending',
         premiumStatus: 'pending'
@@ -617,7 +617,7 @@ const ChannelView = () => {
         currentUserId={user.id}
       />
 
-      <div ref={messageListRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={messageListRef} className="flex-1 overflow-y-auto px-2 py-4 sm:px-4 space-y-4">
         {(channel.premium && !channel.joined ? channel.messages.slice(0, 1) : channel.messages).map((msg, index) => {
           const messageDate = new Date(msg.timestamp);
           const prevMsg = channel.messages[index - 1];
