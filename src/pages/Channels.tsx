@@ -452,7 +452,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
             const icon = isWon ? '✓' : isLost ? '✗' : '⏳';
             const iconColor = isWon ? 'text-emerald-400' : isLost ? 'text-rose-400' : 'text-amber-400';
             const rawPred = channel.lastProno.prediction || '';
-            const prediction = isWon ? `Victoire ${home}` : isLost ? 'Défaite' : cleanTeamName(rawPred);
+            const prediction = cleanTeamName(rawPred) || (isWon ? 'Validé' : isLost ? 'Non passé' : '');
 
             return (
               <div className="flex items-center justify-between gap-2 text-xs sm:text-sm truncate">
@@ -461,12 +461,12 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                   <span className="truncate">
                     <strong className="text-white font-semibold">{home} vs {away}</strong>
                     {prediction && (
-                      <span className="text-slate-300 font-normal"> — {prediction}</span>
+                      <span className={`font-normal ${isLost ? 'text-rose-400 font-semibold' : 'text-slate-300'}`}> — {prediction}</span>
                     )}
                   </span>
                 </div>
                 {channel.lastProno.score && (
-                  <span className="shrink-0 font-bold text-emerald-400 text-xs sm:text-sm ml-2">
+                  <span className={`shrink-0 font-bold text-xs sm:text-sm ml-2 ${isLost ? 'text-rose-400' : 'text-emerald-400'}`}>
                     {channel.lastProno.score}
                   </span>
                 )}
@@ -479,6 +479,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
             const home = cleanTeamName(channel.lastWonProno.home);
             const away = cleanTeamName(channel.lastWonProno.away);
             const score = channel.lastWonProno.result && channel.lastWonProno.result !== 'Gagné' ? channel.lastWonProno.result : '';
+            const rawPick = channel.lastWonProno.result && channel.lastWonProno.result !== 'Gagné' ? '' : channel.lastWonProno.result;
 
             return (
               <div className="flex items-center justify-between gap-2 text-xs sm:text-sm truncate">
@@ -486,7 +487,9 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                   <span className="shrink-0 font-bold text-emerald-400">✓</span>
                   <span className="truncate">
                     <strong className="text-white font-semibold">{home} vs {away}</strong>
-                    <span className="text-slate-300 font-normal"> — Victoire {home}</span>
+                    {rawPick && (
+                      <span className="text-slate-300 font-normal"> — {rawPick}</span>
+                    )}
                   </span>
                 </div>
                 {score && (
@@ -508,14 +511,19 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
 
             let home = '';
             let away = '';
+            let pick = '';
             if (msg.includes(' vs ')) {
-              const vsParts = msg.split(' vs ');
+              const parts = msg.split('\n')[0].split(' — ');
+              const vsParts = parts[0].split(' vs ');
               const rawA = vsParts[0].split(':').pop() || vsParts[0];
               home = cleanTeamName(rawA.split('\n').pop() || '');
               away = cleanTeamName(vsParts[1].split(/\s{2,}|\n|—|-|\(/)[0] || '');
+              if (parts.length > 1) {
+                pick = cleanTeamName(parts[1].split('(')[0]);
+              }
             }
 
-            const prediction = isWon ? `Victoire ${home}` : isLost ? 'Défaite' : 'En attente';
+            const prediction = pick || (isWon ? 'Validé' : isLost ? 'Non passé' : 'En attente');
 
             return (
               <div className="flex items-center justify-between gap-2 text-xs sm:text-sm truncate">
@@ -523,7 +531,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                   <span className={`shrink-0 font-bold ${iconColor}`}>{icon}</span>
                   <span className="truncate">
                     <strong className="text-white font-semibold">{home} vs {away}</strong>
-                    <span className="text-slate-300 font-normal"> — {prediction}</span>
+                    <span className={`font-normal ${isLost ? 'text-rose-400 font-semibold' : 'text-slate-300'}`}> — {prediction}</span>
                   </span>
                 </div>
               </div>

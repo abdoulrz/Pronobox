@@ -1134,46 +1134,7 @@ app.post('/api/upload-media', authenticateToken, upload.single('media'), (req, r
 // Pronos API
 // ----------------------------------------------------------------------
 
-let cachedPronosList = [
-  {
-    _id: "ch_msg_caracas_santa_fe",
-    matchId: 1001,
-    homeTeamName: "Caracas FC",
-    awayTeamName: "Santa Fe",
-    league: "Canal DOOOBI 🤑",
-    matchDate: new Date("2026-07-31T12:45:00.000Z"),
-    freeExpectedResult: "Oui (Les 2 marquent)",
-    freeConfidence: 80,
-    freeObservation: "ON est prêt",
-    premiumExpectedResult: "",
-    premiumOdds: 0,
-    premiumConfidence: 0,
-    premiumObservation: "",
-    status: "pending",
-    freeStatus: "pending",
-    premiumStatus: "pending",
-    createdAt: new Date("2026-07-31T12:45:00.000Z")
-  },
-  {
-    _id: "ch_msg_forward_chattanooga",
-    matchId: 1002,
-    homeTeamName: "Forward Madison",
-    awayTeamName: "Chattanooga Red Wolves",
-    league: "Canal Talakaka Pro",
-    matchDate: new Date("2026-07-30T12:45:00.000Z"),
-    freeExpectedResult: "Plus de 1.5 buts",
-    freeConfidence: 80,
-    freeObservation: "À revoir",
-    premiumExpectedResult: "",
-    premiumOdds: 0,
-    premiumConfidence: 0,
-    premiumObservation: "",
-    status: "pending",
-    freeStatus: "pending",
-    premiumStatus: "pending",
-    createdAt: new Date("2026-07-30T12:45:00.000Z")
-  }
-];
+let cachedPronosList = [];
 
 app.get('/api/pronos', async (req, res) => {
   try {
@@ -2693,7 +2654,7 @@ app.get('/api/channels', async (req, res) => {
     try {
       const cleanStr = (s) => String(s || '').replace(/[⚽🎯🏆💡]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().trim();
       const allDbPronos = await Prono.find().lean();
-      const allPronosPool = [...allDbPronos, ...(typeof cachedPronosList !== 'undefined' ? cachedPronosList : [])];
+      const allPronosPool = allDbPronos;
 
       // Convert to plain JS objects to guarantee winRate & lastProno serialize cleanly
       const channelList = channels.map(ch => {
@@ -2705,7 +2666,7 @@ app.get('/api/channels', async (req, res) => {
         // Deduplicated map of predictions published for this channel
         const channelPronos = new Map();
 
-        // 1. Check allPronosPool (DB pronos + cached)
+        // 1. Check allPronosPool (DB pronos)
         for (const p of allPronosPool) {
           let isMatch = false;
 
@@ -2733,11 +2694,13 @@ app.get('/api/channels', async (req, res) => {
 
           if (isMatch) {
             const key = p.matchId ? `id_${p.matchId}` : `${cleanStr(p.homeTeamName)}_vs_${cleanStr(p.awayTeamName)}`;
+            const pick = p.freeExpectedResult || p.premiumExpectedResult || '';
             channelPronos.set(key, {
               home: p.homeTeamName,
               away: p.awayTeamName,
               status: p.status || p.freeStatus || 'pending',
-              result: p.freeExpectedResult || p.premiumExpectedResult || '',
+              pick: pick,
+              result: pick,
               actualResult: p.actualResult || '',
               verifiedAt: p.verifiedAt || p.updatedAt,
               matchDate: p.matchDate
@@ -2752,12 +2715,24 @@ app.get('/api/channels', async (req, res) => {
             if (text.includes(' vs ') || text.includes('PRONOSTIC')) {
               let home = '';
               let away = '';
+              let pick = '';
               if (text.includes(' vs ')) {
-                const parts = text.split('\n')[0].split(' — ')[0].split(' - ')[0].split(' vs ');
+                const parts = text.split('\n')[0].split(' — ');
                 if (parts.length >= 2) {
-                  const rawHome = parts[0].replace(/[⚽🎯🏆💡]/g, '').trim();
-                  home = rawHome.includes(':') ? rawHome.split(':').pop().trim() : rawHome;
-                  away = parts[1].replace(/[⚽🎯🏆💡]/g, '').split('(')[0].trim();
+                  const matchTeams = parts[0].split(' vs ');
+                  if (matchTeams.length >= 2) {
+                    const rawHome = matchTeams[0].replace(/[⚽🎯🏆💡]/g, '').trim();
+                    home = rawHome.includes(':') ? rawHome.split(':').pop().trim() : rawHome;
+                    away = matchTeams[1].replace(/[⚽🎯🏆💡]/g, '').split('(')[0].trim();
+                  }
+                  pick = parts[1].replace(/[⚽🎯🏆💡]/g, '').split('(')[0].trim();
+                } else {
+                  const matchTeams = parts[0].split(' vs ');
+                  if (matchTeams.length >= 2) {
+                    const rawHome = matchTeams[0].replace(/[⚽🎯🏆💡]/g, '').trim();
+                    home = rawHome.includes(':') ? rawHome.split(':').pop().trim() : rawHome;
+                    away = matchTeams[1].replace(/[⚽🎯🏆💡]/g, '').split('(')[0].trim();
+                  }
                 }
               }
               if (home && away) {
@@ -2774,9 +2749,10 @@ app.get('/api/channels', async (req, res) => {
                     home,
                     away,
                     status,
-                    result: msg.pronoActualResult || '',
-                    actualResult: msg.pronoActualResult || '',
-                    verifiedAt: msg.time
+                    pick: pick || channelPronos.get(key)?.pick || '',
+                    result: pick || channelPronos.get(key)?.result || '',
+                    actualResult: msg.pronoActualResult || channelPronos.get(key)?.actualResult || '',
+                    verifiedAt: msg.time || msg.pronoVerifiedAt
                   });
                 }
               }
@@ -2796,13 +2772,17 @@ app.get('/api/channels', async (req, res) => {
         if (pronoList.length > 0) {
           pronoList.sort((a, b) => new Date(b.verifiedAt || b.matchDate || 0).getTime() - new Date(a.verifiedAt || a.matchDate || 0).getTime());
           const recent = pronoList[0];
-          let prediction = 'En attente';
-          if (recent.status === 'won') {
-            prediction = `Victoire ${recent.home}`;
-          } else if (recent.status === 'lost') {
-            prediction = 'Défaite';
-          } else if (recent.status === 'draw' || recent.status === 'partial') {
-            prediction = 'Match nul';
+          let prediction = recent.pick || recent.result || '';
+          if (!prediction) {
+            if (recent.status === 'won') {
+              prediction = 'Validé';
+            } else if (recent.status === 'lost') {
+              prediction = 'Non passé';
+            } else if (recent.status === 'draw' || recent.status === 'partial') {
+              prediction = 'Match nul';
+            } else {
+              prediction = 'En attente';
+            }
           }
 
           chObj.lastProno = {

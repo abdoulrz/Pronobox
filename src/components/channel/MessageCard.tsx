@@ -218,7 +218,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
       else if (mainText.includes('V2')) pickName = `V2 — Victoire ${awayTeam}`;
       else if (mainText.includes('12')) pickName = '12 — Pas de Nul';
       else if (mainText.includes('X -') || mainText.includes('Match Nul')) pickName = 'X — Match Nul';
-      else pickName = isWon ? `Victoire ${homeTeam}` : 'Pronostic Tipster';
+      else pickName = isWon ? 'Pronostic Validé' : isLost ? 'Pronostic Non validé' : 'Pronostic Tipster';
     }
 
     const isOfficialAdmin = message.user?.username?.includes('Officiel') || message.user?.role === 'admin';
@@ -376,7 +376,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
             <div className="bg-slate-950/70 rounded-xl p-2.5 border border-white/10 mb-2.5 flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Issue Pronostiquée</span>
-                <span className="text-xs sm:text-sm font-black text-emerald-400 break-words">{pickName}</span>
+                <span className={`text-xs sm:text-sm font-black break-words ${isLost ? 'text-rose-400' : 'text-emerald-400'}`}>{pickName}</span>
               </div>
               {/* Stars: ONLY visible when pending */}
               {isPending && (
@@ -395,7 +395,7 @@ export const MessageCard: React.FC<MessageCardProps> = ({
               <div className="bg-slate-950/70 rounded-xl p-2.5 border border-white/10 mb-2.5 flex items-center justify-between gap-2">
                 <div>
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Score Final</span>
-                  <span className="text-sm font-black text-white">{message.pronoActualResult}</span>
+                  <span className={`text-sm font-black ${isLost ? 'text-rose-400' : isWon ? 'text-emerald-400' : 'text-white'}`}>{message.pronoActualResult}</span>
                 </div>
                 <span className={`text-[9px] sm:text-[10px] font-black uppercase px-2 py-0.5 rounded-md shrink-0 whitespace-nowrap ${
                   isWon ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
