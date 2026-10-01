@@ -4,32 +4,26 @@ import { Channel } from '../../types/chat';
 interface ChannelListItemProps {
   channel: Channel;
   currentUserId: string | number;
-  isPro: boolean;
+  isPro?: boolean;
   onOpen: (id: string | number) => void;
   onTogglePin: (id: string | number) => void;
   onJoin: (channel: Channel) => void;
   isProcessingJoin: boolean;
-  isEditing: boolean;
-  onToggleEdit: (id: string | number) => void;
-  channelFeatures: Record<string | number, unknown>;
-  onFeatureToggle: (id: string | number, feature: string) => void;
+  isEditing?: boolean;
+  onToggleEdit?: (id: string | number) => void;
+  channelFeatures?: Record<string | number, unknown>;
+  onFeatureToggle?: (id: string | number, feature: string) => void;
 }
 
 export const ChannelListItem: React.FC<ChannelListItemProps> = ({
   channel,
   currentUserId,
-  isPro,
   onOpen,
   onTogglePin,
   onJoin,
-  isProcessingJoin,
-  isEditing,
-  onToggleEdit,
-  channelFeatures,
-  onFeatureToggle
+  isProcessingJoin
 }) => {
   const [showEnlargedAvatar, setShowEnlargedAvatar] = React.useState(false);
-  const features = (channelFeatures[channel.id] || {}) as Record<string, boolean>;
   const hasWinRate = channel.winRate !== null && channel.winRate !== undefined && !isNaN(Number(channel.winRate));
   const rateValue = hasWinRate ? Number(channel.winRate) : null;
   const winRateColor = (rateValue || 0) >= 50 ? 'text-brand-green' : 'text-amber-500';

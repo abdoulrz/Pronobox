@@ -24,13 +24,42 @@ export const MessageCard: React.FC<MessageCardProps> = ({
   onImageClick,
   onImageLoad
 }) => {
-  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [touchStart, setTouchStart] = useState<number | null>(null);
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
   const [swipeX, setSwipeX] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const LONG_PRESS_DURATION_MS = 2500; // 2.5 secondes pour une confirmation délibérée
+
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const startLongPress = () => {
+    cancelLongPress();
+    longPressTimerRef.current = setTimeout(() => {
+      // Retour haptique léger sur mobile
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate(40);
+        } catch (_) {}
+      }
+      onLongPress();
+    }, LONG_PRESS_DURATION_MS);
+  };
+
+  useEffect(() => {
+    return () => {
+      cancelLongPress();
+    };
+  }, []);
 
   const togglePlay = () => {
     if (audioRef.current) {
@@ -89,13 +118,27 @@ export const MessageCard: React.FC<MessageCardProps> = ({
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStart(e.targetTouches[0].clientX);
+    const touch = e.targetTouches[0];
+    if (touch) {
+      setTouchStart(touch.clientX);
+      touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    }
     startLongPress();
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStart === null) return;
-    const currentX = e.targetTouches[0].clientX;
+    const touch = e.targetTouches[0];
+    if (touch && touchStartPos.current) {
+      const deltaX = Math.abs(touch.clientX - touchStartPos.current.x);
+      const deltaY = Math.abs(touch.clientY - touchStartPos.current.y);
+      // Si l'utilisateur déplace son doigt (défilement vertical ou glissement), on annule le long press
+      if (deltaX > 10 || deltaY > 10) {
+        cancelLongPress();
+      }
+    }
+
+    if (touchStart === null || !touch) return;
+    const currentX = touch.clientX;
     const diff = currentX - touchStart;
     
     // Only allow swiping to the right for reply
@@ -110,21 +153,8 @@ export const MessageCard: React.FC<MessageCardProps> = ({
     }
     setSwipeX(0);
     setTouchStart(null);
+    touchStartPos.current = null;
     cancelLongPress();
-  };
-
-  const startLongPress = () => {
-    const timer = setTimeout(() => {
-      onLongPress();
-    }, 500);
-    setLongPressTimer(timer);
-  };
-
-  const cancelLongPress = () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
   };
 
   const isLegacyAnnouncement = Boolean(

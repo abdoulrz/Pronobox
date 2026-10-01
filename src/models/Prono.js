@@ -36,5 +36,11 @@ const PronoSchema = new mongoose.Schema({
   timestamps: true
 });
 
+PronoSchema.index({ matchId: 1 });
+PronoSchema.index({ channelId: 1 });
+PronoSchema.index({ matchDate: -1 });
+PronoSchema.index({ status: 1 });
+PronoSchema.index({ createdAt: -1 });
+
 const Prono = mongoose.model('Prono', PronoSchema);
 export default Prono;

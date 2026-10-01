@@ -73,8 +73,6 @@ const AdminDashboard = () => {
     setActiveTabState(tabId);
   };
 
-  const [stats, setStats] = useState<any>(null);
-
   const { connected, subscribe } = useWebSocket();
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [usersData, setUsersData] = useState<UserData[]>([]);

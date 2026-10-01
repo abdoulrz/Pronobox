@@ -138,7 +138,11 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
             };
           });
           
-          const uniqueMatches = Array.from(new Map(formattedDbMatches.map(m => [m.name, m])).values());
+          const uniqueMatches = Array.from(
+            new Map<string, { id: string | number; name: string; matchDate?: string | Date; league?: string }>(
+              formattedDbMatches.map((m: { id: string | number; name: string; matchDate?: string | Date; league?: string }) => [m.name, m])
+            ).values()
+          );
           setMatchList(uniqueMatches);
         } else {
           setMatchList(defaultMatchObjects);
@@ -301,7 +305,7 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
                   type="button"
                   onClick={() => {
                     setMatchQuery('');
-                    setSelectedMatch('');
+                    setSelectedMatch(null);
                   }}
                   className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-white"
                 >

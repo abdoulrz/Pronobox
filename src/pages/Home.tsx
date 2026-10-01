@@ -45,9 +45,11 @@ const Home: React.FC = () => {
         const freeCh = ownerChannels.find(ch => !ch.premium);
         const premCh = ownerChannels.find(ch => ch.premium);
 
-        const validRates = ownerChannels.map(ch => ch.winRate).filter(r => r !== null && r !== undefined && !isNaN(Number(r)));
+        const validRates: number[] = ownerChannels
+          .map(ch => ch.winRate)
+          .filter((r): r is number => r !== null && r !== undefined && !isNaN(Number(r)));
         const avgSuccess = validRates.length > 0
-          ? Math.round(validRates.reduce((acc, curr) => acc + Number(curr), 0) / validRates.length)
+          ? Math.round(validRates.reduce((acc: number, curr: number) => acc + curr, 0) / validRates.length)
           : null;
 
         tipsters.push({

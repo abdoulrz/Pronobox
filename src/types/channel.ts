@@ -25,9 +25,16 @@ export interface Channel {
   messages?: any[];
   category?: string;
   allowVoiceMessages?: boolean;
-  owner?: { id: string; username?: string; name?: string; avatar: string };
+  owner?: { id: string | number; username?: string; name?: string; avatar: string; isCertified?: boolean; role?: string };
   winRate?: number | null;
   lastWonProno?: { home: string; away: string; result: string } | null;
+  lastProno?: {
+    home: string;
+    away: string;
+    status: string;
+    prediction: string;
+    score?: string;
+  } | null;
 }
 
 export interface ChannelPost {

@@ -656,8 +656,15 @@ const ChannelView = () => {
                 currentUserId={user.id}
                 onReaction={(emoji) => addReaction(msg.id, emoji)}
                 onLongPress={() => {
-                  setSelectedMessageId(msg.id);
-                  setShowDeleteModal(true);
+                  if (!user) return;
+                  const isAuthor = String(msg.user.id) === String(user.id);
+                  const isOwner = (channel?.owner?.id && String(channel.owner.id) === String(user.id)) ||
+                    (channel?.owner && String(channel.owner) === String(user.id));
+                  const isAdmin = user.role === 'admin';
+                  if (isAuthor || isOwner || isAdmin) {
+                    setSelectedMessageId(msg.id);
+                    setShowDeleteModal(true);
+                  }
                 }}
                 onShowReactionPicker={() => {
                   setSelectedMessageId(msg.id);

@@ -149,4 +149,9 @@ const ChannelSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+ChannelSchema.index({ owner: 1 });
+ChannelSchema.index({ premium: 1 });
+ChannelSchema.index({ name: 1 });
+
 export default mongoose.model('Channel', ChannelSchema);

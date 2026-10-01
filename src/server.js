@@ -1136,6 +1136,31 @@ app.post('/api/upload-media', authenticateToken, upload.single('media'), (req, r
 
 let cachedPronosList = [];
 
+// Helper to determine if requester has Pro or Admin permissions
+const checkIsAuthorizedPro = async (req) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return false;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded || !decoded.id) return false;
+    const u = await User.findById(decoded.id).select('role isPro');
+    return Boolean(u && (u.isPro || u.role === 'admin'));
+  } catch (_) {
+    return false;
+  }
+};
+
+const maskPremiumProno = (prono, isAuthorizedPro) => {
+  if (!prono) return prono;
+  const p = prono.toObject ? prono.toObject() : { ...prono };
+  if (!isAuthorizedPro && p.premiumExpectedResult) {
+    p.premiumExpectedResult = '🔒 Réservé aux membres VIP';
+    p.premiumObservation = '🔒 Analyse détaillée et conseils d\'experts réservés aux membres Pro.';
+  }
+  return p;
+};
+
 app.get('/api/pronos', async (req, res) => {
   try {
     let dbPronos = [];
@@ -1339,10 +1364,15 @@ app.get('/api/pronos', async (req, res) => {
       cachedPronosList = finalPronos;
     }
 
-    res.json(finalPronos.length > 0 ? finalPronos : cachedPronosList);
+    const isAuthorizedPro = await checkIsAuthorizedPro(req);
+    const sourceList = finalPronos.length > 0 ? finalPronos : cachedPronosList;
+    const maskedOutput = sourceList.map(p => maskPremiumProno(p, isAuthorizedPro));
+
+    res.json(maskedOutput);
   } catch (err) {
     console.error('Error fetching pronos stack:', err?.stack || err);
-    res.json(cachedPronosList);
+    const isAuthorizedPro = await checkIsAuthorizedPro(req);
+    res.json(cachedPronosList.map(p => maskPremiumProno(p, isAuthorizedPro)));
   }
 });
 
@@ -1364,7 +1394,8 @@ app.get('/api/pronos/:matchId', async (req, res) => {
       return res.status(404).json({ error: 'Prono not found' });
     }
     
-    res.json(prono);
+    const isAuthorizedPro = await checkIsAuthorizedPro(req);
+    res.json(maskPremiumProno(prono, isAuthorizedPro));
   } catch (err) {
     console.error('Error fetching single prono:', err);
     res.status(500).json({ error: 'Failed to fetch prono' });
@@ -3535,6 +3566,9 @@ const initializeMockData = async () => {
       await oldAdmin.save();
       console.log('Migration: Admin renamed to @Pronosbox Officiel');
     }
+
+    // One-shot migration: ensure all existing users have accountType initialized (Phase 4 Roadmap)
+    await User.updateMany({ accountType: { $exists: false } }, { $set: { accountType: 'standard' } });
 
     // One-shot migration: assign @Pronosbox Officiel as owner of DOOOBI if orphaned
     const pronosboxUser = await User.findOne({ username: '@Pronosbox Officiel' });

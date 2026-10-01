@@ -73,17 +73,17 @@ Ce document décrit les étapes nécessaires pour faire passer PronosBox de son 
     - [x] **Déverrouillage Premium Persistant** : Enregistrement permanent des ressources achetées/déverrouillées directement dans le schéma Utilisateur MongoDB et la session du contexte React pour garantir un accès à vie.
     - [x] **Modération des Canaux & Médias** : Gestion complète en CRUD des canaux (mappage robuste des ID) et persistance résiliente des médias (images et notes vocales) convertis de Blob en Base64.
 - [x] **Refactoring Structurel & Nettoyage** :
-    - [x] Suppression de la page autonome de pronostics ("Pronos") car les analyses de matchs sont désormais intégrées directement.
-    - [x] Fusion de la page autonome "Débats" dans "Canaux" (/box) sous forme de colonne latérale dynamique avec incrustations fluides et filtres par catégorie.
-    - [x] Application de la règle d'autorisation stricte : seuls les propriétaires de canaux (ou les admins) peuvent créer un débat, sécurisée côté frontend et backend (MongoDB).
-    - [x] **Stabilité & Visuel des Débats** : Résolution de tous les bugs de divergence de données serveur-client (disparition des likes/commentaires, filtres d'auto-notification et crashs de rendu Mongoose) et intégration de jolis avatars circulaires pour les débats.
-- [ ] **Performance** :
-    - [ ] Implémentation du lazy loading des images.
-    - [ ] Optimisation des requêtes MongoDB pour le flux de la "Box" (Pagination).
+    - [x] **Page Centrale des Pronostics (/pronos)** : Maintien et stabilisation de la page centrale `/pronos` accessible depuis la navigation, présentant la vitrine des pronostics publiés, filtres par ligue, cotes, taux de réussite et calcul de rentabilité.
+    - [x] **Unification Navigation & Canaux (/channels & /box)** : Rapprochement de `/channels` (point d'entrée canonique) et `/box` (redirection fluide), partageant la même interface unifiée de Canaux & Débats avec le composant optimisé `ChannelListItem`.
+    - [x] **Débats Intégrés** : Fusion de la page autonome "Débats" dans les Canaux sous forme de colonne latérale dynamique avec incrustations fluides, avatars circulaires et filtres par catégorie.
+    - [x] **Contrôle d'Accès Créateur** : Seuls les propriétaires de canaux (ou les administrateurs) peuvent initier un débat officiel, sécurisé côté frontend et backend.
+- [x] **Performance & Fiabilité Codebase** :
+    - [x] **Découpage de Code & Chargement Différé (Code Splitting)** : Implémentation de `React.lazy()` et `Suspense` sur toutes les routes de l'application dans `App.tsx` générant des chunks légers et optimisés.
+    - [x] **Sécurité des Types (TypeScript 0 Défaut)** : Résolution complète des 23 erreurs strictes du compilateur (`tsc --noEmit` avec code de retour 0).
+    - [x] **Indexation Haute Performance MongoDB** : Ajout d'index simples et composés sur les collections `Prono`, `Channel`, `Transaction` et `User` pour accélérer le requêtage en production.
+    - [x] **Migration Automatisée des Comptes** : Script de migration au démarrage du serveur garantissant `accountType: 'standard'` pour tous les utilisateurs existants.
     - [x] **Consolidation du Dashboard Admin** : Fusion de tous les panneaux d'administration (retraits, liste d'utilisateurs, chat de support, résumé financier) dans un tableau de bord centralisé unique avec vérifications strictes du compilateur TypeScript.
-- [ ] **Migrations & Nettoyage de Données** :
-    - [ ] Exécuter la migration `accountType` pour les utilisateurs pré-existants en DB : `db.users.updateMany({ accountType: { $exists: false } }, { $set: { accountType: 'standard' } })`.
-- [ ] **Déploiement** :
+- [ ] **Déploiement VPS** :
     - [ ] Finaliser la configuration du VPS Contabo (Nginx, PM2, MongoDB).
     - [ ] Configurer SSL (Certbot).
     - [ ] Sécuriser et exclure le fichier `.env` du suivi du dépôt public avant le lancement final.
@@ -92,16 +92,24 @@ Ce document décrit les étapes nécessaires pour faire passer PronosBox de son 
 
 ## 💰 Phase 5 : Paiements, Monétisation & Modèle Économique
 
-- [ ] **Intégration des Passerelles de Paiement** :
-    - [ ] Connecter **FedaPay** / **NowPayments.io** au système de portefeuille.
-    - [ ] Gestion des états de succès/erreur, webhooks et mise à jour instantanée du solde wallet.
+- [ ] **Intégration des Passerelles de Paiement (Par Ordre de Priorité)** :
+    - [ ] **Priorité 1 : FedaPay (Mobile Money & Cartes Bancaires - Afrique de l'Ouest)** :
+        - Support direct des moyens de paiement régionaux : MTN Mobile Money, Moov Money, Orange Money, Wave et cartes bancaires (Visa / Mastercard).
+        - Architecture API : Initialisation de transaction côté serveur (`POST /api/payments/fedapay/create`), redirection vers l'interface sécurisée FedaPay.
+        - Webhook sécurisé (`POST /api/payments/fedapay/webhook`) : Vérification de la signature cryptographique, écoute des événements `transaction.approved`, et incrémentation atomique du portefeuille (`walletBalance`) avec journalisation `Transaction`.
+        - Interface de gestion dans l'espace utilisateur pour le rechargement en devises locales (XOF / XAF / EUR).
+    - [ ] **Priorité 2 : NowPayments.io (Crypto-monnaies & International)** :
+        - Support des devises cryptographiques majeures : USDT (TRC20, Polygon, ERC20), BTC, ETH, LTC, SOL.
+        - Architecture : Génération d'ordres de paiement via API NowPayments (`/v1/invoice`), affichage des QR codes et adresses de dépôt.
+        - Webhook IPN (Instant Payment Notification) : Validation HMAC-SHA512, surveillance des confirmations de bloc et conversion en solde portefeuille PronosBox.
+        - Gestion des expirations de session et réconciliations en cas de paiements partiels.
 - [ ] **Accès Payant aux Contenus & Canaux VIP** :
     - [ ] **Canaux Premium / VIP** : Abonnement mensuel récurrent ou one-time débloquant l'accès au flux privé du Tipster (commission plateforme de 10-15%).
     - [ ] **Pronostics Exclusifs** : Déverrouillage à l'unité de pronostics à haute cote / analyses pointues.
     - [ ] **BET-EDUC Premium** : Vente d'E-books spécialisés, masterclasses vidéo et fiches méthodologiques.
 - [ ] **Passerelle Wildcard → Tipster (Achat Unique)** :
     - [ ] Achat unique du "Pass Créateur" permettant à un utilisateur Wildcard de débloquer immédiatement la création de canaux et la publication de pronostics officiels.
-    - [ ] **UI du bouton d'upgrade** : Ajouter un composant dans les paramètres utilisateur / profil Wildcard pour appeler `upgradeToTipster()` (la logique backend existe déjà).
+    - [ ] **UI du bouton d'upgrade** : Composant dédié dans les paramètres utilisateur / profil Wildcard pour appeler `upgradeToTipster()` (logique backend déjà prête).
 - [ ] **UX Google Re-Login (Edge Case)** :
     - [ ] Lors d'un login Google d'un utilisateur existant, si un `accountType` différent est sélectionné sur le formulaire d'inscription, afficher un message informatif expliquant que le rôle existant est conservé.
 - [x] **Authentification Sociale** :
@@ -111,24 +119,25 @@ Ce document décrit les étapes nécessaires pour faire passer PronosBox de son 
 
 ## 🎖️ Phase 6 : Système de Certification & Classement des Tipsters
 
-- [ ] **Hiérarchie des Tipsters (Niveau 1 : Validé / Niveau 2 : Certifié)** :
-    - [ ] **Règles d'attribution de la certification Tipster (★)** :
-        - Minimum 20 pronostics publiés dans un mois calendaire.
-        - Taux de réussite (win-rate) maintenu à ≥ 50%.
-        - Procédure de vérification d'identité : Dès que les compétences sont prouvées, demande d'informations personnelles pour s'assurer qu'il s'agit d'une personne réelle souhaitant s'engager avec la plateforme.
-        - Badge visuel ★ doré sur les cartes de canaux et les pronostics.
-    - [ ] **Réévaluation dynamique continue** : Perte automatique du badge si le taux de réussite chute sous 50% sur fenêtre glissante.
-- [ ] **Priorisation Visuelle des Canaux & Pronostics** :
-    - [ ] Ordre des canaux : 1. Épinglés → 2. Tipsters Certifiés (Admins en tête, triés par performance) → 3. Tipsters Non-certifiés (triés par performance).
-    - [ ] Mise en avant des pronostics certifiés dans l'onglet Pronostics et sur la page d'accueil.
+- [ ] **Moteur d'Audit Automatisé de Certification** :
+    - [ ] **Critères Stricts d'Éligibilité au Badge Certifié (★)** :
+        - **Volume d'activité** : Minimum de 20 pronostics officiels publiés et validés au cours d'un mois calendaire.
+        - **Rentabilité / Réussite** : Taux de réussite (Win-Rate) maintenu à au moins 50% sur l'ensemble des pronostics engagés.
+        - **Vérification d'Identité & Engagement (KYC)** : Dès que les seuils statistiques sont atteints, déclenchement d'un formulaire de vérification d'identité pour certifier qu'il s'agit d'une personne physique réelle et engagée avec la communauté.
+    - [ ] **Évaluation & Révocation Dynamique Continue** :
+        - Script d'audit récurrent (Cron bi-hebdomadaire) calculant le taux de réussite sur fenêtre glissante de 30 jours.
+        - Révocation automatique et immédiate du badge ★ si le win-rate chute en-dessous de 50%, avec notification explicative envoyée au Tipster.
+    - [ ] **Valorisation Visuelle & UX** :
+        - Badge officiel or ★ affiché sur les cartes de canaux (`ChannelListItem`), les en-têtes de canaux et les fiches de pronostics.
+        - Priorisation de visibilité : 1. Canaux épinglés → 2. Canaux certifiés (Admins en tête, triés par win-rate décroissant) → 3. Canaux standards.
 
 ---
 
-## 🎯 Phase 7 : Architecture & Roadmap pour le CRUD des Pronostics Premium
+## 🎯 Phase 7 : Architecture & CRUD des Pronostics Premium
 
-- [ ] **Gating & Paywall API Robuste** :
-    - [ ] Masquage conditionnel des champs `premiumExpectedResult`, `premiumOdds` et `premiumObservation` dans `GET /api/pronos` pour les utilisateurs sans abonnement Pro (`user.isPro !== true`).
-    - [ ] Retour de messages incitatifs au passage Pro (*"🔒 Réservé aux membres VIP"*).
+- [x] **Gating & Paywall API Robuste (Complété)** :
+    - [x] Masquage côté serveur des informations sensibles VIP (`premiumExpectedResult`, `premiumOdds`, `premiumObservation`) dans `GET /api/pronos` et `GET /api/pronos/:matchId`.
+    - [x] Remplacement systématique par des avertissements incitatifs (*"🔒 Réservé aux membres VIP"*) pour tout utilisateur non connecté ou n'ayant pas le statut Pro (`isPro: true` ou `accountType: 'pro'`).
 - [ ] **Gestion Multi-Tipsters & Canaux Privés Payants** :
     - [ ] Publication de pronostics Premium par les créateurs de canaux Pro avec définition de cotes (`premiumOdds`) et d'indices de confiance.
     - [ ] Liaison automatique avec le prix d'abonnement au canal (`subscriptionPrice`).
