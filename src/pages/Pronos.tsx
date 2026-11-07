@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { PronoReactions } from '../components/predictions/PronoReactions';
+import { AiPronoRecommendationsBox } from '../components/predictions/AiPronoRecommendationsBox';
 
 const Pronos = () => {
   const [activeTab, setActiveTab] = useState<'gratuit' | 'premium'>('gratuit');
@@ -73,39 +74,34 @@ const Pronos = () => {
 
   return (
     <div className="flex flex-col space-y-6 max-w-4xl mx-auto pb-24">
-      {/* Header & Toggle */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      {/* Title */}
+      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 mb-1">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Pronostics</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">Découvrez nos analyses et pronostics d'experts</p>
-        </div>
-
-        <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl max-w-xs w-full sm:w-auto">
-          <button
-            onClick={() => setActiveTab('gratuit')}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${
-              activeTab === 'gratuit'
-                ? 'bg-white dark:bg-slate-700 text-brand-green shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            Gratuit
-          </button>
-          <button
-            onClick={() => setActiveTab('premium')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-4 rounded-lg text-sm font-semibold transition-all duration-300 ${
-              activeTab === 'premium'
-                ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-amber-500 dark:hover:text-amber-400'
-            }`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zm7-10a1 1 0 01.707.293l0 .001c.023.023.054.045.085.068.106.079.256.173.435.267.356.188.852.41 1.411.602 1.119.383 2.508.683 4.02.683a1 1 0 010 2c-1.282 0-2.483-.243-3.46-.566-.487-.16-.91-.341-1.25-.526a4.896 4.896 0 01-.482-.295c-.066-.046-.118-.088-.152-.116l-.014-.01a1 1 0 01-1.298-1.416l-.001-.001c-.023-.023-.054-.045-.085-.068-.106-.079-.256-.173-.435-.267-.356-.188-.852-.41-1.411-.602C10.51 3.559 9.121 3.259 7.61 3.259a1 1 0 010-2c1.282 0 2.483.243 3.46.566.487.16.91.341 1.25.526.178.098.342.198.482.295.066.046.118.088.152.116l.014.01A1 1 0 0112 2zM7.61 17.259c1.51 0 2.899-.3 4.019-.683.56-.192 1.055-.414 1.411-.602.179-.094.329-.188.435-.267.031-.023.062-.045.085-.068l.001-.001a1 1 0 011.416 1.416l-.01.014c-.028.034-.07.086-.116.152-.097.14-.197.304-.295.482-.185.34-.366.763-.526 1.25-.323.977-.566 2.178-.566 3.46a1 1 0 01-2 0c0-1.512-.3-2.901-.683-4.02-.192-.56-.414-1.055-.602-1.411a7.712 7.712 0 00-.267-.435c-.023-.031-.045-.062-.068-.085l-.001-.001a1 1 0 01-1.416-1.416l.01-.014c.034-.028.086-.07.152-.116.14-.097.304-.197.482-.295.34-.185.763-.366 1.25-.526.977-.323 2.178-.566 3.46-.566a1 1 0 010 2z" clipRule="evenodd" />
-            </svg>
-            Premium
-          </button>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">Pronostics</h1>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">Découvrez nos analyses et pronostics d'experts</p>
         </div>
       </div>
+
+      {/* ── Fused AI Recommendations & Gratuit/Premium Switcher (Option B) ── */}
+      <AiPronoRecommendationsBox 
+        pronos={pronos} 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab} 
+        onSelectProno={(selectedProno) => {
+          if (selectedProno.channelId) {
+            navigate(`/channel/${selectedProno.channelId}`);
+            return;
+          }
+          const targetId = `prono-${selectedProno._id || selectedProno.id}`;
+          const el = document.getElementById(targetId);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('ring-2', 'ring-brand-green');
+            setTimeout(() => el.classList.remove('ring-2', 'ring-brand-green'), 2500);
+          }
+        }}
+        className="mb-2" 
+      />
 
       {/* Content Area */}
       {loading ? (
@@ -119,7 +115,11 @@ const Pronos = () => {
       ) : activeTab === 'gratuit' ? (
         <div className="space-y-4">
           {pronos.filter(p => p.freeExpectedResult).map(prono => (
-            <div key={prono._id || prono.id} className="glass-panel p-4 sm:p-6 relative overflow-hidden group">
+            <div 
+              id={`prono-${prono._id || prono.id}`}
+              key={prono._id || prono.id} 
+              className="glass-panel p-4 sm:p-6 relative overflow-hidden group transition-all duration-300"
+            >
               <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors duration-500 ${
                 prono.freeStatus === 'won' ? 'bg-brand-green' :
                 prono.freeStatus === 'lost' ? 'bg-red-500' :
@@ -231,7 +231,11 @@ const Pronos = () => {
       ) : (
         <div className="space-y-4">
           {pronos.filter(p => p.premiumExpectedResult).map(prono => (
-            <div key={prono._id || prono.id} className="glass-panel p-4 sm:p-6 relative overflow-hidden">
+            <div 
+              id={`prono-${prono._id || prono.id}`}
+              key={prono._id || prono.id} 
+              className="glass-panel p-4 sm:p-6 relative overflow-hidden transition-all duration-300"
+            >
               <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors duration-500 ${
                 prono.premiumStatus === 'won' ? 'bg-gradient-to-b from-green-400 to-green-600' :
                 prono.premiumStatus === 'lost' ? 'bg-gradient-to-b from-red-400 to-red-600' :

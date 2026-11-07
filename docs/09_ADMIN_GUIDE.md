@@ -75,6 +75,40 @@ Pronobox intègre un système de vérification automatique basé sur l'API Sport
 5. **Revue Manuelle :** Si un libellé non standard est rencontré, le score réel est enregistré et le pronostic passe en attente de validation manuelle via le menu déroulant du tableau de bord.
 6. **Documentation Complète :** Pour une vue détaillée des diagrammes et des règles, consultez [`docs/10_UNIFIED_PRONOSTICS_ENGINE.md`](./10_UNIFIED_PRONOSTICS_ENGINE.md).
 
+### Protocole Tipsters & Admins : Marchés de Buts (+/-) et BTTS
+
+Pour diversifier l'offre de paris au-delà du 1X2 traditionnel, la plateforme prend en charge les marchés de buts cumulés (**Over/Under**) et les deux équipes marquent (**BTTS**), à la fois dans le tableau de bord Admin et dans les Canaux Tipsters (`CreatePronoModal`).
+
+#### 1. Tableau de Référence des Marchés de Buts (Over / Under)
+
+Le chiffre après le `+` ou le `-` représente le seuil décimal d'arbitrage. Puisqu'il est impossible de marquer un demi-but (0.5), ce seuil évite toute ambiguïté de remboursement.
+
+| Intitulé du Pari | Signification Métier | Condition de Victoire | Scores Typiques Gagnants | Scores Perdants |
+| :--- | :--- | :--- | :--- | :--- |
+| **`+0.5 Buts`** | Au moins 1 but marqué | Total buts $\ge 1$ | 1-0, 0-1, 1-1, 2-0, 3-2... | **0-0 uniquement** |
+| **`+1.5 Buts`** | Au moins 2 buts marqués | Total buts $\ge 2$ | 1-1, 2-0, 0-2, 2-1, 3-0... | 0-0, 1-0, 0-1 |
+| **`+2.5 Buts`** | Au moins 3 buts marqués (*Over standard*) | Total buts $\ge 3$ | 2-1, 3-0, 2-2, 3-1, 4-0... | 0-0, 1-0, 0-1, 1-1, 2-0, 0-2 |
+| **`+3.5 Buts`** | Au moins 4 buts marqués | Total buts $\ge 4$ | 3-1, 2-2, 4-0, 3-2, 4-1... | Tout score avec $\le 3$ buts |
+| **`-0.5 Buts`** | Aucun but dans le match | Total buts $= 0$ | **0-0 uniquement** (Score exact 0-0) | Dès qu'un but est marqué (1-0...) |
+| **`-1.5 Buts`** | Maximum 1 but dans le match | Total buts $\le 1$ | 0-0, 1-0, 0-1 | Dès qu'un 2ᵉ but tombe (1-1, 2-0...) |
+| **`-2.5 Buts`** | Maximum 2 buts dans le match (*Under standard*) | Total buts $\le 2$ | 0-0, 1-0, 0-1, 1-1, 2-0, 0-2 | Dès qu'un 3ᵉ but tombe (2-1, 3-0...) |
+| **`-3.5 Buts`** | Maximum 3 buts dans le match | Total buts $\le 3$ | 0-0, 1-0, 1-1, 2-0, 2-1, 3-0 | Dès qu'un 4ᵉ but tombe (3-1, 2-2...) |
+
+#### 2. Marché "Les Deux Équipes Marquent" (BTTS - Both Teams To Score)
+
+- **`BTTS Oui`** : Gagné si les deux équipes ont inscrit au moins un but (ex: 1-1, 2-1, 1-2, 3-3).
+- **`BTTS Non`** : Gagné si au moins l'une des deux équipes garde sa cage inviolée ou si le match se solde par un score nul et vierge (ex: 0-0, 1-0, 0-1, 2-0, 0-3).
+
+#### 3. Recommandations de Saisie pour Admins et Tipsters
+
+1. **Privilégiez les Boutons Automatisés :** Utilisez les onglets **"Total Buts (+ / -)"** et **"Les 2 Marquent"** disponibles dans le panneau de création. Ils insèrent automatiquement les intitulés standardisés reconnus à 100% par le moteur.
+2. **Tolérance Syntaxique du Moteur :** Le serveur gère nativement les variantes :
+   - Formats acceptés pour Over : `+2.5 Buts`, `+ 2.5`, `+2,5 buts`, `Plus de 2.5 buts`, `Over 2.5`, `> 2.5`.
+   - Formats acceptés pour Under : `-2.5 Buts`, `- 2.5`, `-2,5 buts`, `Moins de 2.5 buts`, `Under 2.5`, `< 2.5`.
+   - Formats acceptés pour BTTS : `BTTS Oui`, `BTTS Non`, `Les deux équipes marquent`, `Les deux équipes ne marquent pas`.
+   - Formats acceptés pour Paris Combos : Combinez deux marchés avec `&` ou `et` (ex: `V1 & +2.5 Buts`, `1X & -2.5 Buts`, `V1 et BTTS Oui`). Les deux conditions doivent être validées pour que le pari soit gagné.
+3. **Explications Pédagogiques Automatiques :** Le système de vérification génère automatiquement un récapitulatif factuel affiché aux abonnés (ex: *"✓ 3 but(s) inscrit(s) (2-1) — le marché +2.5 buts est validé par le score final"* ou *"✗ Score final 1-0 — le seuil du marché -1.5 buts est validé"*).
+
 ### Gestion BET-EDUC
 La section BET-EDUC permet d'éduquer et de fidéliser vos utilisateurs via des ressources variées.
 

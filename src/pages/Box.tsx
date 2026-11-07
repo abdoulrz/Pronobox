@@ -9,6 +9,8 @@ import { ChannelTabs } from '../components/box/ChannelTabs';
 import { CreateChannelModal, NewChannelData } from '../components/box/CreateChannelModal';
 import { SubscribeChannelModal } from '../components/box/SubscribeChannelModal';
 import { useChannelData } from '../contexts/ChannelContext';
+import { CommunitySuggestionBox } from '../components/common/CommunitySuggestionBox';
+import { RecommendedChannelsBox } from '../components/common/RecommendedChannelsBox';
 
 // Debates (Débats) imports
 import { useNotifications } from '../contexts/NotificationContext';
@@ -681,9 +683,12 @@ const Box = () => {
             <ChannelTabs activeTab={activeTab} setActiveTab={setActiveTab} isPro={isPro} />
 
             {filteredChannels.length === 0 ? (
-              <div className="text-center py-16 bg-[#0D111D]/80 border border-slate-800/80 rounded-2xl text-slate-400">
-                <p className="text-sm font-medium">Aucun canal dans cette catégorie.</p>
-                <p className="text-xs text-slate-500 mt-1">Essayez un autre filtre ou créez votre propre canal.</p>
+              <div className="space-y-4">
+                <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/80 rounded-2xl text-slate-500 dark:text-slate-400">
+                  <p className="text-sm font-medium">Aucun canal dans cette catégorie.</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Découvrez ci-dessous les canaux recommandés par la communauté.</p>
+                </div>
+                <RecommendedChannelsBox title="Canaux & Tipsters Recommandés" />
               </div>
             ) : (
               <div className="space-y-3.5 sm:space-y-4">
@@ -705,6 +710,9 @@ const Box = () => {
                 ))}
               </div>
             )}
+
+            {/* Boîte à Suggestions pour le Canal (Option A) */}
+            <CommunitySuggestionBox context="channels" />
           </div>
         ) : (
           <div className="w-full">

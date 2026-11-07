@@ -102,8 +102,15 @@ const Header: React.FC<HeaderProps> = ({ onBetEducClick }) => {
               >
                 {/* Online dot + avatar */}
                 <div className="relative">
-                  <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-brand-green/40 group-hover:border-brand-green transition-colors duration-200">
-                    <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+                  <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-brand-green/40 group-hover:border-brand-green transition-colors duration-200 bg-emerald-600/20">
+                    <img 
+                      src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || 'Admin')}&background=10b981&color=fff`} 
+                      alt={user.username || 'Utilisateur'} 
+                      className="w-full h-full object-cover" 
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || 'Admin')}&background=10b981&color=fff`;
+                      }}
+                    />
                   </div>
                   {/* Online indicator */}
                   <span className={`absolute bottom-0 right-0 block w-2.5 h-2.5 rounded-full border-2 border-slate-100 dark:border-brand-navy transition-all duration-300 ${

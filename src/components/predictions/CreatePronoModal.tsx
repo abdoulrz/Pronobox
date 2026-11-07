@@ -103,6 +103,88 @@ export function getProno6Options(matchString: string): PronoOption[] {
   ];
 }
 
+export function getPronoGoalOptions(): PronoOption[] {
+  return [
+    {
+      id: 'OVER_0_5',
+      code: '+0.5',
+      badge: '+0.5',
+      title: '+0.5 Buts',
+      fullPick: '+0.5 Buts',
+      description: 'Au moins 1 but marqué dans le match (seul 0-0 perd)'
+    },
+    {
+      id: 'OVER_1_5',
+      code: '+1.5',
+      badge: '+1.5',
+      title: '+1.5 Buts',
+      fullPick: '+1.5 Buts',
+      description: 'Au moins 2 buts marqués au total (ex: 1-1, 2-0, 2-1)'
+    },
+    {
+      id: 'OVER_2_5',
+      code: '+2.5',
+      badge: '+2.5',
+      title: '+2.5 Buts',
+      fullPick: '+2.5 Buts',
+      description: 'Au moins 3 buts marqués au total (ex: 2-1, 3-0, 2-2)'
+    },
+    {
+      id: 'OVER_3_5',
+      code: '+3.5',
+      badge: '+3.5',
+      title: '+3.5 Buts',
+      fullPick: '+3.5 Buts',
+      description: 'Au moins 4 buts marqués au total (ex: 3-1, 2-2, 4-0)'
+    },
+    {
+      id: 'UNDER_1_5',
+      code: '-1.5',
+      badge: '-1.5',
+      title: '-1.5 Buts',
+      fullPick: '-1.5 Buts',
+      description: 'Maximum 1 but dans le match (0-0, 1-0 ou 0-1)'
+    },
+    {
+      id: 'UNDER_2_5',
+      code: '-2.5',
+      badge: '-2.5',
+      title: '-2.5 Buts',
+      fullPick: '-2.5 Buts',
+      description: 'Maximum 2 buts dans le match (0-0, 1-0, 1-1, 2-0)'
+    },
+    {
+      id: 'UNDER_3_5',
+      code: '-3.5',
+      badge: '-3.5',
+      title: '-3.5 Buts',
+      fullPick: '-3.5 Buts',
+      description: 'Maximum 3 buts dans le match (jusqu\'à 2-1 ou 3-0)'
+    }
+  ];
+}
+
+export function getPronoBttsOptions(): PronoOption[] {
+  return [
+    {
+      id: 'BTTS_YES',
+      code: 'BTTS OUI',
+      badge: 'BTTS OUI',
+      title: 'Les 2 Équipes Marquent',
+      fullPick: 'BTTS Oui - Les deux équipes marquent',
+      description: 'Gagné si les deux équipes marquent au moins 1 but'
+    },
+    {
+      id: 'BTTS_NO',
+      code: 'BTTS NON',
+      badge: 'BTTS NON',
+      title: 'Au Moins 1 Sans But',
+      fullPick: 'BTTS Non - Au moins une équipe ne marque pas',
+      description: 'Gagné si le score contient au moins un 0 (ex: 1-0, 0-0)'
+    }
+  ];
+}
+
 const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, onSubmit }) => {
   const defaultMatchObjects = DEFAULT_MATCHES.map((name, i) => ({ id: `default-${i}`, name, matchDate: new Date() }));
   const [matchList, setMatchList] = useState<{ id: string | number; name: string; matchDate?: string | Date; league?: string }[]>(defaultMatchObjects);
@@ -112,6 +194,7 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
   const [showDropdown, setShowDropdown] = useState(false);
   const [loadingMatches, setLoadingMatches] = useState(false);
 
+  const [marketCategory, setMarketCategory] = useState<'1x2' | 'goals' | 'btts'>('1x2');
   const [selectedOptionId, setSelectedOptionId] = useState('V1');
   const [pick, setPick] = useState('');
   const [confidence, setConfidence] = useState(80);
@@ -183,17 +266,25 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
 
   const currentMatchName = selectedMatch ? selectedMatch.name : matchQuery;
   const options6 = getProno6Options(currentMatchName);
+  const goalOptions = getPronoGoalOptions();
+  const bttsOptions = getPronoBttsOptions();
+
+  const activeOptions = marketCategory === '1x2' 
+    ? options6 
+    : (marketCategory === 'goals' ? goalOptions : bttsOptions);
 
   const handleSelectMatch = (match: { id: string | number; name: string; matchDate?: string | Date; league?: string }) => {
     setSelectedMatch(match);
     setMatchQuery(match.name);
     setShowDropdown(false);
     
-    // Auto-update pick option based on newly selected match
-    const opts = getProno6Options(match.name);
-    const matchedOpt = opts.find(o => o.id === selectedOptionId) || opts[0];
-    if (matchedOpt) {
-      setPick(matchedOpt.fullPick);
+    // Auto-update pick option based on newly selected match if in 1X2 market
+    if (marketCategory === '1x2') {
+      const opts = getProno6Options(match.name);
+      const matchedOpt = opts.find(o => o.id === selectedOptionId) || opts[0];
+      if (matchedOpt) {
+        setPick(matchedOpt.fullPick);
+      }
     }
   };
 
@@ -208,7 +299,7 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
     const finalMatchId = selectedMatch && typeof selectedMatch.id === 'number' ? selectedMatch.id : undefined;
     const finalMatchDate = selectedMatch?.matchDate || new Date(searchDate);
     
-    const finalPick = pick || (options6[0]?.fullPick || 'V1');
+    const finalPick = pick || (activeOptions[0]?.fullPick || options6[0]?.fullPick || 'V1');
     const formattedTitle = `${finalMatch} — ${finalPick} (⏳ en attente)`;
 
     onSubmit({
@@ -342,19 +433,77 @@ const CreatePronoModal: React.FC<CreatePronoModalProps> = ({ isOpen, onClose, on
             )}
           </div>
 
-          {/* 2. Simplified 6-Option Pronostics Grid */}
+          {/* 2. Simplified Pronostics Grid with Market Categories */}
           <div>
             <div className="flex justify-between items-center mb-2">
               <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider">
-                2. Issue Pronostiquée (6 Choix Automatisés)
+                2. Issue Pronostiquée ({marketCategory === '1x2' ? '1X2 & Double Chance' : marketCategory === 'goals' ? 'Total Buts' : 'BTTS'})
               </label>
               <span className="text-[10px] text-brand-green font-bold bg-brand-green/10 px-2 py-0.5 rounded border border-brand-green/20">
                 100% Vérifiable
               </span>
             </div>
 
+            {/* Market Category Switcher */}
+            <div className="flex p-1 bg-slate-800/90 border border-slate-700/80 rounded-xl mb-3 gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setMarketCategory('1x2');
+                  const opts = getProno6Options(currentMatchName);
+                  if (opts[0]) {
+                    setSelectedOptionId(opts[0].id);
+                    setPick(opts[0].fullPick);
+                  }
+                }}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center ${
+                  marketCategory === '1x2'
+                    ? 'bg-brand-green text-white shadow'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                }`}
+              >
+                1X2 & Double Chance
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMarketCategory('goals');
+                  const opts = getPronoGoalOptions();
+                  if (opts[2]) {
+                    setSelectedOptionId(opts[2].id);
+                    setPick(opts[2].fullPick);
+                  }
+                }}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center ${
+                  marketCategory === 'goals'
+                    ? 'bg-brand-green text-white shadow'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                }`}
+              >
+                Total Buts (+ / -)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMarketCategory('btts');
+                  const opts = getPronoBttsOptions();
+                  if (opts[0]) {
+                    setSelectedOptionId(opts[0].id);
+                    setPick(opts[0].fullPick);
+                  }
+                }}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center ${
+                  marketCategory === 'btts'
+                    ? 'bg-brand-green text-white shadow'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                }`}
+              >
+                Les 2 Marquent
+              </button>
+            </div>
+
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-3">
-              {options6.map((opt) => {
+              {activeOptions.map((opt) => {
                 const isSelected = selectedOptionId === opt.id || pick === opt.fullPick;
                 return (
                   <button

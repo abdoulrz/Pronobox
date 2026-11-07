@@ -27,6 +27,8 @@ const Channels = React.lazy(() => import('./pages/Channels'));
 const ChannelView = React.lazy(() => import('./pages/ChannelView'));
 const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
 const BetEduc = React.lazy(() => import('./components/BetEduc'));
+const DeleteAccount = React.lazy(() => import('./pages/DeleteAccount'));
+const PublicLegal = React.lazy(() => import('./pages/PublicLegal'));
 
 const PageLoadingFallback: React.FC = () => (
   <div className="min-h-[60vh] flex items-center justify-center text-white">
@@ -62,6 +64,9 @@ export function App() {
                   <React.Suspense fallback={<PageLoadingFallback />}>
                     <Routes>
                       <Route path="/auth" element={<Auth />} />
+                      <Route path="/delete-account" element={<DeleteAccount />} />
+                      <Route path="/privacy" element={<PublicLegal type="privacy" />} />
+                      <Route path="/terms" element={<PublicLegal type="terms" />} />
                       <Route
                         path="/"
                         element={

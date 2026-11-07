@@ -132,9 +132,13 @@ flowchart TD
     R8 -- Oui --> Won
     R8 -- Non --> Lost
 
-    CheckType -->|BTTS / Les 2 marquent| R9{homeGoals > 0 && awayGoals > 0 ?}
+    CheckType -->|BTTS Oui / Les 2 marquent| R9{homeGoals > 0 && awayGoals > 0 ?}
     R9 -- Oui --> Won
     R9 -- Non --> Lost
+
+    CheckType -->|BTTS Non / Au moins un 0| R9b{homeGoals == 0 || awayGoals == 0 ?}
+    R9b -- Oui --> Won
+    R9b -- Non --> Lost
 
     CheckType -->|Score Exact X-Y| R10{home == X && away == Y ?}
     R10 -- Oui --> Won
@@ -142,6 +146,23 @@ flowchart TD
 
     CheckType -->|Autre format / Complexe| Manual[⏳ Requiert Revue Manuelle Admin]
 ```
+
+### Table des Règles d'Arbitrage Automatisé (`determinePronoResult`)
+
+| Marché | Pattern / Regex Clé | Condition Gagnante | Exemples de Formats Valides |
+| :--- | :--- | :--- | :--- |
+| **Double Chance 1X** | `1x`, `ou nul` + nom home | `homeGoals >= awayGoals` | `1X - PSG ou Nul`, `1X` |
+| **Double Chance 2X** | `2x`, `x2`, `ou nul` + nom away | `awayGoals >= homeGoals` | `2X - Real Madrid ou Nul`, `X2` |
+| **Double Chance 12** | `12`, `ou` (domicile ou extérieur) | `homeGoals !== awayGoals` | `12 - Pas de Nul` |
+| **Victoire Domicile (1)** | `v1`, `1`, `victoire [domicile]` | `homeGoals > awayGoals` | `V1 - Victoire PSG`, `1` |
+| **Victoire Extérieur (2)**| `v2`, `2`, `victoire [extérieur]` | `awayGoals > homeGoals` | `V2 - Victoire Real`, `2` |
+| **Match Nul (X)** | `x`, `nul`, `match nul` | `homeGoals === awayGoals` | `X - Match Nul`, `Nul` |
+| **Plus de X.5 buts** | `(?:\+\|plus de\|over\|>)\s*(\d+[,.]\d+)` | `(homeGoals + awayGoals) > seuil` | `+0.5 Buts`, `+1.5 Buts`, `+2.5 Buts`, `Over 2.5` |
+| **Moins de X.5 buts** | `(?:\-\|moins de\|under\|<)\s*(\d+[,.]\d+)`| `(homeGoals + awayGoals) < seuil` | `-1.5 Buts`, `-2.5 Buts`, `-3.5 Buts`, `Moins de 2.5` |
+| **BTTS (Oui)** | `btts`, `btts oui`, `les deux équipes marquent` | `homeGoals > 0 && awayGoals > 0` | `BTTS Oui`, `Les deux équipes marquent` |
+| **BTTS (Non)** | `btts non`, `ne marque pas`, `sans but` | `homeGoals === 0 \|\| awayGoals === 0` | `BTTS Non`, `Au moins 1 équipe sans but` |
+| **Paris Combos** | `\s+(?:&\|et)\s+` | `condition1 && condition2` | `V1 & +2.5 Buts`, `1X & -2.5 Buts`, `V1 et BTTS Oui` |
+| **Score Exact** | `(\d+)\s*[-–:]\s*(\d+)` | `home === X && away === Y` | `2-1`, `0-0`, `3:1` |
 
 ---
 

@@ -62,8 +62,15 @@ const Navigation = () => {
   const renderIcon = (item: typeof navItems[0]) => {
     if ((item.path === '/settings' || item.path === '/profile') && user?.avatar) {
       return (
-        <div className="w-5 h-5 rounded-full overflow-hidden border border-brand-green/50 flex items-center justify-center shrink-0">
-          <img src={user.avatar} alt={user.username || 'Profil'} className="w-full h-full object-cover" />
+        <div className="w-5 h-5 rounded-full overflow-hidden border border-brand-green/50 flex items-center justify-center shrink-0 bg-emerald-600/20">
+          <img 
+            src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || 'User')}&background=10b981&color=fff`} 
+            alt={user.username || 'Profil'} 
+            className="w-full h-full object-cover" 
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username || 'User')}&background=10b981&color=fff`;
+            }}
+          />
         </div>
       );
     }

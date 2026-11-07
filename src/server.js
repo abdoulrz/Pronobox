@@ -183,7 +183,22 @@ const connectWithRetry = () => {
     initializeMockData();
   }).
   catch((err) => {
-    console.error('MongoDB connection error:', err);
+    console.error('MongoDB connection error:', err?.message || err);
+    const isIpWhitelistError = 
+      String(err?.message || '').includes('whitelist') ||
+      String(err?.cause?.message || '').includes('alert number 80') ||
+      String(err?.stack || '').includes('alert number 80');
+
+    if (isIpWhitelistError) {
+      console.warn('\n===============================================================');
+      console.warn('⚠️ [ACTION REQUISE] ADRESSE IP NON AUTORISÉE DANS MONGODB ATLAS !');
+      console.warn('MongoDB Atlas a rejeté la connexion (SSL Alert 80).');
+      console.warn('👉 Allez sur : https://cloud.mongodb.com');
+      console.warn('👉 Menu : Security > Network Access');
+      console.warn('👉 Cliquez sur : "Add IP Address" -> "Allow Access from Anywhere" (0.0.0.0/0)');
+      console.warn('   ou ajoutez votre adresse IP actuelle.');
+      console.warn('===============================================================\n');
+    }
     console.log('Retrying connection in 5 seconds...');
     setTimeout(connectWithRetry, 5000);
   });
@@ -209,6 +224,23 @@ const authenticateToken = (req, res, next) => {
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) return res.status(403).json({ message: 'Invalid token' });
     req.user = user;
+    next();
+  });
+};
+
+const optionalAuthenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (!err && user) {
+      req.user = user;
+    } else {
+      req.user = null;
+    }
     next();
   });
 };
@@ -423,6 +455,51 @@ app.post('/api/auth/google', async (req, res) => {
     console.error('Google Auth Route Error:', error);
     res.status(500).json({ message: 'Authentication failed: ' + error.message });
   }
+});
+
+// ── Mobile App & APK Integration Endpoints ─────────────────────────────────
+app.get('/api/mobile/campaigns', (req, res) => {
+  res.json({
+    everyMatches: 2,
+    serverTime: new Date().toISOString(),
+    campaigns: []
+  });
+});
+
+app.post('/api/mobile/account/deletion', authenticateToken, async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ message: 'Le mot de passe est obligatoire pour confirmer la suppression.' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur introuvable.' });
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Mot de passe incorrect.' });
+    }
+
+    // Flag account deletion request for Google Play compliance
+    user.isBanned = true;
+    user.bio = (user.bio || '') + ' [Compte en cours de suppression sur demande utilisateur]';
+    await user.save();
+
+    res.json({ message: 'Votre demande de suppression de compte a bien été prise en compte. Vos données seront définitivement purgées sous 30 jours conformément à la réglementation.' });
+  } catch (error) {
+    console.error('Erreur suppression compte mobile:', error);
+    res.status(500).json({ message: 'Erreur lors du traitement de la demande.' });
+  }
+});
+
+app.get('/api/mobile/legal', (req, res) => {
+  res.json({
+    privacy: `POLITIQUE DE CONFIDENTIALITÉ — PRONOBOX\n\nDernière mise à jour : Novembre 2026\n\n1. COLLECTE DES DONNÉES\nPronosBox collecte les informations nécessaires à la création de votre profil (pseudonyme, e-mail, avatar, historique de pronostics et solde de portefeuille virtuel).\n\n2. UTILISATION DES DONNÉES\nVos données sont exclusivement utilisées pour le fonctionnement de la plateforme : authentification sécurisée, participation aux canaux de discussion, suivi des statistiques et des transactions.\n\n3. SUPPRESSION DU COMPTE\nConformément aux exigences des plateformes mobiles (Google Play / App Store), vous pouvez à tout moment demander la suppression définitive de votre compte depuis la page /delete-account ou en contactant le support WhatsApp officiel.\n\n4. SÉCURITÉ\nLes mots de passe sont hachés de manière irréversible via bcrypt. Vos sessions sont sécurisées par jetons JWT chiffrés.`,
+    terms: `CONDITIONS GÉNÉRALES D'UTILISATION — PRONOBOX\n\nDernière mise à jour : Novembre 2026\n\n1. OBJET\nPronosBox est une plateforme communautaire d'analyse sportive, d'échange de pronostics et d'éducation aux paris sportifs (Bet-Educ).\n\n2. RESPONSABILITÉ ET JEU RESPONSABLE\nPronosBox ne constitue pas un opérateur de jeux d'argent direct. Les pronostics et conseils partagés par les tipsters sont fournis à titre informatif. Le jeu comporte des risques : endettement, isolement, dépendance.\n\n3. CODE DE CONDUITE\nTout comportement injurieux, diffamatoire ou frauduleux au sein des canaux publics ou privés entraînera la suspension immédiate du compte sans préavis.\n\n4. PROPRIÉTÉ INTELLECTUELLE\nTous les contenus originaux, graphismes, logos et marques PronosBox sont protégés par le droit d'auteur.`
+  });
 });
 
 // Upgrade user role (e.g. Wildcard or Standard to Tipster)
@@ -1567,6 +1644,16 @@ function determinePronoResult(prediction, homeGoals, awayGoals, homeTeam, awayTe
   const homeTeamLower = (homeTeam || '').toLowerCase().trim();
   const awayTeamLower = (awayTeam || '').toLowerCase().trim();
 
+  // --- 0. Combo Bets Recursive Matcher (e.g. "V1 & +2.5 Buts", "1X & -2.5 Buts", "V1 et BTTS Oui") ---
+  const comboParts = pred.split(/\s+(?:&|et)\s+/i);
+  if (comboParts.length === 2 && comboParts[0].trim() && comboParts[1].trim()) {
+    const res1 = determinePronoResult(comboParts[0].trim(), homeGoals, awayGoals, homeTeam, awayTeam);
+    const res2 = determinePronoResult(comboParts[1].trim(), homeGoals, awayGoals, homeTeam, awayTeam);
+    if (res1 && res2) {
+      return (res1 === 'won' && res2 === 'won') ? 'won' : 'lost';
+    }
+  }
+
   // --- 1. Standard 6-Option Explicit Pattern Matcher ---
   // Option 1X: Home Win or Draw (HomeGoals >= AwayGoals)
   if (
@@ -1619,18 +1706,44 @@ function determinePronoResult(prediction, homeGoals, awayGoals, homeTeam, awayTe
   }
 
   // --- Fallback Patterns ---
-  // Over/Under
-  const overMatch = pred.match(/(?:\+|plus de\s*)(\d+[,.]\d*)\s*buts?/i);
+  // Over / Plus de / > (e.g. "+0.5", "+1.5 buts", "Plus de 2.5", "Over 2.5", "> 2.5")
+  const overMatch = pred.match(/(?:(?:\+|plus\s+de|over|>)\s*)(\d+(?:[,.]\d+)?)(?:\s*buts?)?/i);
   if (overMatch) {
-    return (homeGoals + awayGoals) > parseFloat(overMatch[1].replace(',', '.')) ? 'won' : 'lost';
-  }
-  const underMatch = pred.match(/(?:\-|moins de\s*)(\d+[,.]\d*)\s*buts?/i);
-  if (underMatch) {
-    return (homeGoals + awayGoals) < parseFloat(underMatch[1].replace(',', '.')) ? 'won' : 'lost';
+    const threshold = parseFloat(overMatch[1].replace(',', '.'));
+    return (homeGoals + awayGoals) > threshold ? 'won' : 'lost';
   }
 
-  // Both Teams To Score (BTTS)
-  if (pred.includes('les deux équipes marquent') || pred.includes('les deux equipes marquent') || pred === 'btts') {
+  // Under / Moins de / < / - (e.g. "-0.5", "-1.5 buts", "Moins de 2.5", "Under 2.5", "< 2.5")
+  // Ensures exact scores like "2-1" are not confused with negative numbers by requiring boundary or start of string
+  const underMatch = pred.match(/(?:^|[\s(])(?:(?:\-|moins\s+de|under|<)\s*)(\d+(?:[,.]\d+)?)(?:\s*buts?)?/i);
+  if (underMatch) {
+    const threshold = parseFloat(underMatch[1].replace(',', '.'));
+    return (homeGoals + awayGoals) < threshold ? 'won' : 'lost';
+  }
+
+  // Both Teams To Score (BTTS) - Non
+  if (
+    pred.startsWith('btts non') ||
+    pred.includes('btts non') ||
+    pred.includes('btts - non') ||
+    pred.includes('ne marque pas') ||
+    pred.includes('ne marquent pas') ||
+    pred.includes('sans but')
+  ) {
+    return (homeGoals === 0 || awayGoals === 0) ? 'won' : 'lost';
+  }
+
+  // Both Teams To Score (BTTS) - Oui
+  if (
+    pred.startsWith('btts oui') ||
+    pred.includes('btts oui') ||
+    pred.includes('btts - oui') ||
+    pred.includes('les deux équipes marquent') ||
+    pred.includes('les deux equipes marquent') ||
+    pred.includes('les 2 équipes marquent') ||
+    pred.includes('les 2 equipes marquent') ||
+    pred === 'btts'
+  ) {
     return (homeGoals > 0 && awayGoals > 0) ? 'won' : 'lost';
   }
 
@@ -1655,6 +1768,18 @@ function generatePronoExplanation(prediction, actualResult, homeGoals, awayGoals
   const hGoals = Number(homeGoals != null ? homeGoals : 0);
   const aGoals = Number(awayGoals != null ? awayGoals : 0);
   const pred = (prediction || '').toLowerCase().trim();
+
+  // --- 0. Combo Explanation Matcher (e.g. "V1 & +2.5 Buts") ---
+  const comboParts = pred.split(/\s+(?:&|et)\s+/i);
+  if (comboParts.length === 2 && comboParts[0].trim() && comboParts[1].trim()) {
+    const res1 = determinePronoResult(comboParts[0].trim(), homeGoals, awayGoals, homeTeam, awayTeam);
+    const res2 = determinePronoResult(comboParts[1].trim(), homeGoals, awayGoals, homeTeam, awayTeam);
+    const expl1 = generatePronoExplanation(comboParts[0].trim(), actualResult, homeGoals, awayGoals, homeTeam, awayTeam, res1 || status);
+    const expl2 = generatePronoExplanation(comboParts[1].trim(), actualResult, homeGoals, awayGoals, homeTeam, awayTeam, res2 || status);
+    if (expl1 && expl2) {
+      return `${expl1} | ${expl2}`;
+    }
+  }
 
   // 1X: Home Win or Draw
   if (pred.includes('1x') || (pred.includes('ou nul') && pred.includes(hTeam.toLowerCase()))) {
@@ -1719,30 +1844,47 @@ function generatePronoExplanation(prediction, actualResult, homeGoals, awayGoals
     }
   }
 
-  // Over
-  const overMatch = pred.match(/(?:\+|plus de\s*)(\d+[,.]\d*)\s*buts?/i);
+  // Over / Plus de / >
+  const overMatch = pred.match(/(?:(?:\+|plus\s+de|over|>)\s*)(\d+(?:[,.]\d+)?)(?:\s*buts?)?/i);
   if (overMatch) {
-    const threshold = overMatch[1];
+    const threshold = overMatch[1].replace(',', '.');
     const total = hGoals + aGoals;
     return isWon
-      ? `${mark} ${total} buts inscrits au total — le marché +${threshold} buts est validé par le score final.`
-      : `${mark} Seulement ${total} but(s) inscrit(s) — le marché +${threshold} buts n'est pas validé.`;
+      ? `${mark} ${total} but(s) inscrit(s) (${hGoals}-${aGoals}) — le marché +${threshold} buts est validé par le score final.`
+      : `${mark} Seulement ${total} but(s) inscrit(s) (${hGoals}-${aGoals}) — le marché +${threshold} buts n'est pas validé.`;
   }
 
-  // Under
-  const underMatch = pred.match(/(?:\-|moins de\s*)(\d+[,.]\d*)\s*buts?/i);
+  // Under / Moins de / < / -
+  const underMatch = pred.match(/(?:^|[\s(])(?:(?:\-|moins\s+de|under|<)\s*)(\d+(?:[,.]\d+)?)(?:\s*buts?)?/i);
   if (underMatch) {
-    const threshold = underMatch[1];
+    const threshold = underMatch[1].replace(',', '.');
     const total = hGoals + aGoals;
     return isWon
-      ? `${mark} ${total} buts inscrits au total — le marché -${threshold} buts est validé par le score final.`
-      : `${mark} ${total} buts inscrits au total — le marché -${threshold} buts est dépassé.`;
+      ? `${mark} ${total} but(s) inscrit(s) (${hGoals}-${aGoals}) — le marché -${threshold} buts est validé par le score final.`
+      : `${mark} ${total} but(s) inscrit(s) (${hGoals}-${aGoals}) — le seuil du marché -${threshold} buts est dépassé.`;
   }
 
-  // BTTS
-  if (pred.includes('marquent') || pred === 'btts') {
+  // BTTS - Les deux équipes marquent (Oui / Non)
+  if (
+    pred.startsWith('btts non') ||
+    pred.includes('btts non') ||
+    pred.includes('btts - non') ||
+    pred.includes('ne marque pas') ||
+    pred.includes('ne marquent pas') ||
+    pred.includes('sans but')
+  ) {
     return isWon
-      ? `${mark} Les deux équipes ont marqué (${hGoals}-${aGoals}) — le marché est validé par le score final.`
+      ? `${mark} Une seule ou aucune équipe n'a marqué (${hGoals}-${aGoals}) — le marché BTTS (Non) est validé.`
+      : `${mark} Les deux équipes ont marqué (${hGoals}-${aGoals}) — le marché BTTS (Non) n'est pas validé.`;
+  }
+  if (
+    pred.startsWith('btts oui') ||
+    pred.includes('btts oui') ||
+    pred.includes('btts') ||
+    pred.includes('marquent')
+  ) {
+    return isWon
+      ? `${mark} Les deux équipes ont marqué (${hGoals}-${aGoals}) — le marché BTTS (Oui) est validé par le score final.`
       : `${mark} Score final ${hGoals}-${aGoals} — les deux équipes n'ont pas marqué toutes les deux.`;
   }
 
@@ -2520,6 +2662,61 @@ app.get('/api/admin/support/messages', authenticateToken, async (req, res) => {
     res.json([]); 
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// --- Community Suggestions & Feedback System (Option A) ---
+const suggestionSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  username: { type: String, default: 'Visiteur' },
+  userEmail: { type: String },
+  category: { type: String, default: 'general' }, // 'apk', 'betting_markets', 'features', 'tipster_request', 'bug'
+  title: { type: String, default: '' },
+  message: { type: String, required: true },
+  targetChannelId: { type: mongoose.Schema.Types.ObjectId, ref: 'Channel' },
+  targetChannelName: { type: String, default: '' },
+  status: { type: String, default: 'pending' }, // 'pending', 'reviewed', 'implemented'
+  createdAt: { type: Date, default: Date.now }
+});
+const Suggestion = mongoose.models.Suggestion || mongoose.model('Suggestion', suggestionSchema);
+
+app.post('/api/community/suggestions', optionalAuthenticateToken, async (req, res) => {
+  try {
+    const { category, title, message, targetChannelId, targetChannelName, userEmail } = req.body;
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Le contenu de la suggestion est requis.' });
+    }
+    const validTargetChannelId = (targetChannelId && mongoose.Types.ObjectId.isValid(targetChannelId))
+      ? targetChannelId
+      : null;
+
+    const suggestion = new Suggestion({
+      userId: req.user?.id || null,
+      username: req.user?.username || req.user?.name || 'Visiteur',
+      userEmail: userEmail || req.user?.email || '',
+      category: category || 'general',
+      title: title ? title.trim() : '',
+      message: message.trim(),
+      targetChannelId: validTargetChannelId,
+      targetChannelName: targetChannelName ? targetChannelName.trim() : ''
+    });
+    await suggestion.save();
+    res.status(201).json({ success: true, message: 'Suggestion envoyée avec succès ! Merci de votre contribution.' });
+  } catch (error) {
+    console.error('Error saving community suggestion:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'enregistrement de votre suggestion.' });
+  }
+});
+
+app.get('/api/community/suggestions', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Accès réservé aux administrateurs.' });
+    }
+    const suggestions = await Suggestion.find().sort({ createdAt: -1 }).limit(100);
+    res.json(suggestions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

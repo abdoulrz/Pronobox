@@ -7,7 +7,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useChannelData } from '../contexts/ChannelContext';
 import MarkdownEditor from './MarkdownEditor';
 import { markdownToHtml } from '../utils/markdownToHtml';
-import { getProno6Options } from './predictions/CreatePronoModal';
+import { getProno6Options, getPronoGoalOptions, getPronoBttsOptions } from './predictions/CreatePronoModal';
+
 const parseErrorResponse = async (res: Response): Promise<{ error: string; details?: string }> => {
   try {
     const errorData = await res.json();
@@ -1508,6 +1509,7 @@ const PronosManagement = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState('V1');
+  const [adminMarketCategory, setAdminMarketCategory] = useState<'1x2' | 'goals' | 'btts'>('1x2');
   const [formData, setFormData] = useState({
     matchId: '',
     homeTeamName: '',
@@ -1931,7 +1933,7 @@ const PronosManagement = () => {
                 Section GRATUIT
               </h4>
               <span className="text-[10px] text-brand-green font-bold bg-brand-green/10 px-2 py-0.5 rounded border border-brand-green/20">
-                6 Choix Automatisés (100% Vérifiables)
+                Choix Automatisés (100% Vérifiables)
               </span>
             </div>
 
@@ -1945,39 +1947,106 @@ const PronosManagement = () => {
                   ? `${formData.homeTeamName} vs ${formData.awayTeamName}` 
                   : 'Équipe 1 vs Équipe 2';
                 const opts6 = getProno6Options(currentMatchTitle);
+                const optsGoals = getPronoGoalOptions();
+                const optsBtts = getPronoBttsOptions();
+                const activeOpts = adminMarketCategory === '1x2' 
+                  ? opts6 
+                  : (adminMarketCategory === 'goals' ? optsGoals : optsBtts);
 
                 return (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 mb-3">
-                    {opts6.map((opt) => {
-                      const isSelected = selectedOptionId === opt.id || formData.freeExpectedResult === opt.fullPick;
-                      return (
-                        <button
-                          type="button"
-                          key={opt.id}
-                          onClick={() => {
-                            setSelectedOptionId(opt.id);
-                            setFormData(prev => ({ ...prev, freeExpectedResult: opt.fullPick }));
-                          }}
-                          className={`p-2.5 rounded-xl text-left border transition-all flex flex-col justify-between ${
-                            isSelected
-                              ? 'bg-brand-green/15 border-brand-green shadow-sm'
-                              : 'bg-white dark:bg-brand-navy-2 border-slate-200 dark:border-brand-slate/50 hover:border-brand-green/50'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-black tracking-wider ${
-                              isSelected ? 'bg-brand-green text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                            }`}>
-                              {opt.badge}
-                            </span>
-                            {isSelected && <span className="text-brand-green font-black text-xs">✓</span>}
-                          </div>
-                          <div className="text-[11px] font-bold leading-tight text-slate-800 dark:text-white truncate">
-                            {opt.title}
-                          </div>
-                        </button>
-                      );
-                    })}
+                  <div>
+                    {/* Market Category Selector */}
+                    <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl mb-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminMarketCategory('1x2');
+                          if (opts6[0]) {
+                            setSelectedOptionId(opts6[0].id);
+                            setFormData(prev => ({ ...prev, freeExpectedResult: opts6[0].fullPick }));
+                          }
+                        }}
+                        className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center ${
+                          adminMarketCategory === '1x2'
+                            ? 'bg-brand-green text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        1X2 & Double Chance
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminMarketCategory('goals');
+                          if (optsGoals[2]) {
+                            setSelectedOptionId(optsGoals[2].id);
+                            setFormData(prev => ({ ...prev, freeExpectedResult: optsGoals[2].fullPick }));
+                          }
+                        }}
+                        className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center ${
+                          adminMarketCategory === 'goals'
+                            ? 'bg-brand-green text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        Total Buts (+ / -)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminMarketCategory('btts');
+                          if (optsBtts[0]) {
+                            setSelectedOptionId(optsBtts[0].id);
+                            setFormData(prev => ({ ...prev, freeExpectedResult: optsBtts[0].fullPick }));
+                          }
+                        }}
+                        className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center ${
+                          adminMarketCategory === 'btts'
+                            ? 'bg-brand-green text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        Les 2 Marquent
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-2.5 mb-3">
+                      {activeOpts.map((opt) => {
+                        const isSelected = selectedOptionId === opt.id || formData.freeExpectedResult === opt.fullPick;
+                        return (
+                          <button
+                            type="button"
+                            key={opt.id}
+                            onClick={() => {
+                              setSelectedOptionId(opt.id);
+                              setFormData(prev => ({ ...prev, freeExpectedResult: opt.fullPick }));
+                            }}
+                            className={`p-3 rounded-2xl text-left border transition-all flex flex-col justify-between group ${
+                              isSelected
+                                ? 'bg-brand-green/15 border-brand-green shadow-sm'
+                                : 'bg-white dark:bg-brand-navy-2 border-slate-200 dark:border-brand-slate/50 hover:border-brand-green/50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className={`px-2 py-0.5 rounded-md text-[11px] font-black tracking-wider ${
+                                isSelected ? 'bg-brand-green text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                              }`}>
+                                {opt.badge}
+                              </span>
+                              {isSelected && <span className="text-brand-green font-black text-xs">✓</span>}
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold leading-snug text-slate-800 dark:text-white">
+                                {opt.title}
+                              </div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-medium leading-tight">
+                                {opt.description}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })()}
